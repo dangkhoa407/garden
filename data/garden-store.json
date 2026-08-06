@@ -1,0 +1,120 @@
+{
+  "plants": [
+    {
+      "id": "plant-1",
+      "name": "Cải bẹ xanh",
+      "days": 14,
+      "status": "Phát triển tốt",
+      "statusColor": "text-primary bg-primary/10",
+      "progress": 45,
+      "category": "Rau ăn lá",
+      "location": "Khay 01",
+      "createdDate": "23/7/2026",
+      "image": "https://images.unsplash.com/photo-1540420773420-3366772f4999?q=80&w=400&auto=format&fit=crop"
+    },
+    {
+      "id": "plant-2",
+      "name": "Xà lách thủy canh",
+      "days": 22,
+      "status": "Chuẩn bị thu hoạch",
+      "statusColor": "text-secondary bg-secondary-container/50",
+      "progress": 90,
+      "category": "Thủy canh",
+      "location": "Khay 02",
+      "createdDate": "15/7/2026",
+      "image": "https://images.unsplash.com/photo-1622206151226-18ca2c9ab4a1?q=80&w=400&auto=format&fit=crop"
+    },
+    {
+      "id": "plant-3",
+      "name": "Cà chua bi",
+      "days": 45,
+      "status": "Đang ra hoa",
+      "statusColor": "text-tertiary-container bg-tertiary-fixed/40",
+      "progress": 60,
+      "category": "Cây lấy quả",
+      "location": "Khay 03",
+      "createdDate": "22/6/2026",
+      "image": "https://images.unsplash.com/photo-1592841200221-a6898f307baa?q=80&w=400&auto=format&fit=crop"
+    },
+    {
+      "id": "plant-4",
+      "name": "Rau húng lủi",
+      "days": 10,
+      "status": "Đang nảy mầm",
+      "statusColor": "text-primary bg-primary/10",
+      "progress": 25,
+      "category": "Rau gia vị",
+      "location": "Khay 04",
+      "createdDate": "27/7/2026",
+      "image": "https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?q=80&w=400&auto=format&fit=crop"
+    }
+  ],
+  "controls": {
+    "watering": true,
+    "lights": false,
+    "fan": true,
+    "misting": false,
+    "lightIntensity": 80,
+    "waterFlowRate": 65,
+    "targetHumidity": 70,
+    "soilMoisture": 65,
+    "temperature": 28,
+    "phValue": 6.2
+  },
+  "tasks": [
+    {
+      "id": "task-1",
+      "title": "Phun thuốc tự động",
+      "time": "08:00 - 09:30",
+      "period": "Sáng",
+      "location": "Khu vực A & B",
+      "duration": "90 phút",
+      "remaining": "Còn 45 phút",
+      "status": "active",
+      "progress": 50,
+      "icon": "water_drop"
+    },
+    {
+      "id": "task-2",
+      "title": "Kiểm tra sâu bệnh",
+      "time": "14:00",
+      "period": "Chiều",
+      "location": "Nhà kính 01",
+      "duration": "30 phút",
+      "status": "upcoming",
+      "icon": "pest_control"
+    },
+    {
+      "id": "task-3",
+      "title": "Châm thêm dinh dưỡng thủy canh",
+      "time": "16:30",
+      "period": "Chiều",
+      "location": "Hệ thống Bồn Nước A",
+      "duration": "15 phút",
+      "status": "upcoming",
+      "icon": "science"
+    },
+    {
+      "id": "task-4",
+      "title": "Kiểm tra độ ẩm đất",
+      "time": "06:30",
+      "period": "Sáng",
+      "location": "Toàn bộ khu vườn",
+      "status": "completed",
+      "icon": "check_circle"
+    }
+  ],
+  "chatHistory": [
+    {
+      "id": "msg-1",
+      "sender": "ai",
+      "text": "Xin chào! Tôi là **GrowAI** - Trợ lý trí tuệ nhân tạo chuyên sâu về vườn thông minh của bạn. 🌿\n\nTôi vừa đồng bộ dữ liệu cảm biến mới nhất từ khu vườn:\n• Độ ẩm đất: **65%** (Tối ưu)\n• Nhiệt độ: **28°C**\n• Cường độ sáng: **80%**\n• Độ pH: **6.2**\n\nBạn cần tôi hỗ trợ kiểm tra sức khỏe cây trồng hay điều chỉnh thiết bị nào hôm nay?",
+      "timestamp": "15:00",
+      "actions": [
+        { "label": "🌱 Kiểm tra Xà lách thủy canh", "actionKey": "check-lettuce" },
+        { "label": "💧 Kích hoạt tưới nước 5 phút", "actionKey": "water-now" },
+        { "label": "☀️ Tối ưu ánh sáng LED", "actionKey": "optimize-led" }
+      ]
+    }
+  ]
+}

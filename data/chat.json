@@ -1,0 +1,124 @@
+[
+  {
+    "id": "msg-1",
+    "sender": "ai",
+    "text": "Xin chào! Tôi là **GrowAI** - Trợ lý trí tuệ nhân tạo chuyên sâu về vườn thông minh của bạn. 🌿\n\nTôi vừa đồng bộ dữ liệu cảm biến mới nhất từ khu vườn:\n• Độ ẩm đất: **65%** (Tối ưu)\n• Nhiệt độ: **28°C**\n• Cường độ sáng: **80%**\n• Độ pH: **6.2**\n\nBạn cần tôi hỗ trợ kiểm tra sức khỏe cây trồng hay điều chỉnh thiết bị nào hôm nay?",
+    "timestamp": "15:00",
+    "actions": [
+      {
+        "label": "🌱 Kiểm tra Xà lách thủy canh",
+        "actionKey": "check-lettuce"
+      },
+      {
+        "label": "💧 Kích hoạt tưới nước 5 phút",
+        "actionKey": "water-now"
+      },
+      {
+        "label": "☀️ Tối ưu ánh sáng LED",
+        "actionKey": "optimize-led"
+      }
+    ]
+  },
+  {
+    "id": "user-1786005884901",
+    "sender": "user",
+    "text": "hi b",
+    "timestamp": "15:44"
+  },
+  {
+    "id": "ai-1786005885993",
+    "sender": "ai",
+    "text": "🤖 **GrowAI Assistant (Tất cả Key đều gặp sự cố):**\n\nLỗi: *Tất cả 1 API Key trong danh sách đều gặp lỗi: models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.*\n\nHệ thống đã tự động đẩy các Key bị lỗi xuống cuối hàng chờ rotation.",
+    "timestamp": "15:44"
+  },
+  {
+    "id": "user-1786006073997",
+    "sender": "user",
+    "text": "hi bạn",
+    "timestamp": "15:47"
+  },
+  {
+    "id": "ai-1786006074001",
+    "sender": "ai",
+    "text": "💡 **Chưa có Gemini API Key nào trong hệ thống:**\n\n📊 **Dữ liệu hiện tại đọc từ data/plants.json & data/controls.json:**\n• Cây đang theo dõi (4 loài): Cải bẹ xanh, Xà lách thủy canh, Cà chua bi, Rau húng lủi\n• Độ ẩm đất: **65%** | Nhiệt độ: **28°C**\n\n👉 Vui lòng vào menu **\"Cấu hình API Key\"** để thêm một hoặc nhiều Gemini API Key.",
+    "timestamp": "15:47",
+    "actions": [
+      {
+        "label": "🔑 Thêm Gemini API Key ngay",
+        "actionKey": "nav-api-key"
+      }
+    ]
+  },
+  {
+    "id": "user-1786006095156",
+    "sender": "user",
+    "text": "hi bạn",
+    "timestamp": "15:48"
+  },
+  {
+    "id": "ai-1786006100349",
+    "sender": "ai",
+    "text": "✨ **Google Gemini AI (gemini-3.5-flash-lite - Key: AQ.Ab8...vJdA):**\n\nChào bạn! 🌿 Chúc bạn một ngày tốt lành tại khu vườn thông minh! \n\nTôi là **GrowAI** - Trợ lý Trí Tuệ Nhân Tạo chuyên sâu của hệ thống **GrowHub (Botanical Intelligence Conservatory)**. Tôi luôn sẵn sàng đồng hành cùng bạn để chăm sóc và theo dõi sự phát triển của khu vườn rau đô thị chúng ta.\n\nHôm nay hệ thống của chúng ta đang hoạt động rất tốt với các chỉ số IoT thời gian thực như sau:\n• 🌱 **Độ ẩm đất:** 65% (Đang được hệ thống phun sương tự động bổ sung nước).\n• 🌡️ **Nhiệt độ phòng kính:** 28°C (Quạt thông gió đang bật để duy trì sự thoáng mát).\n• 💧 **pH Thủy canh:** 6.2 (Mức lý tưởng cho Xà lách).\n• 🥬 **Tình trạng vườn:** 4 loại cây trồng (Cải bẹ xanh, Xà lách thủy canh, Cà chua bi, Húng lủi) đều đang phát triển rất khả quan!\n\nBạn có muốn kiểm tra chi tiết tình trạng của loại cây nào, xem lịch trình chăm sóc, hay cần tôi tư vấn kỹ thuật nông nghiệp gì không? Hãy cho tôi biết nhé! 🍅🥬✨",
+    "timestamp": "15:48"
+  },
+  {
+    "id": "user-1786006138259",
+    "sender": "user",
+    "text": "bạn tên là gì",
+    "timestamp": "15:48"
+  },
+  {
+    "id": "ai-1786006142459",
+    "sender": "ai",
+    "text": "✨ **Google Gemini AI (gemini-3.5-flash-lite - Key: AQ.Ab8...vJdA):**\n\nChào bạn! 🌿 Mình là **GrowAI** - Trợ lý Trí Tuệ Nhân Tạo chuyên sâu trực thuộc Hệ thống Quản lý Vườn Rau Thông Minh GrowHub (Botanical Intelligence Conservatory). \n\nNhiệm vụ của mình là đồng hành cùng bạn theo dõi các chỉ số cảm biến IoT, cập nhật tình trạng sinh trưởng của 4 loại cây trồng trong vườn (từ Cải bẹ xanh, Xà lách thủy canh, Cà chua bi cho đến Rau húng lủi), cũng như nhắc nhở lịch trình chăm sóc để khu vườn luôn xanh tốt. \n\nHôm nay mình có thể hỗ trợ gì cho bạn và khu vườn thông minh của chúng ta nào? 🌱✨",
+    "timestamp": "15:48"
+  },
+  {
+    "id": "user-1786006204030",
+    "sender": "user",
+    "text": "bạn ơi",
+    "timestamp": "15:50"
+  },
+  {
+    "id": "ai-1786006208270",
+    "sender": "ai",
+    "text": "✨ **Google Gemini AI (gemini-3.5-flash-lite - Key: AQ.Ab8...vJdA):**\n\nChào bạn! Tôi là **GrowAI** - Trợ lý Trí Tuệ Nhân Tạo của Hệ thống Quản lý Vườn Rau Thông Minh GrowHub 🌱. \n\nHiện tại, khu vườn thông minh của chúng ta đang hoạt động rất năng suất với 4 loại cây trồng đang phát triển:\n• 🥬 **Cải bẹ xanh** (Khay 01 - Tầng 1): 14 ngày tuổi, đang phát triển tốt.\n• 🥗 **Xà lách thủy canh** (Khay 02 - Tầng 1): 22 ngày tuổi, đã đạt 90% tiến độ và chuẩn bị thu hoạch!\n• 🍅 **Cà chua bi** (Khay 03 - Tầng 2): 45 ngày tuổi, đang trong giai đoạn ra hoa.\n• 🌿 **Rau húng lủi** (Khay 04 - Tầng 2): 10 ngày tuổi, đang nảy mầm.\n\nCác chỉ số môi trường IoT hiện tại trong vườn:\n• 💧 **Độ ẩm đất:** 65% (Hệ thống phun sương đang chạy ở mức 65% để bổ sung đạt mục tiêu 70%).\n• 🌡️ **Nhiệt độ:** 28°C (Quạt thông gió đang bật để làm mát).\n• 💡 **Ánh sáng:** Đèn LED đang tắt, cường độ thiết lập 80%.\n• 🧪 **pH thủy canh:** 6.2 (Hoàn hảo cho xà lách).\n\nHôm nay tôi có thể hỗ trợ gì cho bạn về khu vườn, lịch chăm sóc hay tình trạng của các \"bé cây\" không nào? 😊",
+    "timestamp": "15:50"
+  },
+  {
+    "id": "user-1786006491021",
+    "sender": "user",
+    "text": "hi b",
+    "timestamp": "15:54"
+  },
+  {
+    "id": "ai-1786006495209",
+    "sender": "ai",
+    "text": "✨ **Google Gemini AI (gemini-3.5-flash-lite - Key: AQ.Ab8...vJdA):**\n\nChào bạn! 🌱 Mình là **GrowAI** - Trợ lý Trí Tuệ Nhân Tạo của Hệ thống Quản lý Vườn Rau Thông Minh GrowHub đây ạ! \n\nHiện tại, vườn rau thông minh của chúng ta đang hoạt động với các thông số môi trường rất ổn định:\n• 💧 **Độ ẩm đất:** 65% (Mục tiêu hướng tới là 70%, hệ thống phun sương đang hoạt động ở mức 65% để bổ sung nước).\n• 🌡️ **Nhiệt độ phòng kính:** 28°C (Quạt thông gió đang bật để duy trì sự thoáng mát).\n• 💡 **Ánh sáng LED:** Cường độ cài đặt 80% (Đèn LED hiện đang tắt, tận dụng ánh sáng tự nhiên).\n• 🧪 **Độ pH Thủy canh:** 6.2 (Mức chuẩn cho sự phát triển của nhiều loại cây).\n• 📋 **Công việc:** Đang có 4 nhiệm vụ chăm sóc trong lịch trình (1 nhiệm vụ đã hoàn thành).\n\n*Lưu ý:* Cơ sở dữ liệu hiện tại chưa ghi nhận loài cây cụ thể nào trong vườn. \n\nHôm nay mình có thể hỗ trợ gì cho bạn nhỉ? Bạn có muốn thêm cây trồng mới vào hệ thống, kiểm tra chi tiết các nhiệm vụ chăm sóc hay cần tư vấn về kỹ thuật nông nghiệp đô thị không? 😊🌿",
+    "timestamp": "15:54"
+  },
+  {
+    "id": "user-1786006515485",
+    "sender": "user",
+    "text": "hiện tại tôi có mấy cây rau",
+    "timestamp": "15:55"
+  },
+  {
+    "id": "ai-1786006579966",
+    "sender": "ai",
+    "text": "🤖 **GrowAI Assistant (Tất cả Key đều gặp sự cố):**\n\nLỗi: *Tất cả 1 API Key trong danh sách đều gặp lỗi với các mô hình Gemini: fetch failed*\n\nHệ thống đã tự động đẩy các Key bị lỗi xuống cuối hàng chờ rotation.",
+    "timestamp": "15:55"
+  },
+  {
+    "id": "user-1786008222513",
+    "sender": "user",
+    "text": "hi b",
+    "timestamp": "16:23"
+  },
+  {
+    "id": "ai-1786008226698",
+    "sender": "ai",
+    "text": "✨ **Google Gemini AI (gemini-3.5-flash-lite - Key: AQ.Ab8...vJdA):**\n\nChào bạn! 🌿 Chúc bạn một ngày mới tốt lành tại khu vườn thông minh của mình! \n\nTôi là **GrowAI** - Trợ lý Trí Tuệ Nhân Tạo của Hệ thống Quản lý Vườn Rau Thông Minh GrowHub. \n\nHiện tại, vườn rau của chúng ta đang chăm sóc **Rau má** (1 ngày tuổi, ở Vị trí 1 - Khay 01 - Tầng 1) và các thông số môi trường IoT đang hoạt động rất ổn định:\n• 💧 **Độ ẩm đất:** 65% (Đang tự động tưới phun sương để đạt mục tiêu 70%)\n• 🌡️ **Nhiệt độ:** 28°C (Quạt thông gió đang bật để làm mát)\n• 💡 **Ánh sáng LED:** Đang tắt (Cường độ cài đặt 80%)\n• 🧪 **Độ pH:** 6.2\n\nBạn có cần tôi hỗ trợ kiểm tra lịch trình chăm sóc, điều chỉnh thiết bị IoT hay tư vấn kỹ thuật gì cho khu vườn không? Cứ cho tôi biết nhé! 🌱✨",
+    "timestamp": "16:23"
+  }
+]

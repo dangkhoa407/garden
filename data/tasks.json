@@ -1,0 +1,43 @@
+[
+  {
+    "id": "task-1",
+    "title": "Phun thuốc tự động",
+    "time": "08:00 - 09:30",
+    "period": "Sáng",
+    "location": "Khu vực A & B",
+    "duration": "90 phút",
+    "remaining": "Còn 45 phút",
+    "status": "active",
+    "progress": 50,
+    "icon": "water_drop"
+  },
+  {
+    "id": "task-2",
+    "title": "Kiểm tra sâu bệnh",
+    "time": "14:00",
+    "period": "Chiều",
+    "location": "Nhà kính 01",
+    "duration": "30 phút",
+    "status": "upcoming",
+    "icon": "pest_control"
+  },
+  {
+    "id": "task-3",
+    "title": "Châm thêm dinh dưỡng thủy canh",
+    "time": "16:30",
+    "period": "Chiều",
+    "location": "Hệ thống Bồn Nước A",
+    "duration": "15 phút",
+    "status": "upcoming",
+    "icon": "science"
+  },
+  {
+    "id": "task-4",
+    "title": "Kiểm tra độ ẩm đất",
+    "time": "06:30",
+    "period": "Sáng",
+    "location": "Toàn bộ khu vườn",
+    "status": "completed",
+    "icon": "check_circle"
+  }
+]

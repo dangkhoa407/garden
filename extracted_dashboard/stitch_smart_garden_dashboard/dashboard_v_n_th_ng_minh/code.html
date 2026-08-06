@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+
+<html lang="vi"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Smart Vegetable Garden Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-primary-fixed": "#002204",
+                      "tertiary-fixed-dim": "#ffb865",
+                      "tertiary": "#7a4a00",
+                      "on-surface": "#1a1c1c",
+                      "error": "#ba1a1a",
+                      "tertiary-fixed": "#ffddba",
+                      "on-primary-fixed-variant": "#005312",
+                      "on-tertiary-container": "#ffeee0",
+                      "surface-tint": "#1b6d24",
+                      "on-secondary": "#ffffff",
+                      "on-error-container": "#93000a",
+                      "surface-container-highest": "#e2e2e2",
+                      "secondary-container": "#abf4ac",
+                      "primary": "#0d631b",
+                      "secondary": "#286b33",
+                      "on-tertiary-fixed-variant": "#663d00",
+                      "on-secondary-container": "#2e7238",
+                      "surface-container-low": "#f3f3f3",
+                      "on-background": "#1a1c1c",
+                      "background": "#f9f9f9",
+                      "on-secondary-fixed": "#002107",
+                      "outline": "#707a6c",
+                      "tertiary-container": "#9c6000",
+                      "on-tertiary-fixed": "#2b1700",
+                      "primary-fixed-dim": "#88d982",
+                      "surface": "#f9f9f9",
+                      "on-secondary-fixed-variant": "#07521d",
+                      "primary-container": "#2e7d32",
+                      "surface-bright": "#f9f9f9",
+                      "error-container": "#ffdad6",
+                      "primary-fixed": "#a3f69c",
+                      "surface-dim": "#dadada",
+                      "surface-container-lowest": "#ffffff",
+                      "inverse-surface": "#2f3131",
+                      "on-primary": "#ffffff",
+                      "on-primary-container": "#cbffc2",
+                      "inverse-on-surface": "#f1f1f1",
+                      "surface-container": "#eeeeee",
+                      "on-tertiary": "#ffffff",
+                      "outline-variant": "#bfcaba",
+                      "on-surface-variant": "#40493d",
+                      "surface-container-high": "#e8e8e8",
+                      "inverse-primary": "#88d982",
+                      "surface-variant": "#e2e2e2",
+                      "secondary-fixed-dim": "#90d792",
+                      "on-error": "#ffffff",
+                      "secondary-fixed": "#abf4ac"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "md": "24px",
+                      "sm": "16px",
+                      "base": "4px",
+                      "container-margin-desktop": "40px",
+                      "lg": "32px",
+                      "gutter": "16px",
+                      "xl": "48px",
+                      "container-margin-mobile": "16px",
+                      "xs": "8px"
+              },
+              "fontFamily": {
+                      "headline-md-mobile": [
+                              "Inter"
+                      ],
+                      "headline-md": [
+                              "Inter"
+                      ],
+                      "body-sm": [
+                              "Inter"
+                      ],
+                      "display-lg": [
+                              "Inter"
+                      ],
+                      "label-caps": [
+                              "JetBrains Mono"
+                      ],
+                      "body-lg": [
+                              "Inter"
+                      ],
+                      "stat-value": [
+                              "Inter"
+                      ]
+              },
+              "fontSize": {
+                      "headline-md-mobile": [
+                              "20px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-md": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-sm": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "display-lg": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "label-caps": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "body-lg": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "stat-value": [
+                              "28px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "700"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+    </script>
+<style>
+        body {
+            background-color: #f9f9f9; /* fallback */
+            -webkit-font-smoothing: antialiased;
+        }
+        /* Custom scrollbar for horizontal scroll */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen pb-24 md:pb-0 font-body-lg">
+<!-- Top App Bar -->
+<header class="bg-background dark:bg-background flex justify-between items-center px-container-margin-mobile w-full z-50 h-16 fixed top-0 w-full flat no shadows">
+<div class="flex items-center gap-xs">
+<img class="w-8 h-8 rounded-full object-cover" data-alt="A small circular avatar showing a professional looking person in a garden setting, soft natural lighting, high quality." src="https://lh3.googleusercontent.com/aida-public/AB6AXuClDvnxklki-Rnr9QWwhrRdCzYheSU45HqUYEYeAPlO-WTn3UGpyyxO9cBAvnceGt4LDvBjxQKVNcVHzOhjlHBuE9ugk0Yfjo0AVGM9ndEF-1ePNEP1kT16Q1yxp_rELyL1saio1cqK6_NVCFxwSlV3zADHUjvmOd4rGR8kZiC_1Iabm0jRAdqwOPt0RUS-_ero2PSf3lnpXe_EhR7wunMLnVP87xxoPJcNTc0nG3f0Pmn2lLFD7bWj"/>
+<div>
+<h1 class="font-headline-md-mobile text-headline-md-mobile text-primary dark:text-primary-fixed-dim m-0">Chào buổi sáng, Minh!</h1>
+</div>
+</div>
+<button aria-label="Notifications" class="w-10 h-10 flex items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container-low transition-transform active:scale-95 duration-200">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">notifications</span>
+</button>
+</header>
+<!-- Main Canvas -->
+<main class="pt-20 px-container-margin-mobile md:px-container-margin-desktop max-w-7xl mx-auto space-y-lg">
+<!-- Header Subtext -->
+<section>
+<p class="font-body-lg text-body-lg text-on-surface-variant">Vườn của bạn đang phát triển tốt</p>
+</section>
+<!-- Main Stats Bento Grid (Desktop) / Horizontal Scroll (Mobile) -->
+<section>
+<h2 class="font-headline-md-mobile text-headline-md-mobile text-on-surface mb-sm md:font-headline-md md:text-headline-md">Thông số môi trường</h2>
+<div class="flex overflow-x-auto gap-sm pb-xs no-scrollbar md:grid md:grid-cols-4 md:overflow-visible">
+<!-- Stat Card: Soil Moisture -->
+<div class="bg-surface-container-lowest p-md rounded-xl shadow-sm min-w-[160px] flex-shrink-0 border border-primary/10">
+<div class="flex justify-between items-start mb-sm">
+<span class="font-label-caps text-label-caps text-on-surface-variant">Độ ẩm đất</span>
+<span class="material-symbols-outlined text-primary">water_drop</span>
+</div>
+<div class="font-stat-value text-stat-value text-on-surface mb-base">65%</div>
+<div class="inline-block bg-secondary-container text-on-secondary-container font-label-caps text-label-caps px-2 py-1 rounded-full opacity-80">Tốt</div>
+<!-- Mini Sparkline Placeholder -->
+<div class="h-6 mt-sm bg-gradient-to-r from-primary-fixed-dim to-primary rounded-full opacity-20 w-full relative overflow-hidden">
+<div class="absolute top-0 left-0 h-full bg-primary rounded-full w-[65%]"></div>
+</div>
+</div>
+<!-- Stat Card: Temperature -->
+<div class="bg-surface-container-lowest p-md rounded-xl shadow-sm min-w-[160px] flex-shrink-0 border border-primary/10">
+<div class="flex justify-between items-start mb-sm">
+<span class="font-label-caps text-label-caps text-on-surface-variant">Nhiệt độ</span>
+<span class="material-symbols-outlined text-tertiary">thermostat</span>
+</div>
+<div class="font-stat-value text-stat-value text-on-surface mb-base">28°C</div>
+<div class="inline-block bg-surface-container-high text-on-surface-variant font-label-caps text-label-caps px-2 py-1 rounded-full opacity-80">Ổn định</div>
+<div class="h-6 mt-sm bg-gradient-to-r from-tertiary-fixed-dim to-tertiary rounded-full opacity-20 w-full relative overflow-hidden">
+<div class="absolute top-0 left-0 h-full bg-tertiary rounded-full w-[70%]"></div>
+</div>
+</div>
+<!-- Stat Card: Light -->
+<div class="bg-surface-container-lowest p-md rounded-xl shadow-sm min-w-[160px] flex-shrink-0 border border-primary/10">
+<div class="flex justify-between items-start mb-sm">
+<span class="font-label-caps text-label-caps text-on-surface-variant">Ánh sáng</span>
+<span class="material-symbols-outlined text-tertiary-fixed-dim" style="font-variation-settings: 'FILL' 1;">light_mode</span>
+</div>
+<div class="font-stat-value text-stat-value text-on-surface mb-base">80%</div>
+<div class="inline-block bg-surface-container-high text-on-surface-variant font-label-caps text-label-caps px-2 py-1 rounded-full opacity-80">Rất tốt</div>
+<div class="h-6 mt-sm bg-gradient-to-r from-tertiary-fixed-dim to-tertiary-container rounded-full opacity-20 w-full relative overflow-hidden">
+<div class="absolute top-0 left-0 h-full bg-tertiary-fixed-dim rounded-full w-[80%]"></div>
+</div>
+</div>
+<!-- Stat Card: Water Level -->
+<div class="bg-surface-container-lowest p-md rounded-xl shadow-sm min-w-[160px] flex-shrink-0 border border-primary/10">
+<div class="flex justify-between items-start mb-sm">
+<span class="font-label-caps text-label-caps text-on-surface-variant">Mực nước</span>
+<span class="material-symbols-outlined text-outline">waves</span>
+</div>
+<div class="font-stat-value text-stat-value text-on-surface mb-base">45%</div>
+<div class="inline-block bg-error-container text-on-error-container font-label-caps text-label-caps px-2 py-1 rounded-full opacity-80">Cần châm</div>
+<div class="h-6 mt-sm bg-gradient-to-r from-outline-variant to-outline rounded-full opacity-20 w-full relative overflow-hidden">
+<div class="absolute top-0 left-0 h-full bg-outline rounded-full w-[45%]"></div>
+</div>
+</div>
+</div>
+</section>
+<!-- Quick Actions -->
+<section>
+<h2 class="font-headline-md-mobile text-headline-md-mobile text-on-surface mb-sm md:font-headline-md md:text-headline-md">Thao tác nhanh</h2>
+<div class="flex flex-wrap gap-sm">
+<button class="bg-primary text-on-primary font-body-sm text-body-sm px-sm py-xs rounded-lg shadow-sm hover:opacity-90 transition-opacity flex items-center gap-xs">
+<span class="material-symbols-outlined text-[18px]">sprinkler</span>
+                     Tưới nước ngay
+                 </button>
+<button class="bg-surface-container-lowest border border-primary text-primary font-body-sm text-body-sm px-sm py-xs rounded-lg hover:bg-surface-container-low transition-colors flex items-center gap-xs">
+<span class="material-symbols-outlined text-[18px]">tungsten</span>
+                     Bật đèn LED
+                 </button>
+<button class="bg-surface-container-lowest border border-outline text-on-surface-variant font-body-sm text-body-sm px-sm py-xs rounded-lg hover:bg-surface-container-low transition-colors flex items-center gap-xs">
+<span class="material-symbols-outlined text-[18px]">bug_report</span>
+                     Kiểm tra sâu bệnh
+                 </button>
+</div>
+</section>
+<!-- Plant Status Grid -->
+<section>
+<h2 class="font-headline-md-mobile text-headline-md-mobile text-on-surface mb-sm md:font-headline-md md:text-headline-md">Trạng thái cây trồng</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-sm">
+<!-- Plant Item 1 -->
+<div class="bg-surface-container-lowest p-md rounded-xl shadow-sm border border-primary/5 flex items-center gap-sm relative overflow-hidden">
+<div class="w-16 h-16 rounded-lg bg-secondary-container flex-shrink-0 flex items-center justify-center relative z-10">
+<span class="material-symbols-outlined text-[32px] text-on-secondary-container" style="font-variation-settings: 'FILL' 1;">eco</span>
+</div>
+<div class="flex-grow z-10">
+<h3 class="font-body-lg text-body-lg font-semibold text-on-surface">Cải bẹ xanh</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-xs">Ngày 14 - Phát triển tốt</p>
+<div class="w-full bg-surface-container-highest rounded-full h-2">
+<div class="bg-primary h-2 rounded-full" style="width: 70%"></div>
+</div>
+</div>
+<!-- Decorative Background Elements -->
+<div class="absolute top-0 right-0 p-sm opacity-5 z-0">
+<span class="material-symbols-outlined text-[100px] text-primary">eco</span>
+</div>
+</div>
+<!-- Plant Item 2 -->
+<div class="bg-surface-container-lowest p-md rounded-xl shadow-sm border border-primary/5 flex items-center gap-sm relative overflow-hidden">
+<div class="w-16 h-16 rounded-lg bg-tertiary-container flex-shrink-0 flex items-center justify-center relative z-10">
+<span class="material-symbols-outlined text-[32px] text-on-tertiary-container" style="font-variation-settings: 'FILL' 1;">local_florist</span>
+</div>
+<div class="flex-grow z-10">
+<h3 class="font-body-lg text-body-lg font-semibold text-on-surface">Xà lách thủy canh</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-xs">Ngày 22 - Chuẩn bị thu hoạch</p>
+<div class="w-full bg-surface-container-highest rounded-full h-2">
+<div class="bg-tertiary h-2 rounded-full" style="width: 90%"></div>
+</div>
+</div>
+</div>
+<!-- Plant Item 3 -->
+<div class="bg-surface-container-lowest p-md rounded-xl shadow-sm border border-primary/5 flex items-center gap-sm relative overflow-hidden">
+<div class="w-16 h-16 rounded-lg bg-error-container flex-shrink-0 flex items-center justify-center relative z-10">
+<span class="material-symbols-outlined text-[32px] text-on-error-container" style="font-variation-settings: 'FILL' 1;">nutrition</span>
+</div>
+<div class="flex-grow z-10">
+<h3 class="font-body-lg text-body-lg font-semibold text-on-surface">Cà chua bi</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-xs">Ngày 45 - Đang ra hoa</p>
+<div class="w-full bg-surface-container-highest rounded-full h-2">
+<div class="bg-error h-2 rounded-full" style="width: 50%"></div>
+</div>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Bottom Navigation Bar (Mobile Only) -->
+<nav class="md:hidden bg-surface-container dark:bg-surface-container fixed bottom-0 w-full rounded-t-xl shadow-[0px_-4px_20px_rgba(0,0,0,0.05)] shadow-sm fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-xs pb-safe h-20">
+<button class="flex flex-col items-center justify-center bg-secondary-container dark:bg-on-primary-fixed-variant text-on-secondary-container dark:text-on-primary-container rounded-full px-4 py-1 transition-all active:scale-90 duration-150 hover:bg-surface-container-high dark:hover:bg-surface-container-highest">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+<span class="font-label-caps text-label-caps mt-1">Dashboard</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline-variant px-4 py-1 transition-all active:scale-90 duration-150 hover:bg-surface-container-high dark:hover:bg-surface-container-highest">
+<span class="material-symbols-outlined">potted_plant</span>
+<span class="font-label-caps text-label-caps mt-1">My Plants</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline-variant px-4 py-1 transition-all active:scale-90 duration-150 hover:bg-surface-container-high dark:hover:bg-surface-container-highest">
+<span class="material-symbols-outlined">calendar_today</span>
+<span class="font-label-caps text-label-caps mt-1">Schedule</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline-variant px-4 py-1 transition-all active:scale-90 duration-150 hover:bg-surface-container-high dark:hover:bg-surface-container-highest">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-label-caps text-label-caps mt-1">Settings</span>
+</button>
+</nav>
+<!-- Desktop Side Navigation (Placeholder structure, hidden on mobile) -->
+<aside class="hidden md:flex flex-col fixed left-0 top-16 h-[calc(100vh-64px)] w-64 bg-surface-container-lowest border-r border-outline-variant/20 p-md z-40">
+<nav class="space-y-sm">
+<a class="flex items-center gap-sm px-md py-xs bg-secondary-container text-on-secondary-container rounded-full font-body-lg text-body-lg font-semibold" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+                 Dashboard
+             </a>
+<a class="flex items-center gap-sm px-md py-xs text-on-surface-variant hover:bg-surface-container-low rounded-full font-body-lg text-body-lg transition-colors" href="#">
+<span class="material-symbols-outlined">potted_plant</span>
+                 My Plants
+             </a>
+<a class="flex items-center gap-sm px-md py-xs text-on-surface-variant hover:bg-surface-container-low rounded-full font-body-lg text-body-lg transition-colors" href="#">
+<span class="material-symbols-outlined">calendar_today</span>
+                 Schedule
+             </a>
+<a class="flex items-center gap-sm px-md py-xs text-on-surface-variant hover:bg-surface-container-low rounded-full font-body-lg text-body-lg transition-colors mt-auto" href="#">
+<span class="material-symbols-outlined">settings</span>
+                 Settings
+             </a>
+</nav>
+<!-- Additional desktop nav items could go here -->
+</aside>
+<!-- Adjust main content margin for desktop sidenav -->
+<style>
+        @media (min-width: 768px) {
+            main {
+                margin-left: 16rem; /* 64 * 0.25rem = 16rem */
+            }
+        }
+    </style>
+</body></html>

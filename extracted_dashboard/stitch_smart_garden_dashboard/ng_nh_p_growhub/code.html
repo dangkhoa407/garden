@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>GrowHub - Login</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "background": "#f9f9f9",
+                    "tertiary-container": "#9c6000",
+                    "tertiary": "#7a4a00",
+                    "surface-tint": "#1b6d24",
+                    "surface-variant": "#e2e2e2",
+                    "on-error": "#ffffff",
+                    "on-tertiary-container": "#ffeee0",
+                    "surface-container-highest": "#e2e2e2",
+                    "on-primary-fixed-variant": "#005312",
+                    "on-secondary-fixed-variant": "#07521d",
+                    "on-primary": "#ffffff",
+                    "inverse-surface": "#2f3131",
+                    "on-primary-fixed": "#002204",
+                    "primary-fixed-dim": "#88d982",
+                    "surface-container": "#eeeeee",
+                    "on-surface": "#1a1c1c",
+                    "inverse-primary": "#88d982",
+                    "on-error-container": "#93000a",
+                    "on-surface-variant": "#40493d",
+                    "on-secondary-container": "#2e7238",
+                    "on-tertiary-fixed-variant": "#663d00",
+                    "tertiary-fixed-dim": "#ffb865",
+                    "on-background": "#1a1c1c",
+                    "surface-container-lowest": "#ffffff",
+                    "on-secondary": "#ffffff",
+                    "error": "#ba1a1a",
+                    "surface-container-high": "#e8e8e8",
+                    "on-secondary-fixed": "#002107",
+                    "secondary-fixed-dim": "#90d792",
+                    "secondary": "#286b33",
+                    "primary-container": "#2e7d32",
+                    "outline": "#707a6c",
+                    "primary-fixed": "#a3f69c",
+                    "on-primary-container": "#cbffc2",
+                    "inverse-on-surface": "#f1f1f1",
+                    "outline-variant": "#bfcaba",
+                    "surface-dim": "#dadada",
+                    "error-container": "#ffdad6",
+                    "secondary-container": "#abf4ac",
+                    "tertiary-fixed": "#ffddba",
+                    "surface": "#f9f9f9",
+                    "on-tertiary": "#ffffff",
+                    "secondary-fixed": "#abf4ac",
+                    "surface-container-low": "#f3f3f3",
+                    "surface-bright": "#f9f9f9",
+                    "primary": "#0d631b",
+                    "on-tertiary-fixed": "#2b1700"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "xl": "48px",
+                    "container-margin-mobile": "16px",
+                    "gutter": "16px",
+                    "xs": "8px",
+                    "md": "24px",
+                    "base": "4px",
+                    "lg": "32px",
+                    "container-margin-desktop": "40px",
+                    "sm": "16px"
+            },
+            "fontFamily": {
+                    "body-sm": [
+                            "Inter"
+                    ],
+                    "body-lg": [
+                            "Inter"
+                    ],
+                    "headline-md-mobile": [
+                            "Inter"
+                    ],
+                    "display-lg": [
+                            "Inter"
+                    ],
+                    "stat-value": [
+                            "Inter"
+                    ],
+                    "label-caps": [
+                            "JetBrains Mono"
+                    ],
+                    "headline-md": [
+                            "Inter"
+                    ]
+            },
+            "fontSize": {
+                    "body-sm": [
+                            "14px",
+                            {
+                                    "lineHeight": "20px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "body-lg": [
+                            "16px",
+                            {
+                                    "lineHeight": "24px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "headline-md-mobile": [
+                            "20px",
+                            {
+                                    "lineHeight": "28px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "display-lg": [
+                            "32px",
+                            {
+                                    "lineHeight": "40px",
+                                    "letterSpacing": "-0.02em",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "stat-value": [
+                            "28px",
+                            {
+                                    "lineHeight": "32px",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "label-caps": [
+                            "12px",
+                            {
+                                    "lineHeight": "16px",
+                                    "letterSpacing": "0.05em",
+                                    "fontWeight": "500"
+                            }
+                    ],
+                    "headline-md": [
+                            "24px",
+                            {
+                                    "lineHeight": "32px",
+                                    "letterSpacing": "-0.01em",
+                                    "fontWeight": "600"
+                            }
+                    ]
+            }
+    },
+        },
+      }
+    </script>
+<style>
+        /* Custom scrollbar for webkit */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #bfcaba;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #707a6c;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-lg min-h-screen flex items-center justify-center p-0 m-0">
+<main class="w-full h-screen flex flex-col md:flex-row">
+<!-- Left Side: Imagery -->
+<section class="hidden md:flex md:w-1/2 relative bg-surface-container-high h-full" data-alt="A high-quality, soft-focus image of a lush indoor modern greenhouse, featuring automated hydroponic systems, thriving vibrant green plants, and soft, natural sunlight filtering through large glass panels. The setting evokes a serene, technologically advanced agricultural environment with a clean, light-mode aesthetic, utilizing deep greens and crisp whites." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCgcz5OIlRPcvLScgosfRe5tI-uMEnJp5d_O3XHcBR6HcaJjKzJmgiuv4BzcAlVI0RW1fAaAYxDQ_YU7T6vp5XjhI4XIYacoi9wFYBafA4TKzJg2EikEOdqXo0vtqtPupq76ecn9W4bjhaiNOKOuq8Ba8N-o0ZuDGJOvZU2vIbyAmVmQgT-VmP4_7EMHQ4mNn5jzPhB6qyKHkKRCn7KA-hGEmxmSG5m9Fdxo-l9_KxvUc3wPSfOFHRz')">
+<!-- Overlay for text readability if needed -->
+<div class="absolute inset-0 bg-gradient-to-t from-on-primary-fixed-variant/40 to-transparent"></div>
+<div class="absolute bottom-10 left-10 p-md max-w-md">
+<h2 class="font-display-lg text-display-lg text-on-primary mb-xs">Cultivate Intelligently.</h2>
+<p class="font-body-lg text-body-lg text-on-primary/90">Monitor your indoor ecosystem with precision sensors and data-driven insights.</p>
+</div>
+</section>
+<!-- Right Side: Form -->
+<section class="w-full md:w-1/2 flex items-center justify-center p-container-margin-mobile md:p-container-margin-desktop bg-surface h-full">
+<div class="w-full max-w-md bg-surface-container-lowest rounded-xl p-lg shadow-md border border-primary/10">
+<!-- Header -->
+<div class="text-center mb-lg">
+<div class="flex items-center justify-center gap-2 mb-sm text-primary">
+<span class="material-symbols-outlined text-4xl" data-icon="potted_plant" style="font-variation-settings: 'FILL' 1;">potted_plant</span>
+<h1 class="font-headline-md text-headline-md">GrowHub</h1>
+</div>
+<h2 class="font-display-lg text-display-lg text-on-surface mb-base">Welcome Back</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Sign in to manage your digital conservatory.</p>
+</div>
+<!-- Form -->
+<form action="#" class="space-y-sm" method="POST">
+<!-- Email -->
+<div>
+<label class="block font-label-caps text-label-caps text-on-surface-variant mb-base" for="email">Email Address</label>
+<div class="relative">
+<div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-outline">
+<span class="material-symbols-outlined text-lg" data-icon="mail">mail</span>
+</div>
+<input class="w-full pl-10 pr-3 py-2 bg-surface-container-low border border-outline-variant rounded-lg focus:bg-surface-container-lowest focus:ring-1 focus:ring-primary focus:border-primary font-body-sm text-body-sm text-on-surface placeholder-on-surface-variant/50 transition-colors" id="email" name="email" placeholder="you@example.com" required="" type="email"/>
+</div>
+</div>
+<!-- Password -->
+<div>
+<label class="block font-label-caps text-label-caps text-on-surface-variant mb-base" for="password">Password</label>
+<div class="relative">
+<div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-outline">
+<span class="material-symbols-outlined text-lg" data-icon="lock">lock</span>
+</div>
+<input class="w-full pl-10 pr-3 py-2 bg-surface-container-low border border-outline-variant rounded-lg focus:bg-surface-container-lowest focus:ring-1 focus:ring-primary focus:border-primary font-body-sm text-body-sm text-on-surface placeholder-on-surface-variant/50 transition-colors" id="password" name="password" placeholder="••••••••" required="" type="password"/>
+</div>
+</div>
+<!-- Actions -->
+<div class="flex items-center justify-between py-2">
+<div class="flex items-center">
+<input class="h-4 w-4 text-primary focus:ring-primary border-outline-variant rounded bg-surface-container-low" id="remember-me" name="remember-me" type="checkbox"/>
+<label class="ml-2 block font-body-sm text-body-sm text-on-surface-variant" for="remember-me">
+                                Remember me
+                            </label>
+</div>
+<div class="text-body-sm">
+<a class="font-body-sm text-primary hover:text-primary-container font-semibold transition-colors" href="#">Forgot password?</a>
+</div>
+</div>
+<!-- Submit Button -->
+<button class="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-body-lg font-body-lg text-on-primary bg-primary hover:bg-primary-container focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors active:scale-[0.98]" type="submit">
+                        Đăng nhập
+                    </button>
+</form>
+<!-- Divider -->
+<div class="mt-lg relative">
+<div class="absolute inset-0 flex items-center">
+<div class="w-full border-t border-surface-variant"></div>
+</div>
+<div class="relative flex justify-center text-sm">
+<span class="px-2 bg-surface-container-lowest text-on-surface-variant font-body-sm text-body-sm">Or continue with</span>
+</div>
+</div>
+<!-- Social Login -->
+<div class="mt-sm grid grid-cols-2 gap-3">
+<button class="w-full inline-flex justify-center py-2 px-4 border border-outline-variant rounded-lg shadow-sm bg-surface-container-lowest font-body-sm text-body-sm text-on-surface hover:bg-surface-container-low transition-colors" type="button">
+<span class="sr-only">Sign in with Google</span>
+<svg class="h-5 w-5" fill="currentColor" viewbox="0 0 24 24">
+<path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z"></path>
+</svg>
+<span class="ml-2">Google</span>
+</button>
+<button class="w-full inline-flex justify-center py-2 px-4 border border-outline-variant rounded-lg shadow-sm bg-surface-container-lowest font-body-sm text-body-sm text-on-surface hover:bg-surface-container-low transition-colors" type="button">
+<span class="sr-only">Sign in with Apple</span>
+<svg class="h-5 w-5" fill="currentColor" viewbox="0 0 24 24">
+<path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09.105.15.219.303.34.456 1.122 1.404 2.404 2.753 3.962 2.753.114 0 .227-.006.339-.018.665-.069 1.341-.252 1.999-.485.648-.228 1.29-.441 1.942-.441s1.294.213 1.943.441c.658.233 1.334.416 2.001.485.111.012.224.018.338.018 1.558 0 2.84-1.349 3.961-2.753.12-.153.235-.306.34-.456 2.065-2.987 3.636-8.415 1.519-12.09-1.052-1.831-2.921-2.987-4.961-3.014-1.545-.038-3.012 1.04-3.96 1.04zm-.566-1.353c1.084-.336 1.914-1.284 2.21-2.417.027-.101.036-.205.029-.308-.949.19-2.034.782-2.75 1.597-.611.696-1.032 1.62-1.018 2.529.006.035.011.07.017.106.917.072 1.83-.267 2.512-.907z"></path>
+</svg>
+<span class="ml-2">Apple</span>
+</button>
+</div>
+<!-- Footer Link -->
+<p class="mt-lg text-center font-body-sm text-body-sm text-on-surface-variant">
+                    Don't have an account? 
+                    <a class="font-semibold text-primary hover:text-primary-container transition-colors" href="#">Sign up</a>
+</p>
+</div>
+</section>
+</main>
+</body></html>

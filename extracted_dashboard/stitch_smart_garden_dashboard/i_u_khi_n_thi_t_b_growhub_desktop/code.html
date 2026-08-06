@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+
+<html lang="vi"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>GrowHub - Control Center</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "error": "#ba1a1a",
+                        "surface-container-lowest": "#ffffff",
+                        "secondary": "#286b33",
+                        "surface-container-high": "#e8e8e8",
+                        "on-secondary-fixed": "#002107",
+                        "on-secondary-fixed-variant": "#07521d",
+                        "primary": "#0d631b",
+                        "surface": "#f9f9f9",
+                        "inverse-on-surface": "#f1f1f1",
+                        "on-primary-container": "#cbffc2",
+                        "surface-container-highest": "#e2e2e2",
+                        "tertiary-fixed": "#ffddba",
+                        "on-secondary-container": "#2e7238",
+                        "background": "#f9f9f9",
+                        "tertiary-fixed-dim": "#ffb865",
+                        "on-background": "#1a1c1c",
+                        "inverse-surface": "#2f3131",
+                        "outline-variant": "#bfcaba",
+                        "on-secondary": "#ffffff",
+                        "outline": "#707a6c",
+                        "on-tertiary-fixed-variant": "#663d00",
+                        "on-primary-fixed": "#002204",
+                        "inverse-primary": "#88d982",
+                        "on-surface": "#1a1c1c",
+                        "error-container": "#ffdad6",
+                        "surface-variant": "#e2e2e2",
+                        "primary-container": "#2e7d32",
+                        "on-tertiary": "#ffffff",
+                        "tertiary-container": "#9c6000",
+                        "on-error": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "surface-tint": "#1b6d24",
+                        "on-tertiary-container": "#ffeee0",
+                        "tertiary": "#7a4a00",
+                        "surface-container": "#eeeeee",
+                        "surface-bright": "#f9f9f9",
+                        "on-primary": "#ffffff",
+                        "primary-fixed-dim": "#88d982",
+                        "surface-dim": "#dadada",
+                        "on-surface-variant": "#40493d",
+                        "on-tertiary-fixed": "#2b1700",
+                        "secondary-container": "#abf4ac",
+                        "surface-container-low": "#f3f3f3",
+                        "secondary-fixed-dim": "#90d792",
+                        "primary-fixed": "#a3f69c",
+                        "on-primary-fixed-variant": "#005312",
+                        "secondary-fixed": "#abf4ac"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "lg": "32px",
+                        "md": "24px",
+                        "xl": "48px",
+                        "container-margin-desktop": "40px",
+                        "xs": "8px",
+                        "gutter": "16px",
+                        "base": "4px",
+                        "sm": "16px",
+                        "container-margin-mobile": "16px"
+                    },
+                    "fontFamily": {
+                        "display-lg": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "headline-md-mobile": ["Inter"],
+                        "stat-value": ["Inter"],
+                        "label-caps": ["JetBrains Mono"],
+                        "body-sm": ["Inter"],
+                        "headline-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "display-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-md-mobile": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "stat-value": ["28px", { "lineHeight": "32px", "fontWeight": "700" }],
+                        "label-caps": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                        "body-sm": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { background-color: theme('colors.background'); }
+        .slider-thumb::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: theme('colors.primary');
+            cursor: pointer;
+            box-shadow: 0px 2px 4px rgba(0,0,0,0.2);
+        }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden text-on-surface">
+<!-- SideNavBar (Hidden on Mobile, Visible on md+) -->
+<aside class="hidden md:flex flex-col h-full p-sm gap-base bg-surface-container-low border-r border-outline-variant w-64 flex-shrink-0 z-20">
+<div class="mb-lg">
+<h1 class="font-headline-md text-headline-md font-bold text-primary">GrowHub</h1>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Botanical Intelligence</p>
+</div>
+<nav class="flex-1 flex flex-col gap-base">
+<a class="flex items-center gap-sm px-sm py-xs rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-transform duration-150 active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-body-sm text-body-sm">Dashboard</span>
+</a>
+<a class="flex items-center gap-sm px-sm py-xs rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-transform duration-150 active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="potted_plant">potted_plant</span>
+<span class="font-body-sm text-body-sm">My Plants</span>
+</a>
+<a class="flex items-center gap-sm px-sm py-xs rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-transform duration-150 active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="calendar_today">calendar_today</span>
+<span class="font-body-sm text-body-sm">Schedule</span>
+</a>
+<a class="flex items-center gap-sm px-sm py-xs rounded-lg bg-secondary-container text-on-secondary-container font-semibold transition-transform duration-150 active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="settings" data-weight="fill" style="font-variation-settings: 'FILL' 1;">settings</span>
+<span class="font-body-sm text-body-sm">Settings</span>
+</a>
+</nav>
+<button class="w-full bg-primary text-on-primary py-xs rounded-lg font-body-sm text-body-sm hover:bg-primary-container transition-colors">Add New Plant</button>
+</aside>
+<div class="flex-1 flex flex-col h-full relative overflow-hidden">
+<!-- TopNavBar (Full Width on Mobile, Remaining Width on md+) -->
+<header class="flex justify-between items-center w-full px-container-margin-mobile md:px-container-margin-desktop py-xs bg-surface shadow-sm z-10 flex-shrink-0">
+<div class="flex items-center gap-sm">
+<button class="md:hidden text-primary">
+<span class="material-symbols-outlined">menu</span>
+</button>
+<span class="font-display-lg text-display-lg font-bold text-primary md:hidden">GrowHub</span>
+<span class="font-headline-md text-headline-md font-bold text-on-surface hidden md:block">Điều khiển Thiết bị</span>
+</div>
+<div class="flex items-center gap-sm">
+<button class="text-on-surface-variant hover:bg-surface-container rounded-full p-xs transition-colors">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<div class="w-8 h-8 rounded-full overflow-hidden bg-surface-variant flex items-center justify-center">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="A small circular profile picture of a young professional urban gardener, smiling slightly, illuminated by soft natural light against a blurred background of indoor hanging plants, adhering to the clean modern botanical aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC85TkYhXtTfmwul0LKh8OwbMD7_s0YXo-voSWbLdBxuOrmK_fsqHTWFisI5Dadq3d8Hid9OXlICsxqWxjCAlkr4JmYqgBfQQTnQxsPTDYjA-0sEOtcPiNlY25PeOcgDX_eJoEp-6xA61UnN3pFsXEy6ng1cvXbQbL4l9CimRM9fEoN8w_XGgKzeuGJlUWozGNLGRd62XMmV7JUnHd7n8ODxnBd3FvHkQAxLDEuuC6ob161OK1IQj_9"/>
+</div>
+</div>
+</header>
+<!-- Main Content -->
+<main class="flex-1 overflow-y-auto p-container-margin-mobile md:p-container-margin-desktop bg-background pb-xl md:pb-0">
+<div class="max-w-5xl mx-auto space-y-xl">
+<h1 class="font-display-lg text-display-lg text-on-surface md:hidden">Điều khiển Thiết bị</h1>
+<!-- Quick Toggles Section -->
+<section>
+<h2 class="font-headline-md text-headline-md text-on-surface mb-md">Công tắc nhanh</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-gutter">
+<!-- Toggle Card 1: Watering -->
+<div class="bg-surface-container-lowest p-md rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.05)] flex items-center justify-between border border-transparent hover:border-primary/10 transition-colors">
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 rounded-full bg-secondary-container flex items-center justify-center text-on-secondary-container">
+<span class="material-symbols-outlined">water_drop</span>
+</div>
+<span class="font-body-lg text-body-lg text-on-surface">Hệ thống tưới</span>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox" value=""/>
+<div class="w-11 h-6 bg-surface-variant peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+<!-- Toggle Card 2: Lights -->
+<div class="bg-surface-container-lowest p-md rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.05)] flex items-center justify-between border border-transparent hover:border-primary/10 transition-colors">
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant">
+<span class="material-symbols-outlined">lightbulb</span>
+</div>
+<span class="font-body-lg text-body-lg text-on-surface">Đèn LED</span>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input class="sr-only peer" type="checkbox" value=""/>
+<div class="w-11 h-6 bg-surface-variant peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+<!-- Toggle Card 3: Ventilation -->
+<div class="bg-surface-container-lowest p-md rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.05)] flex items-center justify-between border border-transparent hover:border-primary/10 transition-colors">
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 rounded-full bg-secondary-container flex items-center justify-center text-on-secondary-container">
+<span class="material-symbols-outlined">mode_fan</span>
+</div>
+<span class="font-body-lg text-body-lg text-on-surface">Quạt thông gió</span>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox" value=""/>
+<div class="w-11 h-6 bg-surface-variant peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+<!-- Toggle Card 4: Misting -->
+<div class="bg-surface-container-lowest p-md rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.05)] flex items-center justify-between border border-transparent hover:border-primary/10 transition-colors">
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant">
+<span class="material-symbols-outlined">air</span>
+</div>
+<span class="font-body-lg text-body-lg text-on-surface">Máy phun sương</span>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input class="sr-only peer" type="checkbox" value=""/>
+<div class="w-11 h-6 bg-surface-variant peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+</div>
+</section>
+<!-- Detailed Adjustments Section -->
+<section>
+<h2 class="font-headline-md text-headline-md text-on-surface mb-md">Điều chỉnh chi tiết</h2>
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-gutter">
+<!-- Slider 1: Light Intensity -->
+<div class="bg-surface-container-lowest p-md rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.05)] flex flex-col gap-sm">
+<div class="flex justify-between items-end">
+<span class="font-label-caps text-label-caps text-on-surface-variant">CƯỜNG ĐỘ ÁNH SÁNG</span>
+<span class="font-stat-value text-stat-value text-primary">80%</span>
+</div>
+<div class="w-full relative mt-sm">
+<input class="w-full h-2 bg-surface-variant rounded-lg appearance-none cursor-pointer slider-thumb" id="lightSlider" max="100" min="0" style="background: linear-gradient(to right, theme('colors.primary') 80%, theme('colors.surface-variant') 80%);" type="range" value="80"/>
+</div>
+</div>
+<!-- Slider 2: Water Flow Rate -->
+<div class="bg-surface-container-lowest p-md rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.05)] flex flex-col gap-sm">
+<div class="flex justify-between items-end">
+<span class="font-label-caps text-label-caps text-on-surface-variant">LƯU LƯỢNG NƯỚC</span>
+<span class="font-stat-value text-stat-value text-primary">65%</span>
+</div>
+<div class="w-full relative mt-sm">
+<input class="w-full h-2 bg-surface-variant rounded-lg appearance-none cursor-pointer slider-thumb" id="waterSlider" max="100" min="0" style="background: linear-gradient(to right, theme('colors.primary') 65%, theme('colors.surface-variant') 65%);" type="range" value="65"/>
+</div>
+</div>
+<!-- Slider 3: Target Humidity -->
+<div class="bg-surface-container-lowest p-md rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.05)] flex flex-col gap-sm">
+<div class="flex justify-between items-end">
+<span class="font-label-caps text-label-caps text-on-surface-variant">ĐỘ ẨM MỤC TIÊU</span>
+<span class="font-stat-value text-stat-value text-primary">70%</span>
+</div>
+<div class="w-full relative mt-sm">
+<input class="w-full h-2 bg-surface-variant rounded-lg appearance-none cursor-pointer slider-thumb" id="humiditySlider" max="100" min="0" style="background: linear-gradient(to right, theme('colors.primary') 70%, theme('colors.surface-variant') 70%);" type="range" value="70"/>
+</div>
+</div>
+</div>
+</section>
+</div>
+</main>
+</div>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="md:hidden fixed bottom-0 left-0 right-0 bg-surface shadow-[0_-2px_10px_rgba(0,0,0,0.05)] flex justify-around items-center h-16 z-20">
+<a class="flex flex-col items-center gap-1 text-on-surface-variant" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="text-[10px] font-medium">Dashboard</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-on-surface-variant" href="#">
+<span class="material-symbols-outlined" data-icon="potted_plant">potted_plant</span>
+<span class="text-[10px] font-medium">My Plants</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-on-surface-variant" href="#">
+<span class="material-symbols-outlined" data-icon="calendar_today">calendar_today</span>
+<span class="text-[10px] font-medium">Schedule</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-primary" href="#">
+<div class="bg-secondary-container px-3 py-1 rounded-full">
+<span class="material-symbols-outlined" data-icon="settings" data-weight="fill" style="font-variation-settings: 'FILL' 1;">settings</span>
+</div>
+<span class="text-[10px] font-bold">Settings</span>
+</a>
+</nav>
+<script>
+        // Simple script to update slider backgrounds
+        document.querySelectorAll('input[type="range"]').forEach(slider => {
+            slider.addEventListener('input', function() {
+                const value = this.value;
+                this.style.background = `linear-gradient(to right, theme('colors.primary') ${value}%, theme('colors.surface-variant') ${value}%)`;
+                this.parentElement.previousElementSibling.querySelector('.font-stat-value').textContent = `${value}%`;
+            });
+        });
+    </script>
+</body></html>
