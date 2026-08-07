@@ -57,7 +57,7 @@ function getKeysList() {
   return keys;
 }
 
-// REAL SERIAL PORT DETECTION FUNCTION (NO MOCK)
+// REAL SERIAL PORT DETECTION FUNCTION FOR RASPBERRY PI 4 & WINDOWS
 async function getRealSerialStatus() {
   try {
     const { SerialPort } = require("serialport");
@@ -71,10 +71,14 @@ async function getRealSerialStatus() {
         pPath.includes("COM") ||
         pPath.includes("TTYACM") ||
         pPath.includes("TTYUSB") ||
+        pPath.includes("TTYAMA") ||
         mfg.includes("ARDUINO") ||
         mfg.includes("CH340") ||
         mfg.includes("FTDI") ||
-        vendor.includes("2341")
+        mfg.includes("RASPBERRY") ||
+        vendor.includes("2341") ||
+        vendor.includes("1A86") ||
+        vendor.includes("0403")
       );
     });
 
@@ -92,20 +96,24 @@ async function getRealSerialStatus() {
     } else {
       return {
         connected: false,
-        port: "Không có cổng Serial/USB nào",
+        port: "Không có cổng Serial/USB",
         baudRate: 9600,
         pointCount: 6,
-        statusMessage: "Chưa kết nối: Không tìm thấy thiết bị Arduino/USB cắm vào hệ thống!",
+        statusMessage: "Chưa kết nối: Không tìm thấy thiết bị Arduino nào cắm vào cổng USB/Serial của Raspberry Pi!",
         allPorts: [],
       };
     }
   } catch (err) {
+    const isMissingModule = err.code === "MODULE_NOT_FOUND" || (err.message && err.message.includes("Cannot find module"));
+    const errMsg = isMissingModule
+      ? "Thư viện 'serialport' chưa được cài đặt trên Raspberry Pi (Vui lòng chạy 'npm install' trong thư mục dự án)"
+      : err.message;
     return {
       connected: false,
-      port: "Chưa kết nối (Cổng Serial)",
+      port: "Chưa kết nối (Serial)",
       baudRate: 9600,
       pointCount: 6,
-      statusMessage: `Không tìm thấy thiết bị Arduino thực tế (${err.message})`,
+      statusMessage: `Chưa nhận diện Arduino: ${errMsg}`,
       allPorts: [],
     };
   }
