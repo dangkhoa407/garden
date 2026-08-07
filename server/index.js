@@ -453,67 +453,59 @@ async function captureImage() {
   const imagePath = path.join(process.cwd(), "st01.jpg");
   console.log("Đang mở camera chụp ảnh...");
   
+  await configureCamera();
+  const directory = await fs.promises.mkdtemp(path.join(require("os").tmpdir(), "vuon-rau-camera-"));
+
   try {
-    await configureCamera();
-    const directory = await fs.promises.mkdtemp(path.join(require("os").tmpdir(), "vuon-rau-camera-"));
+    await captureFrames(directory);
+    const frameFiles = (await fs.promises.readdir(directory))
+      .filter((name) => name.toLowerCase().endsWith(".jpg"))
+      .sort()
+      .slice(WARMUP_FRAMES, WARMUP_FRAMES + CHECK_FRAMES);
 
-    try {
-      await captureFrames(directory);
-      const frameFiles = (await fs.promises.readdir(directory))
-        .filter((name) => name.toLowerCase().endsWith(".jpg"))
-        .sort()
-        .slice(WARMUP_FRAMES, WARMUP_FRAMES + CHECK_FRAMES);
-
-      if (frameFiles.length === 0) {
-        throw new Error("Camera không tạo đủ khung hình.");
-      }
-
-      let bestPath = null;
-      let bestInfo = null;
-      let bestScore = Infinity;
-
-      for (const fileName of frameFiles) {
-        const framePath = path.join(directory, fileName);
-        const info = await analyzeFrameLight(framePath);
-        const score = Math.abs(info.meanBrightness - TARGET_BRIGHTNESS) + info.overexposedRatio * 300 + info.darkRatio * 60;
-        if (score < bestScore) {
-          bestScore = score;
-          bestPath = framePath;
-          bestInfo = info;
-        }
-      }
-
-      if (!bestPath || !bestInfo) {
-        throw new Error("Không chọn được ảnh tốt từ camera.");
-      }
-
-      const brightness = bestInfo.meanBrightness;
-      const overexposedRatio = bestInfo.overexposedRatio;
-      let alpha = 1;
-      let beta = 0;
-
-      if (overexposedRatio > 0.25 || brightness > 200) { alpha = 0.58; beta = -30; }
-      else if (overexposedRatio > 0.15 || brightness > 175) { alpha = 0.72; beta = -18; }
-      else if (overexposedRatio > 0.07 || brightness > 150) { alpha = 0.84; beta = -8; }
-      else if (overexposedRatio > 0.03 || brightness > 130) { alpha = 0.94; beta = -2; }
-      else if (brightness < 35) { alpha = 1.30; beta = 30; }
-      else if (brightness < 65) { alpha = 1.15; beta = 15; }
-      else if (brightness < 90) { alpha = 1.07; beta = 8; }
-      else if (brightness < 115) { alpha = 1.03; beta = 4; }
-
-      const sharp = require("sharp");
-      await sharp(bestPath).removeAlpha().linear(alpha, beta).jpeg({ quality: JPEG_QUALITY }).toFile(imagePath);
-      console.log(`Đã chụp và lưu ảnh: ${imagePath}`);
-      return imagePath;
-    } finally {
-      await fs.promises.rm(directory, { recursive: true, force: true });
+    if (frameFiles.length === 0) {
+      throw new Error("Camera USB không tạo được khung hình nào (Vui lòng kiểm tra cáp cắm USB /dev/video0).");
     }
-  } catch (err) {
-    console.warn(`[Camera Warning] ${err.message}. Sử dụng ảnh st01.jpg hiện có...`);
-    if (fs.existsSync(imagePath)) {
-      return imagePath;
+
+    let bestPath = null;
+    let bestInfo = null;
+    let bestScore = Infinity;
+
+    for (const fileName of frameFiles) {
+      const framePath = path.join(directory, fileName);
+      const info = await analyzeFrameLight(framePath);
+      const score = Math.abs(info.meanBrightness - TARGET_BRIGHTNESS) + info.overexposedRatio * 300 + info.darkRatio * 60;
+      if (score < bestScore) {
+        bestScore = score;
+        bestPath = framePath;
+        bestInfo = info;
+      }
     }
-    throw err;
+
+    if (!bestPath || !bestInfo) {
+      throw new Error("Không chọn được khung hình chất lượng từ camera USB.");
+    }
+
+    const brightness = bestInfo.meanBrightness;
+    const overexposedRatio = bestInfo.overexposedRatio;
+    let alpha = 1;
+    let beta = 0;
+
+    if (overexposedRatio > 0.25 || brightness > 200) { alpha = 0.58; beta = -30; }
+    else if (overexposedRatio > 0.15 || brightness > 175) { alpha = 0.72; beta = -18; }
+    else if (overexposedRatio > 0.07 || brightness > 150) { alpha = 0.84; beta = -8; }
+    else if (overexposedRatio > 0.03 || brightness > 130) { alpha = 0.94; beta = -2; }
+    else if (brightness < 35) { alpha = 1.30; beta = 30; }
+    else if (brightness < 65) { alpha = 1.15; beta = 15; }
+    else if (brightness < 90) { alpha = 1.07; beta = 8; }
+    else if (brightness < 115) { alpha = 1.03; beta = 4; }
+
+    const sharp = require("sharp");
+    await sharp(bestPath).removeAlpha().linear(alpha, beta).jpeg({ quality: JPEG_QUALITY }).toFile(imagePath);
+    console.log(`[Camera Engine] Đã chụp và lưu ảnh thành công: ${imagePath}`);
+    return imagePath;
+  } finally {
+    await fs.promises.rm(directory, { recursive: true, force: true }).catch(() => {});
   }
 }
 
@@ -704,12 +696,20 @@ async function getOrInitArduinoSerialPort() {
           try {
             pushWebNotification(`Đang chụp ảnh & phân tích Gemini tại Điểm ${pointIndex + 1}...`, "AI_ANALYSIS");
 
-            // 1. CHỤP ẢNH TỪ CAMERA THỰC TẾ (GIỐNG V2.MJS captureImage())
-            let imagePathToSend = path.join(process.cwd(), "st01.jpg");
+            // 1. CHỤP ẢNH TỪ CAMERA (CHỈ KHI CHỤP ĐƯỢC ẢNH MỚI CHẠY TIẾP, NẾU LỖI THÌ DỪNG & BÁO LỖI ARDUINO)
+            let imagePathToSend = null;
             try {
               imagePathToSend = await captureImage();
             } catch (capErr) {
-              console.error(`[Capture Error] ${capErr.message}`);
+              console.error(`[Capture Error] Dừng kiểm tra Điểm ${pointIndex + 1}: ${capErr.message}`);
+              pushWebNotification(`Lỗi chụp ảnh từ USB Camera tại Điểm ${pointIndex + 1}: ${capErr.message}. Đã dừng chu trình điểm này!`, "ALERT");
+              await sendTelegramText(`⚠️ LỖI CHỤP ẢNH TỪ CAMERA USB TẠI ĐIỂM ${pointIndex + 1}:\n${capErr.message}\n-> ĐÃ DỪNG CHU TRÌNH ĐIỂM NÀY!`);
+              
+              if (cancellationId === currentCancellationId && activeSerialPort && activeSerialPort.isOpen) {
+                activeSerialPort.write(`POINT_RESULT:${pointIndex}:ERROR\n`);
+                console.log(`[Server -> Arduino] POINT_RESULT:${pointIndex}:ERROR`);
+              }
+              return; // DỪNG NGAY KHÔNG CHẠY GEMINI HAY PHUN THUỐC KHI CHỤP ẢNH LỖI!
             }
 
             // 2. PHÂN TÍCH GEMINI AI VỚI DỮ LIỆU ẢNH BASE64
@@ -1546,6 +1546,71 @@ app.post("/api/settings/telegram/test", async (req, res) => {
     return res.status(500).json({
       success: false,
       error: `Lỗi kết nối tới Telegram Server: ${err.message}`,
+    });
+  }
+});
+
+// CAMERA DIAGNOSTICS & TESTING ENDPOINTS FOR DEVICE SETTINGS
+app.get("/api/camera/status", async (req, res) => {
+  try {
+    const isLinux = process.platform === "linux";
+    const devPath = typeof CAMERA_DEVICE !== "undefined" ? CAMERA_DEVICE : "/dev/video0";
+    const exists = fs.existsSync(devPath);
+
+    let connected = false;
+    let statusMessage = "";
+
+    if (exists) {
+      connected = true;
+      statusMessage = `Đã nhận diện thiết bị USB Camera kết nối tại ${devPath}`;
+    } else if (!isLinux) {
+      connected = true;
+      statusMessage = "Đang chạy chế độ giả lập (Windows Dev)";
+    } else {
+      connected = false;
+      statusMessage = `Không phát hiện thiết bị USB Camera (${devPath} không tồn tại). Vui lòng cắm cáp USB Camera!`;
+    }
+
+    res.json({
+      connected,
+      model: connected ? "USB Web Camera (v4l2)" : "Chưa nhận diện",
+      resolution: typeof CAMERA_WIDTH !== "undefined" ? `${CAMERA_WIDTH}x${CAMERA_HEIGHT} (${CAMERA_FPS} fps)` : "640x480 (30 fps)",
+      statusMessage,
+      device: devPath,
+      lastSnapshotTime: new Date().toLocaleTimeString("vi-VN"),
+      streamUrl: "/st01.jpg?t=" + Date.now(),
+    });
+  } catch (err) {
+    res.status(500).json({
+      connected: false,
+      model: "Lỗi kết nối",
+      resolution: "N/A",
+      statusMessage: `Lỗi kiểm tra camera: ${err.message}`,
+      device: typeof CAMERA_DEVICE !== "undefined" ? CAMERA_DEVICE : "/dev/video0",
+    });
+  }
+});
+
+app.post("/api/camera/test", async (req, res) => {
+  try {
+    const imgPath = await captureImage();
+    res.json({
+      success: true,
+      message: `Chụp ảnh thử nghiệm thành công từ USB Camera! Ảnh đã lưu tại ${imgPath}`,
+      status: {
+        connected: true,
+        model: "USB Web Camera (v4l2)",
+        resolution: typeof CAMERA_WIDTH !== "undefined" ? `${CAMERA_WIDTH}x${CAMERA_HEIGHT}` : "640x480",
+        statusMessage: "Ảnh chụp thử nghiệm thành công",
+        device: typeof CAMERA_DEVICE !== "undefined" ? CAMERA_DEVICE : "/dev/video0",
+        lastSnapshotTime: new Date().toLocaleTimeString("vi-VN"),
+        streamUrl: "/st01.jpg?t=" + Date.now(),
+      }
+    });
+  } catch (err) {
+    res.status(400).json({
+      success: false,
+      error: `Chụp ảnh thử nghiệm thất bại: ${err.message}. Vui lòng cắm lại cáp USB camera!`,
     });
   }
 });
