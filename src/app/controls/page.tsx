@@ -22,11 +22,19 @@ interface ArduinoStatus {
   lastPingTime?: string;
 }
 
+interface SystemLog {
+  timestamp: string;
+  command: string;
+  label: string;
+  status?: string;
+}
+
 export default function ControlsPage() {
   const { controls, updateControls } = useGarden();
   const [sendingCmd, setSendingCmd] = useState<string | null>(null);
   const [activeToast, setActiveToast] = useState<string | null>(null);
-  const [commandLogs, setCommandLogs] = useState<CommandLog[]>([]);
+  const [logs, setLogs] = useState<SystemLog[]>([]);
+  const [logFilter, setLogFilter] = useState<"ALL" | "ERRORS" | "AI" | "SERIAL">("ALL");
   const [checkingStatus, setCheckingStatus] = useState(false);
   const [arduinoStatus, setArduinoStatus] = useState<ArduinoStatus>({
     connected: false,
@@ -43,8 +51,8 @@ export default function ControlsPage() {
       if (res.ok) {
         const data = await res.json();
         setArduinoStatus(data);
-        if (data.lastLogs) {
-          setCommandLogs(data.lastLogs);
+        if (data.lastLogs && Array.isArray(data.lastLogs)) {
+          setLogs(data.lastLogs);
         }
       }
     } catch (err) {
@@ -61,7 +69,52 @@ export default function ControlsPage() {
 
   useEffect(() => {
     fetchArduinoStatus();
+    const interval = setInterval(fetchArduinoStatus, 2000);
+    return () => clearInterval(interval);
   }, []);
+
+  const filteredLogs = logs.filter((log) => {
+    const cmd = (log.command || "").toUpperCase();
+    const status = (log.status || "").toUpperCase();
+    const text = (log.label || "").toUpperCase();
+
+    if (logFilter === "ERRORS") {
+      return (
+        cmd.includes("ERROR") ||
+        cmd.includes("ALERT") ||
+        cmd.includes("FAILED") ||
+        cmd.includes("WARNING") ||
+        status.includes("ERROR") ||
+        status.includes("ALERT") ||
+        status.includes("FAILED") ||
+        status.includes("WARNING") ||
+        text.includes("LỖI") ||
+        text.includes("CẢNH BÁO")
+      );
+    }
+    if (logFilter === "AI") {
+      return (
+        cmd.includes("AI") ||
+        cmd.includes("PROCESS") ||
+        cmd.includes("COMPLETE") ||
+        cmd.includes("GEMINI") ||
+        text.includes("GEMINI") ||
+        text.includes("CHỤP") ||
+        text.includes("BỎ QUA") ||
+        text.includes("PHÂN TÍCH")
+      );
+    }
+    if (logFilter === "SERIAL") {
+      return (
+        cmd === "RX" ||
+        cmd === "TX" ||
+        status.includes("SENT") ||
+        cmd.includes("PING") ||
+        text.includes("ARDUINO")
+      );
+    }
+    return true;
+  });
 
   const handleCheckConnection = async () => {
     setCheckingStatus(true);
@@ -384,25 +437,137 @@ export default function ControlsPage() {
               Gửi tín hiệu PING kiểm tra phản hồi PONG từ mạch Arduino
             </p>
           </button>
+      </section>
+
+      {/* REAL-TIME SYSTEM LOG & HARDWARE DIAGNOSTICS TERMINAL */}
+      <section className="bg-zinc-950 rounded-2xl p-md sm:p-lg border border-zinc-800 shadow-2xl overflow-hidden font-mono">
+        {/* Terminal Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-md border-b border-zinc-800/80 mb-md">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-full bg-rose-500/80 inline-block" />
+              <span className="w-3 h-3 rounded-full bg-amber-500/80 inline-block" />
+              <span className="w-3 h-3 rounded-full bg-emerald-500/80 inline-block" />
+            </div>
+            <div className="h-4 w-px bg-zinc-800 mx-1 hidden sm:block" />
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-emerald-400 text-lg animate-pulse">terminal</span>
+              <h3 className="text-zinc-100 font-bold text-sm tracking-wide">
+                KHUNG LOG HỆ THỐNG & NHẬT KÝ LỖI (LIVE CONSOLE)
+              </h3>
+            </div>
+          </div>
+
+          {/* Controls & Filter Buttons */}
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            {/* Filter Tabs */}
+            <div className="bg-zinc-900 p-1 rounded-xl flex items-center border border-zinc-800 flex-wrap gap-1">
+              <button
+                onClick={() => setLogFilter("ALL")}
+                className={`px-2.5 py-1 rounded-lg transition-all ${
+                  logFilter === "ALL" ? "bg-zinc-800 text-emerald-400 font-bold" : "text-zinc-400 hover:text-zinc-200"
+                }`}
+              >
+                Tất cả ({logs.length})
+              </button>
+              <button
+                onClick={() => setLogFilter("ERRORS")}
+                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 ${
+                  logFilter === "ERRORS" ? "bg-rose-950/80 text-rose-400 font-bold border border-rose-800/50" : "text-zinc-400 hover:text-rose-400"
+                }`}
+              >
+                🚨 Lỗi & Cảnh báo
+              </button>
+              <button
+                onClick={() => setLogFilter("AI")}
+                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 ${
+                  logFilter === "AI" ? "bg-cyan-950/80 text-cyan-400 font-bold border border-cyan-800/50" : "text-zinc-400 hover:text-cyan-400"
+                }`}
+              >
+                🤖 AI Inspection
+              </button>
+              <button
+                onClick={() => setLogFilter("SERIAL")}
+                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 ${
+                  logFilter === "SERIAL" ? "bg-purple-950/80 text-purple-400 font-bold border border-purple-800/50" : "text-zinc-400 hover:text-purple-400"
+                }`}
+              >
+                🔌 Serial RX/TX
+              </button>
+            </div>
+
+            {/* Clear button */}
+            <button
+              onClick={() => setLogs([])}
+              className="px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800 rounded-xl transition-all"
+              title="Xóa khung log màn hình"
+            >
+              Xóa log
+            </button>
+          </div>
         </div>
 
-        {/* Command Log Terminal */}
-        {commandLogs.length > 0 && (
-          <div className="mt-md p-md bg-zinc-900 rounded-xl text-zinc-100 font-mono text-xs space-y-1">
-            <div className="flex items-center justify-between text-zinc-400 border-b border-zinc-700 pb-1 mb-2">
-              <span>LỊCH SỬ GỬI LỆNH V2.MJS (SERIAL LOG)</span>
-              <span>PORT: SERIAL DETECTED</span>
+        {/* Terminal Log Output List */}
+        <div className="h-64 sm:h-80 overflow-y-auto pr-2 space-y-2 text-xs scrollbar-thin scrollbar-thumb-zinc-800">
+          {filteredLogs.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center text-zinc-600 space-y-2 py-8">
+              <span className="material-symbols-outlined text-4xl">subject</span>
+              <p>Chưa có dữ liệu log nào phù hợp với bộ lọc hiện tại</p>
             </div>
-            {commandLogs.map((log, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <span className="text-zinc-500">[{log.timestamp}]</span>
-                <span className="text-emerald-400 font-bold">&gt; Node -&gt; Arduino:</span>
-                <span className="text-amber-300">{log.command}</span>
-                <span className="text-zinc-400">({log.label})</span>
-              </div>
-            ))}
+          ) : (
+            filteredLogs.map((log, index) => {
+              const cmdUpper = (log.command || "").toUpperCase();
+              const isError = cmdUpper.includes("ERROR") || cmdUpper.includes("ALERT") || cmdUpper.includes("FAILED");
+              const isWarn = cmdUpper.includes("WARNING") || cmdUpper.includes("WARN");
+              const isAi = cmdUpper.includes("AI") || cmdUpper.includes("PROCESS") || cmdUpper.includes("GEMINI");
+              const isSuccess = cmdUpper.includes("SUCCESS") || cmdUpper.includes("COMPLETE");
+
+              let badgeStyle = "bg-zinc-800 text-zinc-300 border-zinc-700";
+              if (isError) badgeStyle = "bg-rose-950 text-rose-400 border-rose-800/60 font-bold";
+              else if (isWarn) badgeStyle = "bg-amber-950 text-amber-400 border-amber-800/60 font-bold";
+              else if (isAi) badgeStyle = "bg-cyan-950 text-cyan-300 border-cyan-800/60";
+              else if (isSuccess) badgeStyle = "bg-emerald-950 text-emerald-300 border-emerald-800/60";
+
+              return (
+                <div
+                  key={index}
+                  className={`p-2.5 rounded-xl border flex flex-col sm:flex-row sm:items-start gap-2 transition-colors ${
+                    isError
+                      ? "bg-rose-950/30 border-rose-900/40 text-rose-200"
+                      : isWarn
+                      ? "bg-amber-950/20 border-amber-900/30 text-amber-200"
+                      : "bg-zinc-900/70 border-zinc-800/80 text-zinc-300 hover:bg-zinc-900"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-zinc-500 font-mono text-[11px]">
+                      [{log.timestamp || "NOW"}]
+                    </span>
+                    <span className={`px-2 py-0.5 rounded-md text-[10px] uppercase font-bold border ${badgeStyle}`}>
+                      {log.command || "LOG"}
+                    </span>
+                  </div>
+                  <div className="break-all font-sans text-xs sm:text-[13px] leading-relaxed flex-1">
+                    {log.label}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Terminal Footer Status Bar */}
+        <div className="mt-md pt-sm border-t border-zinc-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-zinc-500">
+          <div className="flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full ${arduinoStatus.connected ? "bg-emerald-500 animate-ping" : "bg-rose-500"}`} />
+            <span>
+              Cổng Serial: <strong className="text-zinc-300">{arduinoStatus.port}</strong> ({arduinoStatus.connected ? "HOẠT ĐỘNG 9600 BAUD" : "DISCONNECTED"})
+            </span>
           </div>
-        )}
+          <div>
+            Tự động làm mới: <span className="text-emerald-400 font-bold">2s/lần</span> | Tổng log ghi nhận: <span className="text-zinc-300 font-bold">{logs.length}</span>
+          </div>
+        </div>
       </section>
 
       {/* Quick Toggles Section */}
