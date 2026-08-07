@@ -439,17 +439,30 @@ async function getOrInitArduinoSerialPort() {
             let details = "Cây khỏe mạnh, không phát hiện sâu bệnh.";
 
             try {
-              const aiResult = await callGeminiApiWithRotation({
-                contents: [{ parts: [{ text: `Quan sát sâu bệnh tại Điểm kiểm tra ${pointIndex + 1}` }] }],
-              });
-              
-              if (aiResult && aiResult.text) {
-                details = aiResult.text;
-                if (details.includes("SÂU") || details.includes("BỆNH") || details.includes("SPRAY") || details.includes("LÁ BỊ SÂU ĂN")) {
-                  action = "SPRAY";
+              const keys = getKeysList();
+              if (keys.length === 0) {
+                details = "Chưa thiết lập Gemini API Key! Vui lòng vào trang 'Cấu hình API' trên Web để thêm chìa khóa Gemini.";
+                pushWebNotification(details, "WARNING");
+              } else {
+                const aiResult = await callGeminiApiWithRotation({
+                  contents: [{ parts: [{ text: `Bạn là chuyên gia quan sát cây trồng. Hãy phân tích sâu bệnh tại Điểm kiểm tra ${pointIndex + 1}. Trả về thông tin: 1. Tình trạng (SÂU, LÁ BỊ SÂU ĂN, BỆNH, SÂU VÀ BỆNH, KHÔNG PHÁT HIỆN SÂU BỆNH). 2. Mô tả chi tiết. 3. Khuyến nghị xử lý sinh học.` }] }],
+                });
+                
+                if (aiResult && aiResult.text) {
+                  details = aiResult.text;
+                  const upperDetails = details.toUpperCase();
+                  if (
+                    upperDetails.includes("SÂU") ||
+                    upperDetails.includes("BỆNH") ||
+                    upperDetails.includes("LÁ BỊ SÂU ĂN") ||
+                    upperDetails.includes("SPRAY")
+                  ) {
+                    action = "SPRAY";
+                  }
                 }
               }
             } catch (aiErr) {
+              details = `Lỗi phân tích Gemini AI (dùng Key trong Cấu hình API): ${aiErr.message}`;
               console.warn(`[Point AI fallback] ${aiErr.message}`);
             }
 
