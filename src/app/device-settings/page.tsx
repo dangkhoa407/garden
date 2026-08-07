@@ -174,7 +174,10 @@ export default function DeviceSettingsPage() {
   const fetchCameraStatus = async () => {
     const data = await safeFetchJson("/api/camera/status");
     if (data) {
-      setCameraStatus(data);
+      setCameraStatus({
+        ...data,
+        streamUrl: `/api/camera/image?t=${Date.now()}`,
+      });
     }
   };
 
@@ -185,7 +188,12 @@ export default function DeviceSettingsPage() {
       const data = await safeFetchJson("/api/camera/test", { method: "POST" });
       if (data) {
         if (data.success) {
-          if (data.status) setCameraStatus(data.status);
+          if (data.status) {
+            setCameraStatus({
+              ...data.status,
+              streamUrl: `/api/camera/image?t=${Date.now()}`,
+            });
+          }
           showToast(data.message || "Chụp thử nghiệm camera USB thành công!", "success");
         } else {
           showToast(data.error || "Chụp thử nghiệm camera thất bại! Kiểm tra cáp USB.", "error");
@@ -375,13 +383,21 @@ export default function DeviceSettingsPage() {
     fetchTelegramSettings();
     handleScanWifi();
 
+    // Auto refresh camera status & image feed every 3 seconds for true real-time monitoring
+    const cameraInterval = setInterval(() => {
+      fetchCameraStatus();
+      fetchWifiStatus();
+    }, 3000);
+
     // Auto scan Wi-Fi every 15 seconds silently
     const wifiInterval = setInterval(() => {
       handleScanWifi();
-      fetchWifiStatus();
     }, 15000);
 
-    return () => clearInterval(wifiInterval);
+    return () => {
+      clearInterval(cameraInterval);
+      clearInterval(wifiInterval);
+    };
   }, []);
 
   return (

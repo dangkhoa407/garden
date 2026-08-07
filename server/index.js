@@ -1555,7 +1555,9 @@ app.get("/api/camera/image", (req, res) => {
   const imgPath = path.join(process.cwd(), "st01.jpg");
   if (fs.existsSync(imgPath)) {
     res.setHeader("Content-Type", "image/jpeg");
-    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate, max-age=0");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
     return res.sendFile(imgPath);
   }
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480" viewBox="0 0 640 480">
@@ -1564,6 +1566,7 @@ app.get("/api/camera/image", (req, res) => {
     <text x="50%" y="55%" dominant-baseline="middle" text-anchor="middle" fill="#71717a" font-family="sans-serif" font-size="14">Nhấn nút "Chụp thử nghiệm (Snapshot Test)" để chụp ảnh phần cứng</text>
   </svg>`;
   res.setHeader("Content-Type", "image/svg+xml");
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate, max-age=0");
   res.send(svg);
 });
 
@@ -1571,7 +1574,9 @@ app.get("/st01.jpg", (req, res) => {
   const imgPath = path.join(process.cwd(), "st01.jpg");
   if (fs.existsSync(imgPath)) {
     res.setHeader("Content-Type", "image/jpeg");
-    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate, max-age=0");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
     return res.sendFile(imgPath);
   }
   res.redirect("/api/camera/image");
@@ -1599,8 +1604,9 @@ app.get("/api/camera/status", async (req, res) => {
 
     res.json({
       connected,
-      model: connected ? "USB Web Camera (v4l2)" : "Chưa nhận diện",
-      resolution: typeof CAMERA_WIDTH !== "undefined" ? `${CAMERA_WIDTH}x${CAMERA_HEIGHT} (30 fps)` : "640x480 (30 fps)",
+      model: connected ? "USB Web Camera (/dev/video0)" : "Chưa nhận diện",
+      resolution: typeof CAMERA_WIDTH !== "undefined" ? `${CAMERA_WIDTH}x${CAMERA_HEIGHT}` : "640x480",
+      fps: typeof CAMERA_FPS !== "undefined" ? CAMERA_FPS : 30,
       statusMessage,
       device: devPath,
       lastSnapshotTime: new Date().toLocaleTimeString("vi-VN"),
@@ -1611,6 +1617,7 @@ app.get("/api/camera/status", async (req, res) => {
       connected: false,
       model: "Lỗi kết nối",
       resolution: "N/A",
+      fps: 0,
       statusMessage: `Lỗi kiểm tra camera: ${err.message}`,
       device: typeof CAMERA_DEVICE !== "undefined" ? CAMERA_DEVICE : "/dev/video0",
       streamUrl: "/api/camera/image?t=" + Date.now(),
@@ -1626,8 +1633,9 @@ app.post("/api/camera/test", async (req, res) => {
       message: `Chụp ảnh thử nghiệm thành công từ USB Camera! Ảnh đã lưu tại ${imgPath}`,
       status: {
         connected: true,
-        model: "USB Web Camera (v4l2)",
+        model: "USB Web Camera (/dev/video0)",
         resolution: typeof CAMERA_WIDTH !== "undefined" ? `${CAMERA_WIDTH}x${CAMERA_HEIGHT}` : "640x480",
+        fps: typeof CAMERA_FPS !== "undefined" ? CAMERA_FPS : 30,
         statusMessage: "Ảnh chụp thử nghiệm thành công",
         device: typeof CAMERA_DEVICE !== "undefined" ? CAMERA_DEVICE : "/dev/video0",
         lastSnapshotTime: new Date().toLocaleTimeString("vi-VN"),
