@@ -67,10 +67,29 @@ export default function ControlsPage() {
     }
   };
 
+  const autoPingCheck = async () => {
+    try {
+      const res = await fetch("/api/arduino/ping-check", { method: "POST" });
+      const data = await res.json();
+      if (data.status) {
+        setArduinoStatus(data.status);
+      }
+    } catch (err) {
+      // Bỏ qua lỗi ngầm khi quét tự động
+    }
+  };
+
   useEffect(() => {
     fetchArduinoStatus();
-    const interval = setInterval(fetchArduinoStatus, 2000);
-    return () => clearInterval(interval);
+    // Tự động quét trạng thái thiết bị mỗi 2 giây
+    const statusInterval = setInterval(fetchArduinoStatus, 2000);
+    // Tự động kiểm tra kết nối Arduino (Ping Test ngầm) mỗi 4 giây
+    const pingInterval = setInterval(autoPingCheck, 4000);
+
+    return () => {
+      clearInterval(statusInterval);
+      clearInterval(pingInterval);
+    };
   }, []);
 
   const filteredLogs = logs.filter((log) => {
@@ -207,12 +226,12 @@ export default function ControlsPage() {
                 {arduinoStatus.connected ? (
                   <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    ĐÃ KẾT NỐI
+                    ĐÃ KẾT NỐI (TỰ ĐỘNG QUÉT 4S/LẦN)
                   </span>
                 ) : (
                   <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-300 flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-rose-500" />
-                    CHƯA KẾT NỐI
+                    <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                    CHƯA KẾT NỐI (TỰ ĐỘNG THỬ LẠI 4S/LẦN)
                   </span>
                 )}
               </div>
@@ -237,7 +256,7 @@ export default function ControlsPage() {
             ) : (
               <>
                 <span className="material-symbols-outlined text-lg">sync_lock</span>
-                Kiểm tra kết nối (Ping Test)
+                Kiểm tra ngay (Ping Now)
               </>
             )}
           </button>
@@ -270,11 +289,12 @@ export default function ControlsPage() {
             </span>
           </div>
           <div>
-            <span className="text-on-surface-variant block font-label-caps text-[10px] font-semibold uppercase">
-              LẦN PING CUỐI
+            <span className="text-on-surface-variant block font-label-caps text-[10px] font-semibold uppercase flex items-center gap-1">
+              LẦN PING CUỐI (TỰ ĐỘNG)
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping inline-block" />
             </span>
             <span className="font-bold text-primary text-body-sm">
-              {arduinoStatus.lastPingTime || "Chưa gửi"}
+              {arduinoStatus.lastPingTime || "Đang tự động gửi..."}
             </span>
           </div>
         </div>
