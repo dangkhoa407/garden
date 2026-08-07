@@ -1,7 +1,8 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 interface SidebarProps {
@@ -12,6 +13,27 @@ interface SidebarProps {
 
 export function Sidebar({ className, isOpenMobile, onCloseMobile }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    const cookieMatch = document.cookie.match(/(?:^|;\s*)growhub_token=([^;]*)/);
+    const hasCookie = cookieMatch && cookieMatch[1] && cookieMatch[1].trim() !== "";
+    const hasLocal = typeof window !== "undefined" && !!localStorage.getItem("growhub_token");
+    setIsLoggedIn(!!(hasCookie || hasLocal));
+  }, [pathname]);
+
+  const handleLogout = () => {
+    document.cookie = "growhub_token=; Max-Age=0; path=/";
+    document.cookie = "growhub_user=; Max-Age=0; path=/";
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("growhub_token");
+      localStorage.removeItem("growhub_user");
+    }
+    setIsLoggedIn(false);
+    if (onCloseMobile) onCloseMobile();
+    router.push("/login");
+  };
 
   const navItems = [
     { label: "Dashboard", href: "/", icon: "dashboard" },
@@ -21,7 +43,8 @@ export function Sidebar({ className, isOpenMobile, onCloseMobile }: SidebarProps
     { label: "Điều khiển thiết bị", href: "/controls", icon: "tune" },
     { label: "Lịch trình", href: "/schedule", icon: "calendar_today" },
     { label: "Quan sát Camera", href: "/camera", icon: "videocam" },
-    { label: "Đăng nhập", href: "/login", icon: "login" },
+    { label: "Cài đặt thiết bị", href: "/device-settings", icon: "settings_suggest" },
+    ...(!isLoggedIn ? [{ label: "Đăng nhập", href: "/login", icon: "login" }] : []),
   ];
 
   return (
@@ -98,8 +121,17 @@ export function Sidebar({ className, isOpenMobile, onCloseMobile }: SidebarProps
           })}
         </nav>
 
-        {/* Action button at bottom */}
-        <div className="mt-auto pt-sm border-t border-outline-variant/10">
+        {/* Action buttons at bottom */}
+        <div className="mt-auto pt-sm border-t border-outline-variant/10 space-y-2">
+          {isLoggedIn && (
+            <button
+              onClick={handleLogout}
+              className="w-full bg-error/10 text-error hover:bg-error/20 py-2.5 px-4 rounded-xl font-body-lg text-body-sm font-semibold transition-all shadow-xs active:scale-95 flex justify-center items-center gap-2"
+            >
+              <span className="material-symbols-outlined text-lg">logout</span>
+              Đăng xuất
+            </button>
+          )}
           <button className="w-full bg-primary text-on-primary py-3 px-4 rounded-xl font-body-lg text-body-sm font-semibold hover:bg-primary-container transition-all shadow-sm active:scale-95 flex justify-center items-center gap-2">
             <span className="material-symbols-outlined text-lg">add</span>
             Thêm cây mới

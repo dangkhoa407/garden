@@ -1,0 +1,9 @@
+{
+  "connected": true,
+  "model": "GrowHub HD AI Vision Camera (USB/ESP32)",
+  "resolution": "1920x1080 (1080p Full HD)",
+  "fps": 30,
+  "statusMessage": "Camera đang hoạt động ổn định, khung hình AI sắc nét.",
+  "streamUrl": "https://images.unsplash.com/photo-1585320806297-9794b3e4eeae?q=80&w=1000&auto=format&fit=crop",
+  "lastSnapshotTime": "09:12:03"
+}

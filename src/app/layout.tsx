@@ -45,7 +45,7 @@ export default function RootLayout({
   // Loading state while checking authentication on client
   if (!authChecked) {
     return (
-      <html lang="vi">
+      <html lang="vi" suppressHydrationWarning>
         <head>
           <title>GrowHub - Smart Garden Conservatory</title>
           <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -55,7 +55,7 @@ export default function RootLayout({
             href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=block"
           />
         </head>
-        <body className="bg-background text-on-background min-h-screen flex items-center justify-center">
+        <body suppressHydrationWarning className="bg-background text-on-background min-h-screen flex items-center justify-center">
           <div className="flex flex-col items-center gap-3">
             <span className="material-symbols-outlined text-primary text-4xl animate-spin">
               progress_activity
@@ -72,7 +72,7 @@ export default function RootLayout({
   // Redirecting state if unauthenticated and trying to access protected page
   if (!isLoggedIn && !isLoginPage) {
     return (
-      <html lang="vi">
+      <html lang="vi" suppressHydrationWarning>
         <head>
           <title>GrowHub - Chuyển hướng đăng nhập</title>
           <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -82,7 +82,7 @@ export default function RootLayout({
             href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=block"
           />
         </head>
-        <body className="bg-background text-on-background min-h-screen flex items-center justify-center">
+        <body suppressHydrationWarning className="bg-background text-on-background min-h-screen flex items-center justify-center">
           <div className="flex flex-col items-center gap-3">
             <span className="material-symbols-outlined text-primary text-4xl animate-spin">
               progress_activity
@@ -99,7 +99,7 @@ export default function RootLayout({
   // Redirecting state if already authenticated and trying to access /login page
   if (isLoggedIn && isLoginPage) {
     return (
-      <html lang="vi">
+      <html lang="vi" suppressHydrationWarning>
         <head>
           <title>GrowHub - Chuyển hướng Dashboard</title>
           <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -109,7 +109,7 @@ export default function RootLayout({
             href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=block"
           />
         </head>
-        <body className="bg-background text-on-background min-h-screen flex items-center justify-center">
+        <body suppressHydrationWarning className="bg-background text-on-background min-h-screen flex items-center justify-center">
           <div className="flex flex-col items-center gap-3">
             <span className="material-symbols-outlined text-primary text-4xl animate-spin">
               progress_activity
@@ -124,7 +124,7 @@ export default function RootLayout({
   }
 
   return (
-    <html lang="vi" className={`light ${isAiChatPage ? "h-full overflow-hidden" : ""}`}>
+    <html lang="vi" suppressHydrationWarning className={`light ${isAiChatPage ? "h-full overflow-hidden" : ""}`}>
       <head>
         <title>GrowHub - Smart Garden Conservatory</title>
         <meta
@@ -140,6 +140,7 @@ export default function RootLayout({
         />
       </head>
       <body
+        suppressHydrationWarning
         className={`bg-background text-on-background antialiased ${
           isAiChatPage ? "h-full overflow-hidden" : "min-h-screen"
         }`}

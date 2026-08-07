@@ -5,6 +5,8 @@ import { QuickToggleCard } from "@/components/controls/QuickToggleCard";
 import { RangeSliderCard } from "@/components/controls/RangeSliderCard";
 import { useGarden } from "@/context/GardenContext";
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+
 interface CommandLog {
   timestamp: string;
   command: string;
@@ -37,7 +39,7 @@ export default function ControlsPage() {
 
   const fetchArduinoStatus = async () => {
     try {
-      const res = await fetch("http://localhost:5000/api/arduino/status");
+      const res = await fetch(`${BACKEND_URL}/api/arduino/status`);
       if (res.ok) {
         const data = await res.json();
         setArduinoStatus(data);
@@ -66,7 +68,7 @@ export default function ControlsPage() {
     setActiveToast(null);
 
     try {
-      const res = await fetch("http://localhost:5000/api/arduino/ping-check", {
+      const res = await fetch(`${BACKEND_URL}/api/arduino/ping-check`, {
         method: "POST",
       });
       const data = await res.json();
@@ -98,7 +100,7 @@ export default function ControlsPage() {
     setActiveToast(null);
 
     try {
-      const response = await fetch("http://localhost:5000/api/arduino/command", {
+      const response = await fetch(`${BACKEND_URL}/api/arduino/command`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ command: cmdKey }),

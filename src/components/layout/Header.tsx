@@ -113,6 +113,14 @@ export function Header({ title = "GARDEN OVERVIEW", subtitle, onOpenMobileMenu }
 
               <div className="py-1">
                 <Link
+                  href="/device-settings"
+                  onClick={() => setShowDropdown(false)}
+                  className="flex items-center gap-3 px-4 py-2 text-body-sm text-on-surface hover:bg-surface-container-high transition-colors"
+                >
+                  <span className="material-symbols-outlined text-lg text-primary">settings_suggest</span>
+                  <span>Cài đặt thiết bị</span>
+                </Link>
+                <Link
                   href="/api-key"
                   onClick={() => setShowDropdown(false)}
                   className="flex items-center gap-3 px-4 py-2 text-body-sm text-on-surface hover:bg-surface-container-high transition-colors"
