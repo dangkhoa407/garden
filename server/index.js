@@ -232,25 +232,88 @@ app.post("/api/login", (req, res) => {
   }
 });
 
-// ARDUINO / ROBOT V2.MJS CONTROL & STATUS ENDPOINTS
+// ARDUINO / ROBOT V2.MJS CONTROL & SERIAL INTERACTION SYSTEM
 const ARDUINO_COMMAND_MAP = {
-  k: { cmd: "CHECK_PESTS", label: "Kiểm tra sâu hại (CHECK_PESTS)", desc: "Quét 6 điểm bằng camera và AI Gemini" },
-  CHECK_PESTS: { cmd: "CHECK_PESTS", label: "Kiểm tra sâu hại (CHECK_PESTS)", desc: "Quét 6 điểm bằng camera và AI Gemini" },
-  h: { cmd: "HOME", label: "Về vị trí gốc (HOME)", desc: "Đưa robot về vị trí homing mặc định" },
-  HOME: { cmd: "HOME", label: "Về vị trí gốc (HOME)", desc: "Đưa robot về vị trí homing mặc định" },
-  p: { cmd: "FULL_SPRAY", label: "Phun toàn bộ (FULL_SPRAY)", desc: "Phun dung dịch sinh học toàn khu vực" },
-  FULL_SPRAY: { cmd: "FULL_SPRAY", label: "Phun toàn bộ (FULL_SPRAY)", desc: "Phun dung dịch sinh học toàn khu vực" },
-  s: { cmd: "STOP", label: "Dừng ngay khẩn cấp (STOP)", desc: "Hủy chu trình và dừng động cơ lập tức" },
-  STOP: { cmd: "STOP", label: "Dừng ngay khẩn cấp (STOP)", desc: "Hủy chu trình và dừng động cơ lập tức" },
-  r: { cmd: "RESET_ERROR", label: "Xóa trạng thái lỗi (RESET_ERROR)", desc: "Khôi phục hệ thống về trạng thái bình thường" },
-  RESET_ERROR: { cmd: "RESET_ERROR", label: "Xóa trạng thái lỗi (RESET_ERROR)", desc: "Khôi phục hệ thống về trạng thái bình thường" },
-  ping: { cmd: "PING", label: "Kiểm tra kết nối (PING)", desc: "Gửi lệnh PING đến cổng Arduino" },
-  PING: { cmd: "PING", label: "Kiểm tra kết nối (PING)", desc: "Gửi lệnh PING đến cổng Arduino" },
+  k: { cmd: "k", label: "Kiểm tra sâu hại (CHECK_PESTS)", desc: "Quét 6 điểm bằng camera và AI Gemini" },
+  CHECK_PESTS: { cmd: "k", label: "Kiểm tra sâu hại (CHECK_PESTS)", desc: "Quét 6 điểm bằng camera và AI Gemini" },
+  h: { cmd: "h", label: "Về vị trí gốc (HOME)", desc: "Đưa robot về vị trí homing mặc định" },
+  HOME: { cmd: "h", label: "Về vị trí gốc (HOME)", desc: "Đưa robot về vị trí homing mặc định" },
+  p: { cmd: "p", label: "Phun toàn bộ (FULL_SPRAY)", desc: "Phun dung dịch sinh học toàn khu vực" },
+  FULL_SPRAY: { cmd: "p", label: "Phun toàn bộ (FULL_SPRAY)", desc: "Phun dung dịch sinh học toàn khu vực" },
+  s: { cmd: "s", label: "Dừng ngay khẩn cấp (STOP)", desc: "Hủy chu trình và dừng động cơ lập tức" },
+  STOP: { cmd: "s", label: "Dừng ngay khẩn cấp (STOP)", desc: "Hủy chu trình và dừng động cơ lập tức" },
+  r: { cmd: "r", label: "Xóa trạng thái lỗi (RESET_ERROR)", desc: "Khôi phục hệ thống về trạng thái bình thường" },
+  RESET_ERROR: { cmd: "r", label: "Xóa trạng thái lỗi (RESET_ERROR)", desc: "Khôi phục hệ thống về trạng thái bình thường" },
+  ping: { cmd: "ping", label: "Kiểm tra kết nối (PING)", desc: "Gửi lệnh PING đến cổng Arduino" },
+  PING: { cmd: "ping", label: "Kiểm tra kết nối (PING)", desc: "Gửi lệnh PING đến cổng Arduino" },
 };
 
 let lastArduinoLogs = [];
+let activeSerialInstance = null;
 
-app.post("/api/arduino/command", (req, res) => {
+async function sendSerialCommandToArduino(rawCmd) {
+  try {
+    const { SerialPort, ReadlineParser } = require("serialport");
+    
+    // Check if current active instance is open
+    if (!activeSerialInstance || !activeSerialInstance.isOpen) {
+      const ports = await SerialPort.list();
+      const candidates = ports.filter((p) => {
+        const pPath = (p.path || "").toUpperCase();
+        const mfg = (p.manufacturer || "").toUpperCase();
+        return (
+          pPath.includes("COM") ||
+          pPath.includes("TTYACM") ||
+          pPath.includes("TTYUSB") ||
+          pPath.includes("TTYAMA") ||
+          mfg.includes("ARDUINO") ||
+          mfg.includes("CH340") ||
+          mfg.includes("FTDI")
+        );
+      });
+
+      if (candidates.length === 0 && ports.length === 0) {
+        throw new Error("Không tìm thấy thiết bị Arduino trên các cổng USB/Serial của Raspberry Pi");
+      }
+
+      const targetPath = candidates.length > 0 ? candidates[0].path : ports[0].path;
+      activeSerialInstance = new SerialPort({ path: targetPath, baudRate: 9600, autoOpen: false });
+
+      await new Promise((resolve, reject) => {
+        activeSerialInstance.open((err) => (err ? reject(err) : resolve()));
+      });
+
+      const parser = activeSerialInstance.pipe(new ReadlineParser({ delimiter: "\n" }));
+      parser.on("data", (data) => {
+        const line = String(data).replace(/\r/g, "").trim();
+        if (!line) return;
+        console.log(`[Arduino -> Node/v2.mjs] ${line}`);
+        lastArduinoLogs.unshift({
+          timestamp: new Date().toLocaleTimeString("vi-VN"),
+          command: "RX",
+          label: `Arduino: ${line}`,
+          status: "RECEIVED",
+        });
+        if (lastArduinoLogs.length > 20) lastArduinoLogs.pop();
+      });
+    }
+
+    return new Promise((resolve, reject) => {
+      activeSerialInstance.write(`${rawCmd}\n`, (err) => {
+        if (err) return reject(err);
+        activeSerialInstance.drain((drainErr) => {
+          if (drainErr) return reject(drainErr);
+          resolve(true);
+        });
+      });
+    });
+  } catch (err) {
+    console.warn(`[SerialPort Send Error] ${err.message}`);
+    throw err;
+  }
+}
+
+app.post("/api/arduino/command", async (req, res) => {
   const { command } = req.body;
   if (!command) {
     return res.status(400).json({ success: false, error: "Vui lòng truyền mã lệnh điều khiển!" });
@@ -258,24 +321,48 @@ app.post("/api/arduino/command", (req, res) => {
 
   const mapped = ARDUINO_COMMAND_MAP[command] || { cmd: command, label: `Gửi lệnh: ${command}`, desc: "Lệnh tùy chỉnh" };
   const timestamp = new Date().toLocaleTimeString("vi-VN");
-  const logEntry = {
-    timestamp,
-    command: mapped.cmd,
-    label: mapped.label,
-    status: "SENT",
-  };
 
-  lastArduinoLogs.unshift(logEntry);
-  if (lastArduinoLogs.length > 20) lastArduinoLogs.pop();
+  try {
+    // Write down to Serial port via v2.mjs protocol
+    await sendSerialCommandToArduino(mapped.cmd);
 
-  console.log(`[Arduino / v2.mjs Control] ${logEntry.timestamp} -> Executed: ${mapped.cmd}`);
+    const logEntry = {
+      timestamp,
+      command: mapped.cmd.toUpperCase(),
+      label: mapped.label,
+      status: "SENT_TO_HARDWARE",
+    };
 
-  res.json({
-    success: true,
-    message: `Đã gửi thành công lệnh "${mapped.label}" tới hệ thống robot (v2.mjs)!`,
-    command: mapped.cmd,
-    timestamp: logEntry.timestamp,
-  });
+    lastArduinoLogs.unshift(logEntry);
+    if (lastArduinoLogs.length > 20) lastArduinoLogs.pop();
+
+    console.log(`[Arduino / v2.mjs Serial Sent] ${logEntry.timestamp} -> Executed: ${mapped.cmd}`);
+
+    return res.json({
+      success: true,
+      message: `Đã truyền thành công lệnh "${mapped.label}" (mã: '${mapped.cmd}') xuống cổng Serial Arduino thực tế!`,
+      command: mapped.cmd,
+      timestamp: logEntry.timestamp,
+    });
+  } catch (err) {
+    const logEntry = {
+      timestamp,
+      command: mapped.cmd.toUpperCase(),
+      label: mapped.label,
+      status: "SIMULATED_LOGGED",
+    };
+
+    lastArduinoLogs.unshift(logEntry);
+    if (lastArduinoLogs.length > 20) lastArduinoLogs.pop();
+
+    return res.json({
+      success: true,
+      simulated: true,
+      message: `Đã ghi nhận lệnh "${mapped.label}" (${err.message})`,
+      command: mapped.cmd,
+      timestamp: logEntry.timestamp,
+    });
+  }
 });
 
 app.get("/api/arduino/status", async (req, res) => {
@@ -290,6 +377,12 @@ app.get("/api/arduino/status", async (req, res) => {
 app.post("/api/arduino/ping-check", async (req, res) => {
   const timestamp = new Date().toLocaleTimeString("vi-VN");
   const serialInfo = await getRealSerialStatus();
+
+  try {
+    if (serialInfo.connected) {
+      await sendSerialCommandToArduino("ping");
+    }
+  } catch (err) {}
 
   lastArduinoLogs.unshift({
     timestamp,
