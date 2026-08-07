@@ -1169,6 +1169,86 @@ app.post("/api/settings/gemini/test", async (req, res) => {
   }
 });
 
+// TELEGRAM BOT SETTINGS ENDPOINTS
+app.get("/api/settings/telegram", (req, res) => {
+  const settings = readJson("settings.json", {});
+  const botToken = process.env.BOT_TOKEN || settings.telegramBotToken || settings.botToken || "";
+  const chatId = process.env.CHAT_ID || settings.telegramChatId || settings.chatId || "";
+
+  res.json({
+    telegramBotToken: botToken,
+    telegramChatId: chatId,
+    hasBotToken: !!botToken,
+    hasChatId: !!chatId,
+    maskedToken: botToken ? maskKey(botToken) : "Chưa cấu hình",
+    maskedChatId: chatId ? maskKey(chatId) : "Chưa cấu hình",
+  });
+});
+
+app.post("/api/settings/telegram", (req, res) => {
+  const { telegramBotToken, telegramChatId } = req.body;
+
+  const settings = readJson("settings.json", {});
+  if (telegramBotToken !== undefined) settings.telegramBotToken = telegramBotToken.trim();
+  if (telegramChatId !== undefined) settings.telegramChatId = telegramChatId.trim();
+
+  writeJson("settings.json", settings);
+
+  res.json({
+    success: true,
+    message: "Đã lưu cấu hình Telegram Bot & Chat ID thành công!",
+    settings: {
+      telegramBotToken: settings.telegramBotToken || "",
+      telegramChatId: settings.telegramChatId || "",
+    },
+  });
+});
+
+app.post("/api/settings/telegram/test", async (req, res) => {
+  const { telegramBotToken, telegramChatId } = req.body;
+  const settings = readJson("settings.json", {});
+
+  const token = (telegramBotToken || process.env.BOT_TOKEN || settings.telegramBotToken || settings.botToken || "").trim();
+  const chatId = (telegramChatId || process.env.CHAT_ID || settings.telegramChatId || settings.chatId || "").trim();
+
+  if (!token || !chatId) {
+    return res.status(400).json({
+      success: false,
+      error: "Vui lòng nhập đầy đủ Telegram Bot Token và Chat ID trước khi kiểm tra thử!",
+    });
+  }
+
+  try {
+    const url = `https://api.telegram.org/bot${token}/sendMessage`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: "🌱 [GrowHub Smart Garden]\nKiểm tra kết nối Telegram thành công! Hệ thống sẵn sàng gửi báo cáo phân tích sâu bệnh tự động.",
+      }),
+    });
+
+    const data = await response.json();
+    if (response.ok && data.ok) {
+      return res.json({
+        success: true,
+        message: "Kết nối thành công! Đã gửi tin nhắn thử nghiệm tới Telegram của bạn.",
+      });
+    } else {
+      return res.status(400).json({
+        success: false,
+        error: `Telegram phản hồi lỗi: ${data.description || "Không thể gửi tin nhắn"}`,
+      });
+    }
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      error: `Lỗi kết nối tới Telegram Server: ${err.message}`,
+    });
+  }
+});
+
 // PLANTS API ENDPOINTS
 app.get("/api/plants", (req, res) => {
   const plants = readJson("plants.json", []);

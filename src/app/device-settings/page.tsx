@@ -53,7 +53,14 @@ interface SavedWifiNetwork {
 }
 
 export default function DeviceSettingsPage() {
-  const [activeTab, setActiveTab] = useState<"diagnostics" | "wifi">("diagnostics");
+  const [activeTab, setActiveTab] = useState<"diagnostics" | "wifi" | "telegram">("diagnostics");
+
+  // Telegram state
+  const [telegramBotToken, setTelegramBotToken] = useState("");
+  const [telegramChatId, setTelegramChatId] = useState("");
+  const [showTelegramToken, setShowTelegramToken] = useState(false);
+  const [savingTelegram, setSavingTelegram] = useState(false);
+  const [testingTelegram, setTestingTelegram] = useState(false);
 
   // Arduino state
   const [arduinoStatus, setArduinoStatus] = useState<ArduinoStatus>({
@@ -299,11 +306,69 @@ export default function DeviceSettingsPage() {
     }
   };
 
+  // Telegram Handlers
+  const fetchTelegramSettings = async () => {
+    const data = await safeFetchJson("/api/settings/telegram");
+    if (data) {
+      if (data.telegramBotToken) setTelegramBotToken(data.telegramBotToken);
+      if (data.telegramChatId) setTelegramChatId(data.telegramChatId);
+    }
+  };
+
+  const handleSaveTelegram = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingTelegram(true);
+    try {
+      const data = await safeFetchJson("/api/settings/telegram", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          telegramBotToken,
+          telegramChatId,
+        }),
+      });
+      if (data && data.success) {
+        showToast(data.message, "success");
+        fetchTelegramSettings();
+      } else {
+        showToast(data?.error || "Không thể lưu cấu hình Telegram", "error");
+      }
+    } catch (err) {
+      showToast("Lỗi kết nối tới máy chủ khi lưu Telegram", "error");
+    } finally {
+      setSavingTelegram(false);
+    }
+  };
+
+  const handleTestTelegram = async () => {
+    setTestingTelegram(true);
+    try {
+      const data = await safeFetchJson("/api/settings/telegram/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          telegramBotToken,
+          telegramChatId,
+        }),
+      });
+      if (data && data.success) {
+        showToast(data.message, "success");
+      } else {
+        showToast(data?.error || "Lỗi kiểm tra kết nối Telegram", "error");
+      }
+    } catch (err) {
+      showToast("Lỗi gửi tin nhắn thử nghiệm Telegram", "error");
+    } finally {
+      setTestingTelegram(false);
+    }
+  };
+
   useEffect(() => {
     fetchArduinoStatus();
     fetchCameraStatus();
     fetchWifiStatus();
     fetchSavedWifiNetworks();
+    fetchTelegramSettings();
     handleScanWifi();
 
     // Auto scan Wi-Fi every 15 seconds silently
@@ -375,6 +440,18 @@ export default function DeviceSettingsPage() {
         >
           <span className="material-symbols-outlined text-2xl">wifi</span>
           Cấu Hình Wi-Fi & Mạng
+        </button>
+
+        <button
+          onClick={() => setActiveTab("telegram")}
+          className={`flex items-center gap-2 px-6 py-3.5 font-headline-sm text-body-lg font-bold transition-all border-b-2 ${
+            activeTab === "telegram"
+              ? "border-primary text-primary bg-primary/5 rounded-t-xl"
+              : "border-transparent text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low/50 rounded-t-xl"
+          }`}
+        >
+          <span className="material-symbols-outlined text-2xl">send</span>
+          Cấu Hình Telegram Bot
         </button>
       </div>
 
@@ -935,6 +1012,133 @@ export default function DeviceSettingsPage() {
                 </table>
               </div>
             )}
+          </section>
+        </div>
+      )}
+
+      {/* TAB 3: TELEGRAM BOT CONFIGURATION */}
+      {activeTab === "telegram" && (
+        <div className="space-y-xl animate-in fade-in duration-200">
+          <section className="bg-surface-container-lowest rounded-2xl p-lg border border-primary/20 shadow-md space-y-md">
+            <div className="flex items-center gap-3 pb-md border-b border-outline-variant/15">
+              <div className="w-12 h-12 rounded-2xl bg-sky-500/10 flex items-center justify-center text-sky-600">
+                <span className="material-symbols-outlined text-3xl">send</span>
+              </div>
+              <div>
+                <h2 className="font-headline-md text-headline-md text-on-surface font-bold">
+                  Cấu Hình Telegram Bot & Báo Cáo Tự Động
+                </h2>
+                <p className="font-body-sm text-xs text-on-surface-variant">
+                  Tự động nhận thông báo kết quả ảnh phân tích sâu bệnh và các cảnh báo hệ thống từ phần cứng qua Telegram
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveTelegram} className="space-y-md pt-sm">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
+                {/* Bot Token Field */}
+                <div className="space-y-1.5">
+                  <label className="block text-body-sm font-bold text-on-surface">
+                    Telegram Bot Token <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showTelegramToken ? "text" : "password"}
+                      value={telegramBotToken}
+                      onChange={(e) => setTelegramBotToken(e.target.value)}
+                      placeholder="Ví dụ: 123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ..."
+                      className="w-full px-4 py-3 bg-surface-container-low border border-outline-variant/30 rounded-xl font-mono text-sm text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary pr-12"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowTelegramToken(!showTelegramToken)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface"
+                    >
+                      <span className="material-symbols-outlined text-xl">
+                        {showTelegramToken ? "visibility_off" : "visibility"}
+                      </span>
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-on-surface-variant">
+                    Tạo Bot qua <span className="font-semibold text-primary">@BotFather</span> trên Telegram để lấy mã API Token này.
+                  </p>
+                </div>
+
+                {/* Chat ID Field */}
+                <div className="space-y-1.5">
+                  <label className="block text-body-sm font-bold text-on-surface">
+                    Telegram Chat ID / Group ID <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={telegramChatId}
+                    onChange={(e) => setTelegramChatId(e.target.value)}
+                    placeholder="Ví dụ: 987654321 hoặc -100123456789"
+                    className="w-full px-4 py-3 bg-surface-container-low border border-outline-variant/30 rounded-xl font-mono text-sm text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                  />
+                  <p className="text-[11px] text-on-surface-variant">
+                    Lấy ID tài khoản cá nhân qua <span className="font-semibold text-primary">@userinfobot</span> hoặc Chat ID nhóm Telegram.
+                  </p>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap items-center gap-3 pt-md border-t border-outline-variant/15">
+                <button
+                  type="submit"
+                  disabled={savingTelegram}
+                  className="flex items-center gap-2 px-6 py-3 bg-primary text-on-primary rounded-xl font-bold text-body-sm hover:bg-primary-container transition-all active:scale-95 disabled:opacity-50"
+                >
+                  {savingTelegram ? (
+                    <>
+                      <span className="material-symbols-outlined text-lg animate-spin">
+                        progress_activity
+                      </span>
+                      Đang lưu...
+                    </>
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined text-lg">save</span>
+                      Lưu Cấu Hình Telegram
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleTestTelegram}
+                  disabled={testingTelegram}
+                  className="flex items-center gap-2 px-6 py-3 bg-sky-600 text-white rounded-xl font-bold text-body-sm hover:bg-sky-700 transition-all active:scale-95 disabled:opacity-50"
+                >
+                  {testingTelegram ? (
+                    <>
+                      <span className="material-symbols-outlined text-lg animate-spin">
+                        progress_activity
+                      </span>
+                      Đang kiểm tra...
+                    </>
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined text-lg">mark_email_read</span>
+                      Gửi Tin Nhắn Thử (Test Connection)
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+
+            {/* Instruction Box */}
+            <div className="p-md bg-sky-500/5 rounded-xl border border-sky-500/20 text-xs text-on-surface space-y-2">
+              <div className="flex items-center gap-2 font-bold text-sky-700 dark:text-sky-400">
+                <span className="material-symbols-outlined text-lg">help_outline</span>
+                Hướng dẫn khởi tạo Telegram Bot nhanh trong 3 bước:
+              </div>
+              <ol className="list-decimal list-inside space-y-1 text-on-surface-variant">
+                <li>Mở ứng dụng Telegram, tìm kiếm <strong>@BotFather</strong> và gõ lệnh <code className="bg-surface-container-high px-1 rounded font-mono">/newbot</code> để tạo Bot mới.</li>
+                <li>Sao chép dãy <strong>HTTP API Token</strong> thu được và dán vào ô <em>Telegram Bot Token</em> ở trên.</li>
+                <li>Tìm kiếm <strong>@userinfobot</strong> trên Telegram và nhấn <strong>/start</strong> để lấy dãy số <strong>ID</strong> của bạn, dán vào ô <em>Telegram Chat ID</em>.</li>
+              </ol>
+            </div>
           </section>
         </div>
       )}
