@@ -232,7 +232,9 @@ app.post("/api/login", (req, res) => {
   }
 });
 
-// ARDUINO / ROBOT V2.MJS CONTROL & SERIAL INTERACTION SYSTEM
+// ARDUINO / ROBOT V2.MJS CHILD PROCESS WORKER INTEGRATION
+const { spawn } = require("child_process");
+
 const ARDUINO_COMMAND_MAP = {
   k: { cmd: "k", label: "Kiểm tra sâu hại (CHECK_PESTS)", desc: "Quét 6 điểm bằng camera và AI Gemini" },
   CHECK_PESTS: { cmd: "k", label: "Kiểm tra sâu hại (CHECK_PESTS)", desc: "Quét 6 điểm bằng camera và AI Gemini" },
@@ -249,68 +251,65 @@ const ARDUINO_COMMAND_MAP = {
 };
 
 let lastArduinoLogs = [];
-let activeSerialInstance = null;
+let v2WorkerProcess = null;
 
-async function sendSerialCommandToArduino(rawCmd) {
+function startV2WorkerProcess() {
+  if (v2WorkerProcess && !v2WorkerProcess.killed && v2WorkerProcess.exitCode === null) {
+    return v2WorkerProcess;
+  }
+
+  const v2ScriptPath = path.join(__dirname, "..", "v2.mjs");
+  console.log(`[Backend Worker Manager] Starting v2.mjs background worker: ${v2ScriptPath}`);
+
   try {
-    const { SerialPort, ReadlineParser } = require("serialport");
-    
-    // Check if current active instance is open
-    if (!activeSerialInstance || !activeSerialInstance.isOpen) {
-      const ports = await SerialPort.list();
-      const candidates = ports.filter((p) => {
-        const pPath = (p.path || "").toUpperCase();
-        const mfg = (p.manufacturer || "").toUpperCase();
-        return (
-          pPath.includes("COM") ||
-          pPath.includes("TTYACM") ||
-          pPath.includes("TTYUSB") ||
-          pPath.includes("TTYAMA") ||
-          mfg.includes("ARDUINO") ||
-          mfg.includes("CH340") ||
-          mfg.includes("FTDI")
-        );
-      });
+    v2WorkerProcess = spawn("node", [v2ScriptPath], {
+      cwd: path.join(__dirname, ".."),
+      stdio: ["pipe", "pipe", "pipe"],
+    });
 
-      if (candidates.length === 0 && ports.length === 0) {
-        throw new Error("Không tìm thấy thiết bị Arduino trên các cổng USB/Serial của Raspberry Pi");
-      }
-
-      const targetPath = candidates.length > 0 ? candidates[0].path : ports[0].path;
-      activeSerialInstance = new SerialPort({ path: targetPath, baudRate: 9600, autoOpen: false });
-
-      await new Promise((resolve, reject) => {
-        activeSerialInstance.open((err) => (err ? reject(err) : resolve()));
-      });
-
-      const parser = activeSerialInstance.pipe(new ReadlineParser({ delimiter: "\n" }));
-      parser.on("data", (data) => {
-        const line = String(data).replace(/\r/g, "").trim();
-        if (!line) return;
-        console.log(`[Arduino -> Node/v2.mjs] ${line}`);
+    v2WorkerProcess.stdout.on("data", (chunk) => {
+      const text = String(chunk).trim();
+      if (!text) return;
+      console.log(`[v2.mjs output] ${text}`);
+      const lines = text.split("\n");
+      for (const rawLine of lines) {
+        const line = rawLine.trim();
+        if (!line) continue;
         lastArduinoLogs.unshift({
           timestamp: new Date().toLocaleTimeString("vi-VN"),
-          command: "RX",
-          label: `Arduino: ${line}`,
-          status: "RECEIVED",
+          command: "v2.mjs",
+          label: line,
+          status: "RUNNING",
         });
         if (lastArduinoLogs.length > 20) lastArduinoLogs.pop();
-      });
-    }
+      }
+    });
 
-    return new Promise((resolve, reject) => {
-      activeSerialInstance.write(`${rawCmd}\n`, (err) => {
-        if (err) return reject(err);
-        activeSerialInstance.drain((drainErr) => {
-          if (drainErr) return reject(drainErr);
-          resolve(true);
-        });
-      });
+    v2WorkerProcess.stderr.on("data", (chunk) => {
+      const text = String(chunk).trim();
+      if (!text) return;
+      console.error(`[v2.mjs err] ${text}`);
+    });
+
+    v2WorkerProcess.on("exit", (code) => {
+      console.warn(`[v2.mjs worker] Process exited with code ${code}`);
+      v2WorkerProcess = null;
     });
   } catch (err) {
-    console.warn(`[SerialPort Send Error] ${err.message}`);
-    throw err;
+    console.error(`[v2.mjs worker spawn error] ${err.message}`);
+    v2WorkerProcess = null;
   }
+
+  return v2WorkerProcess;
+}
+
+function sendCommandToV2Worker(rawCmd) {
+  const proc = startV2WorkerProcess();
+  if (proc && proc.stdin && proc.stdin.writable) {
+    proc.stdin.write(`${rawCmd}\n`);
+    return true;
+  }
+  throw new Error("Không thể khởi chạy hoặc gửi lệnh tới tiến trình v2.mjs worker!");
 }
 
 app.post("/api/arduino/command", async (req, res) => {
@@ -323,24 +322,24 @@ app.post("/api/arduino/command", async (req, res) => {
   const timestamp = new Date().toLocaleTimeString("vi-VN");
 
   try {
-    // Write down to Serial port via v2.mjs protocol
-    await sendSerialCommandToArduino(mapped.cmd);
+    // Send command to v2.mjs worker process via stdin stream
+    sendCommandToV2Worker(mapped.cmd);
 
     const logEntry = {
       timestamp,
       command: mapped.cmd.toUpperCase(),
       label: mapped.label,
-      status: "SENT_TO_HARDWARE",
+      status: "SENT_TO_V2_WORKER",
     };
 
     lastArduinoLogs.unshift(logEntry);
     if (lastArduinoLogs.length > 20) lastArduinoLogs.pop();
 
-    console.log(`[Arduino / v2.mjs Serial Sent] ${logEntry.timestamp} -> Executed: ${mapped.cmd}`);
+    console.log(`[Arduino / v2.mjs Worker Sent] ${logEntry.timestamp} -> Executed: ${mapped.cmd}`);
 
     return res.json({
       success: true,
-      message: `Đã truyền thành công lệnh "${mapped.label}" (mã: '${mapped.cmd}') xuống cổng Serial Arduino thực tế!`,
+      message: `Đã gửi thành công lệnh "${mapped.label}" (mã: '${mapped.cmd}') tới tiến trình v2.mjs quản lý robot!`,
       command: mapped.cmd,
       timestamp: logEntry.timestamp,
     });
@@ -349,16 +348,15 @@ app.post("/api/arduino/command", async (req, res) => {
       timestamp,
       command: mapped.cmd.toUpperCase(),
       label: mapped.label,
-      status: "SIMULATED_LOGGED",
+      status: "WORKER_ERROR",
     };
 
     lastArduinoLogs.unshift(logEntry);
     if (lastArduinoLogs.length > 20) lastArduinoLogs.pop();
 
-    return res.json({
-      success: true,
-      simulated: true,
-      message: `Đã ghi nhận lệnh "${mapped.label}" (${err.message})`,
+    return res.status(500).json({
+      success: false,
+      error: `Lỗi điều khiển v2.mjs: ${err.message}`,
       command: mapped.cmd,
       timestamp: logEntry.timestamp,
     });

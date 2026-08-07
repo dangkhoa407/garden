@@ -2101,7 +2101,7 @@ async function main() {
                 process.stdout,
 
             terminal:
-                true
+                false
         });
 
     keyboard.on(
