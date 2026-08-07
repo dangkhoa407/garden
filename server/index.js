@@ -2,7 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const fs = require("fs");
 const path = require("path");
-const { exec } = require("child_process");
+const { exec, spawn } = require("child_process");
 const { promisify } = require("util");
 const execAsync = promisify(exec);
 
@@ -1029,75 +1029,76 @@ app.post("/api/arduino/ping-check", async (req, res) => {
 });
 
 // =========================================================
-// REAL USB CAMERA API ENDPOINTS (/dev/video0) & MJPEG REMOTE STREAM
+// REAL USB CAMERA API ENDPOINTS (/dev/video0) - 25-30 FPS ULTRA SMOOTH STREAM ENGINE
 // =========================================================
 
-// Khởi tạo danh sách các kết nối xem trực tiếp ngầm từ xa (MJPEG Stream Clients)
 const cameraStreamClients = new Set();
-let isCapturingFastFrame = false;
+let ffmpegStreamProcess = null;
+let lastCapturedFrameBuffer = null;
 
-// Hàm chụp 1 khung hình tốc độ cao trực tiếp từ USB Camera /dev/video0 mà không delay
-async function captureFastLiveFrame() {
-  if (isCapturingFastFrame) return;
-  isCapturingFastFrame = true;
+// Khởi động luồng truyền video mượt mà 25-30 FPS duy nhất giữ liên tục không mở/đóng lại camera
+function startPersistentCameraStream() {
+  if (ffmpegStreamProcess || process.platform === "win32") return;
+
+  console.log("[Camera Engine] Đang khởi động luồng Camera Real-time 25-30 FPS mượt mà...");
+
   try {
-    const imagePath = path.join(process.cwd(), "st01.jpg");
-    if (process.platform !== "win32") {
-      // Chụp nhanh 1 frame bằng ffmpeg với v4l2 từ /dev/video0
-      await execFileAsync("ffmpeg", [
-        "-hide_banner", "-loglevel", "error", "-y",
-        "-f", "v4l2",
-        "-video_size", `${CAMERA_WIDTH}x${CAMERA_HEIGHT}`,
-        "-i", CAMERA_DEVICE,
-        "-frames:v", "1",
-        "-q:v", "3",
-        imagePath
-      ], { timeout: 4000 }).catch(() => {
-        // Fallback sang fswebcam nếu ffmpeg bị bận
-        return execFileAsync("fswebcam", [
-          "-d", CAMERA_DEVICE,
-          "-r", `${CAMERA_WIDTH}x${CAMERA_HEIGHT}`,
-          "--jpeg", "85",
-          "--no-banner",
-          imagePath
-        ], { timeout: 4000 }).catch(() => {});
-      });
-    }
+    ffmpegStreamProcess = spawn("ffmpeg", [
+      "-hide_banner", "-loglevel", "error", "-y",
+      "-f", "v4l2",
+      "-framerate", "25",
+      "-video_size", `${CAMERA_WIDTH}x${CAMERA_HEIGHT}`,
+      "-i", CAMERA_DEVICE,
+      "-c:v", "mjpeg",
+      "-q:v", "4",
+      "-f", "mpjpeg",
+      "-boundary_tag", "frame",
+      "pipe:1"
+    ]);
 
-    if (fs.existsSync(imagePath)) {
-      const buf = fs.readFileSync(imagePath);
-      broadcastFrameToClients(buf);
-    }
+    let chunkBuffer = Buffer.alloc(0);
+
+    ffmpegStreamProcess.stdout.on("data", (dataChunk) => {
+      // 1. Đẩy luồng chunk trực tiếp tới tất cả thiết bị xem từ xa ở 25-30 FPS mượt mà
+      for (const clientRes of cameraStreamClients) {
+        try {
+          clientRes.write(dataChunk);
+        } catch (e) {
+          cameraStreamClients.delete(clientRes);
+        }
+      }
+
+      // 2. Trích xuất frame ảnh mới nhất lưu vào st01.jpg để phục vụ Gemini AI & Snapshot ngay tức thì
+      chunkBuffer = Buffer.concat([chunkBuffer, dataChunk]);
+      const startIdx = chunkBuffer.indexOf(Buffer.from([0xFF, 0xD8]));
+      const endIdx = chunkBuffer.indexOf(Buffer.from([0xFF, 0xD9]));
+      if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+        lastCapturedFrameBuffer = chunkBuffer.subarray(startIdx, endIdx + 2);
+        chunkBuffer = chunkBuffer.subarray(endIdx + 2);
+        const imagePath = path.join(process.cwd(), "st01.jpg");
+        fs.writeFile(imagePath, lastCapturedFrameBuffer, () => {});
+      }
+    });
+
+    ffmpegStreamProcess.on("close", () => {
+      console.warn("[Camera Engine] Luồng camera ffmpeg bị dừng, tự động khởi động lại sau 2s...");
+      ffmpegStreamProcess = null;
+      if (cameraStreamClients.size > 0) {
+        setTimeout(startPersistentCameraStream, 2000);
+      }
+    });
+
+    ffmpegStreamProcess.on("error", (err) => {
+      console.error(`[Camera Engine Error] ${err.message}`);
+      ffmpegStreamProcess = null;
+    });
   } catch (err) {
-    console.warn(`[Live Camera Fast Capture Error] ${err.message}`);
-  } finally {
-    isCapturingFastFrame = false;
+    console.error(`[Camera Engine Start Error] ${err.message}`);
+    ffmpegStreamProcess = null;
   }
 }
 
-// Broadcast frame ảnh mới nhất tới tất cả khách hàng đang xem camera từ xa
-function broadcastFrameToClients(imageBuffer) {
-  if (cameraStreamClients.size === 0 || !imageBuffer) return;
-  const header = `--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ${imageBuffer.length}\r\n\r\n`;
-  for (const clientRes of cameraStreamClients) {
-    try {
-      clientRes.write(header);
-      clientRes.write(imageBuffer);
-      clientRes.write("\r\n");
-    } catch (e) {
-      cameraStreamClients.delete(clientRes);
-    }
-  }
-}
-
-// Tự động chụp và truyền video stream 1 FPS trực tiếp từ USB Camera khi có thiết bị kết nối từ xa
-setInterval(() => {
-  if (cameraStreamClients.size > 0) {
-    captureFastLiveFrame();
-  }
-}, 1000);
-
-// Endpoint Stream Video MJPEG chuẩn IP Camera Trực Tiếp Từ Xa (/api/camera/stream)
+// Endpoint Stream Video MJPEG mượt như Camera An ninh Trực Tiếp Từ Xa (/api/camera/stream)
 app.get("/api/camera/stream", (req, res) => {
   res.writeHead(200, {
     "Content-Type": "multipart/x-mixed-replace; boundary=frame",
@@ -1110,11 +1111,19 @@ app.get("/api/camera/stream", (req, res) => {
 
   cameraStreamClients.add(res);
 
-  // Kích hoạt chụp ngay 1 frame tươi mới khi người dùng mở stream
-  captureFastLiveFrame();
+  // Kích hoạt luồng mượt 25-30 FPS liên tục
+  startPersistentCameraStream();
 
   req.on("close", () => {
     cameraStreamClients.delete(res);
+    if (cameraStreamClients.size === 0 && ffmpegStreamProcess) {
+      setTimeout(() => {
+        if (cameraStreamClients.size === 0 && ffmpegStreamProcess) {
+          try { ffmpegStreamProcess.kill("SIGKILL"); } catch (e) {}
+          ffmpegStreamProcess = null;
+        }
+      }, 10000);
+    }
   });
 });
 
