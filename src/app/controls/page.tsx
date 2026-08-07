@@ -132,13 +132,13 @@ export default function ControlsPage() {
       setActiveToast(data.message);
 
       if (data.success) {
-        setCommandLogs((prev) => [
+        setLogs((prev) => [
           {
             timestamp: data.status?.lastPingTime || new Date().toLocaleTimeString("vi-VN"),
             command: "PING",
             label: "Kiểm tra kết nối Arduino thực tế (PING)",
           },
-          ...prev.slice(0, 4),
+          ...prev,
         ]);
       }
     } catch (err) {
@@ -163,13 +163,13 @@ export default function ControlsPage() {
 
       if (response.ok && data.success) {
         setActiveToast(data.message);
-        setCommandLogs((prev) => [
+        setLogs((prev) => [
           {
             timestamp: data.timestamp || new Date().toLocaleTimeString("vi-VN"),
             command: data.command,
             label: labelName,
           },
-          ...prev.slice(0, 4),
+          ...prev,
         ]);
       } else {
         setActiveToast(`Lỗi: ${data.error || "Không thể gửi lệnh"}`);
@@ -437,6 +437,7 @@ export default function ControlsPage() {
               Gửi tín hiệu PING kiểm tra phản hồi PONG từ mạch Arduino
             </p>
           </button>
+        </div>
       </section>
 
       {/* REAL-TIME SYSTEM LOG & HARDWARE DIAGNOSTICS TERMINAL */}
