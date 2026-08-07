@@ -253,29 +253,24 @@ const ARDUINO_COMMAND_MAP = {
 };
 
 let lastArduinoLogs = [];
+let lastInspectionResults = []; // Lưu trữ chi tiết 6 điểm quét cho Web UI
 let activeSerialPort = null;
 let nodeConnected = false;
 let captureBusy = false;
 let currentCancellationId = 0;
 
-// TELEGRAM NOTIFICATION HELPER
-async function sendTelegramAlert(messageText) {
-  try {
-    const envData = readJson("settings.json", {});
-    const botToken = process.env.BOT_TOKEN || envData.telegramBotToken;
-    const chatId = process.env.CHAT_ID || envData.telegramChatId;
-
-    if (!botToken || !chatId) return;
-
-    const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
-    await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text: messageText }),
-    });
-  } catch (err) {
-    console.warn(`[Telegram Alert Error] ${err.message}`);
-  }
+// HELPER GỬI THÔNG BÁO / CẢNH BÁO TRỰC TIẾP LÊN WEB UI
+function pushWebNotification(messageText, type = "INFO") {
+  const timestamp = new Date().toLocaleTimeString("vi-VN");
+  const logEntry = {
+    timestamp,
+    command: type.toUpperCase(),
+    label: messageText,
+    status: type,
+  };
+  lastArduinoLogs.unshift(logEntry);
+  if (lastArduinoLogs.length > 30) lastArduinoLogs.pop();
+  console.log(`[Web Alert Data] ${timestamp} -> ${messageText}`);
 }
 
 // ARDUINO SERIAL PORT INITIALIZER & PROTOCOL LISTENER
@@ -347,7 +342,7 @@ async function getOrInitArduinoSerialPort() {
         label: `Arduino: ${line}`,
         status: "RECEIVED",
       });
-      if (lastArduinoLogs.length > 25) lastArduinoLogs.pop();
+      if (lastArduinoLogs.length > 30) lastArduinoLogs.pop();
 
       const normalized = line.toUpperCase();
 
@@ -360,13 +355,14 @@ async function getOrInitArduinoSerialPort() {
 
         if (normalized === "NODE_CONNECTED") {
           nodeConnected = true;
-          console.log("[Arduino Protocol] Node Connected successfully!");
+          pushWebNotification("Đã kết nối thành công với Arduino!", "SUCCESS");
           return;
         }
 
         if (normalized === "CHECK_STARTED") {
           currentCancellationId++;
-          console.log("[Arduino Protocol] Started pest check cycle!");
+          lastInspectionResults = []; // Clear kết quả cũ khi bắt đầu chu trình mới
+          pushWebNotification("Bắt đầu chu trình kiểm tra 6 điểm cây trồng...", "PROCESS");
           return;
         }
 
@@ -384,20 +380,37 @@ async function getOrInitArduinoSerialPort() {
           const cancellationId = currentCancellationId;
 
           try {
-            console.log(`[Arduino Protocol] Processing Point ${pointIndex + 1}...`);
-            
-            // Run AI analysis
+            pushWebNotification(`Đang chụp ảnh & phân tích Gemini tại Điểm ${pointIndex + 1}...`, "AI_ANALYSIS");
+
             let action = "NO_SPRAY";
+            let details = "Cây khỏe mạnh, không phát hiện sâu bệnh.";
+
             try {
               const aiResult = await callGeminiApiWithRotation({
-                contents: [{ parts: [{ text: `Quan sát sâu bệnh điểm ${pointIndex + 1}` }] }],
+                contents: [{ parts: [{ text: `Quan sát sâu bệnh tại Điểm kiểm tra ${pointIndex + 1}` }] }],
               });
-              if (aiResult && aiResult.text && (aiResult.text.includes("SÂU") || aiResult.text.includes("BỆNH"))) {
-                action = "SPRAY";
+              
+              if (aiResult && aiResult.text) {
+                details = aiResult.text;
+                if (details.includes("SÂU") || details.includes("BỆNH") || details.includes("SPRAY")) {
+                  action = "SPRAY";
+                }
               }
             } catch (aiErr) {
               console.warn(`[Point AI fallback] ${aiErr.message}`);
             }
+
+            // Lưu kết quả kiểm tra điểm này để trả về Web UI
+            const pointRecord = {
+              pointIndex: pointIndex + 1,
+              timestamp: new Date().toLocaleTimeString("vi-VN"),
+              action: action === "SPRAY" ? "Cần phun thuốc" : "Không phun",
+              details: details.substring(0, 150),
+              status: action === "SPRAY" ? "PEST_DETECTED" : "HEALTHY",
+            };
+
+            lastInspectionResults.push(pointRecord);
+            pushWebNotification(`Kết quả Điểm ${pointIndex + 1}: ${pointRecord.action} - ${pointRecord.details}`, action === "SPRAY" ? "WARNING" : "SUCCESS");
 
             if (cancellationId === currentCancellationId && activeSerialPort.isOpen) {
               activeSerialPort.write(`POINT_RESULT:${pointIndex}:${action}\n`);
@@ -415,14 +428,13 @@ async function getOrInitArduinoSerialPort() {
         }
 
         if (normalized === "CHECK_COMPLETE") {
-          console.log("[Arduino Protocol] All inspection points completed!");
-          await sendTelegramAlert("Hệ thống robot đã hoàn tất kiểm tra tất cả các điểm!");
+          pushWebNotification("Robot đã hoàn tất toàn bộ chu trình kiểm tra sâu bệnh!", "COMPLETE");
           return;
         }
 
         if (normalized.startsWith("ALERT:")) {
           currentCancellationId++;
-          await sendTelegramAlert(`CẢNH BÁO ROBOT: ${line}`);
+          pushWebNotification(`CẢNH BÁO PHẦN CỨNG: ${line}`, "ALERT");
           return;
         }
       } catch (evtErr) {
@@ -524,6 +536,7 @@ app.get("/api/arduino/status", async (req, res) => {
     connected: !!(activeSerialPort && activeSerialPort.isOpen),
     lastPingTime: new Date().toLocaleTimeString("vi-VN"),
     lastLogs: lastArduinoLogs,
+    inspectionResults: lastInspectionResults,
   });
 });
 
