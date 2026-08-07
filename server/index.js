@@ -378,6 +378,145 @@ function needSpray(resultText) {
   );
 }
 
+// =========================================================
+// CAMERA CAPTURE PIPELINE (ĐỒNG BỘ 100% V2.MJS)
+// =========================================================
+const CAMERA_DEVICE = "/dev/video0";
+const CAMERA_WIDTH = 640;
+const CAMERA_HEIGHT = 480;
+const CAMERA_FPS = 30;
+const CAMERA_BRIGHTNESS = 105;
+const CAMERA_CONTRAST = 135;
+const CAMERA_SATURATION = 125;
+const CAMERA_SHARPNESS = 140;
+const WARMUP_FRAMES = 5;
+const CHECK_FRAMES = 10;
+const TARGET_BRIGHTNESS = 110;
+const JPEG_QUALITY = 85;
+
+const { execFile } = require("child_process");
+const execFileAsync = promisify(execFile);
+
+async function setCameraControl(name, value) {
+  try {
+    await execFileAsync("v4l2-ctl", ["-d", CAMERA_DEVICE, `--set-ctrl=${name}=${value}`], { timeout: 5000 });
+    console.log(`Camera ${name}: ${value}`);
+  } catch {
+    console.log(`Không chỉnh được ${name}, bỏ qua.`);
+  }
+}
+
+async function configureCamera() {
+  console.log("Đang thiết lập camera...");
+  await setCameraControl("brightness", CAMERA_BRIGHTNESS);
+  await setCameraControl("contrast", CAMERA_CONTRAST);
+  await setCameraControl("saturation", CAMERA_SATURATION);
+  await setCameraControl("sharpness", CAMERA_SHARPNESS);
+  await setCameraControl("white_balance_automatic", 1);
+  await setCameraControl("power_line_frequency", 1);
+}
+
+async function captureFrames(directory) {
+  const framePattern = path.join(directory, "frame-%03d.jpg");
+  const totalFrames = WARMUP_FRAMES + CHECK_FRAMES;
+  await execFileAsync("ffmpeg", [
+    "-hide_banner", "-loglevel", "error", "-y",
+    "-f", "v4l2",
+    "-framerate", String(CAMERA_FPS),
+    "-video_size", `${CAMERA_WIDTH}x${CAMERA_HEIGHT}`,
+    "-i", CAMERA_DEVICE,
+    "-frames:v", String(totalFrames),
+    "-q:v", "2",
+    framePattern
+  ], { timeout: 30000, maxBuffer: 2 * 1024 * 1024 });
+}
+
+async function analyzeFrameLight(framePath) {
+  const sharp = require("sharp");
+  const result = await sharp(framePath).greyscale().raw().toBuffer({ resolveWithObject: true });
+  let totalBrightness = 0;
+  let overexposedPixels = 0;
+  let darkPixels = 0;
+  for (const value of result.data) {
+    totalBrightness += value;
+    if (value >= 245) overexposedPixels++;
+    if (value <= 15) darkPixels++;
+  }
+  return {
+    meanBrightness: totalBrightness / result.data.length,
+    overexposedRatio: overexposedPixels / result.data.length,
+    darkRatio: darkPixels / result.data.length,
+  };
+}
+
+async function captureImage() {
+  const imagePath = path.join(process.cwd(), "st01.jpg");
+  console.log("Đang mở camera chụp ảnh...");
+  
+  try {
+    await configureCamera();
+    const directory = await fs.promises.mkdtemp(path.join(require("os").tmpdir(), "vuon-rau-camera-"));
+
+    try {
+      await captureFrames(directory);
+      const frameFiles = (await fs.promises.readdir(directory))
+        .filter((name) => name.toLowerCase().endsWith(".jpg"))
+        .sort()
+        .slice(WARMUP_FRAMES, WARMUP_FRAMES + CHECK_FRAMES);
+
+      if (frameFiles.length === 0) {
+        throw new Error("Camera không tạo đủ khung hình.");
+      }
+
+      let bestPath = null;
+      let bestInfo = null;
+      let bestScore = Infinity;
+
+      for (const fileName of frameFiles) {
+        const framePath = path.join(directory, fileName);
+        const info = await analyzeFrameLight(framePath);
+        const score = Math.abs(info.meanBrightness - TARGET_BRIGHTNESS) + info.overexposedRatio * 300 + info.darkRatio * 60;
+        if (score < bestScore) {
+          bestScore = score;
+          bestPath = framePath;
+          bestInfo = info;
+        }
+      }
+
+      if (!bestPath || !bestInfo) {
+        throw new Error("Không chọn được ảnh tốt từ camera.");
+      }
+
+      const brightness = bestInfo.meanBrightness;
+      const overexposedRatio = bestInfo.overexposedRatio;
+      let alpha = 1;
+      let beta = 0;
+
+      if (overexposedRatio > 0.25 || brightness > 200) { alpha = 0.58; beta = -30; }
+      else if (overexposedRatio > 0.15 || brightness > 175) { alpha = 0.72; beta = -18; }
+      else if (overexposedRatio > 0.07 || brightness > 150) { alpha = 0.84; beta = -8; }
+      else if (overexposedRatio > 0.03 || brightness > 130) { alpha = 0.94; beta = -2; }
+      else if (brightness < 35) { alpha = 1.30; beta = 30; }
+      else if (brightness < 65) { alpha = 1.15; beta = 15; }
+      else if (brightness < 90) { alpha = 1.07; beta = 8; }
+      else if (brightness < 115) { alpha = 1.03; beta = 4; }
+
+      const sharp = require("sharp");
+      await sharp(bestPath).removeAlpha().linear(alpha, beta).jpeg({ quality: JPEG_QUALITY }).toFile(imagePath);
+      console.log(`Đã chụp và lưu ảnh: ${imagePath}`);
+      return imagePath;
+    } finally {
+      await fs.promises.rm(directory, { recursive: true, force: true });
+    }
+  } catch (err) {
+    console.warn(`[Camera Warning] ${err.message}. Sử dụng ảnh st01.jpg hiện có...`);
+    if (fs.existsSync(imagePath)) {
+      return imagePath;
+    }
+    throw err;
+  }
+}
+
 // TELEGRAM ENGINE (CẤU HÌNH TRỰC TIẾP TỪ WEB LƯU TRONG SETTINGS.JSON HOẶC FILE .ENV)
 async function sendTelegramText(messageText) {
   try {
@@ -565,6 +704,15 @@ async function getOrInitArduinoSerialPort() {
           try {
             pushWebNotification(`Đang chụp ảnh & phân tích Gemini tại Điểm ${pointIndex + 1}...`, "AI_ANALYSIS");
 
+            // 1. CHỤP ẢNH TỪ CAMERA THỰC TẾ (GIỐNG V2.MJS captureImage())
+            let imagePathToSend = path.join(process.cwd(), "st01.jpg");
+            try {
+              imagePathToSend = await captureImage();
+            } catch (capErr) {
+              console.error(`[Capture Error] ${capErr.message}`);
+            }
+
+            // 2. PHÂN TÍCH GEMINI AI VỚI DỮ LIỆU ẢNH BASE64
             let formattedResult = "";
             let action = "NO_SPRAY";
 
@@ -574,10 +722,9 @@ async function getOrInitArduinoSerialPort() {
               pushWebNotification(formattedResult, "WARNING");
             } else {
               let imageBase64 = null;
-              const imgPath = path.join(process.cwd(), "st01.jpg");
-              if (fs.existsSync(imgPath)) {
+              if (fs.existsSync(imagePathToSend)) {
                 try {
-                  const imgBuf = fs.readFileSync(imgPath);
+                  const imgBuf = fs.readFileSync(imagePathToSend);
                   imageBase64 = imgBuf.toString("base64");
                 } catch (e) {}
               }
@@ -612,9 +759,8 @@ async function getOrInitArduinoSerialPort() {
               }
             }
 
-            // Gửi báo cáo + ảnh st01.jpg về Telegram (chuẩn v2.mjs)
-            const imagePathToSend = path.join(process.cwd(), "st01.jpg");
-            const telegramCaption = `ĐIỂM KIỂM TRA ${pointIndex + 1}\n${formattedResult}`;
+            // 3. GỬI ẢNH CHỤP + KẾT QUẢ PHÂN TÍCH VỀ TELEGRAM (CHUẨN V2.MJS)
+            const telegramCaption = `ĐIỂM KIỂM TRA ${pointIndex + 1}\n\n${formattedResult}`;
 
             try {
               await sendTelegramPhoto(imagePathToSend, telegramCaption);
@@ -622,7 +768,7 @@ async function getOrInitArduinoSerialPort() {
               console.error(`[Telegram Error] ${tErr.message}`);
             }
 
-            // CHỈ KHI CÓ SÂU (needSpray returns true) MỚI PHUN THUỐC (SPRAY)
+            // 4. CHỈ KHI CÓ SÂU (needSpray returns true) MỚI PHUN THUỐC (SPRAY)
             action = needSpray(formattedResult) ? "SPRAY" : "NO_SPRAY";
 
             // Lưu kết quả kiểm tra điểm này cho Web UI
