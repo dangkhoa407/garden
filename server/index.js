@@ -1034,6 +1034,46 @@ app.post("/api/arduino/ping-check", async (req, res) => {
 
 // Khởi tạo danh sách các kết nối xem trực tiếp ngầm từ xa (MJPEG Stream Clients)
 const cameraStreamClients = new Set();
+let isCapturingFastFrame = false;
+
+// Hàm chụp 1 khung hình tốc độ cao trực tiếp từ USB Camera /dev/video0 mà không delay
+async function captureFastLiveFrame() {
+  if (isCapturingFastFrame) return;
+  isCapturingFastFrame = true;
+  try {
+    const imagePath = path.join(process.cwd(), "st01.jpg");
+    if (process.platform !== "win32") {
+      // Chụp nhanh 1 frame bằng ffmpeg với v4l2 từ /dev/video0
+      await execFileAsync("ffmpeg", [
+        "-hide_banner", "-loglevel", "error", "-y",
+        "-f", "v4l2",
+        "-video_size", `${CAMERA_WIDTH}x${CAMERA_HEIGHT}`,
+        "-i", CAMERA_DEVICE,
+        "-frames:v", "1",
+        "-q:v", "3",
+        imagePath
+      ], { timeout: 4000 }).catch(() => {
+        // Fallback sang fswebcam nếu ffmpeg bị bận
+        return execFileAsync("fswebcam", [
+          "-d", CAMERA_DEVICE,
+          "-r", `${CAMERA_WIDTH}x${CAMERA_HEIGHT}`,
+          "--jpeg", "85",
+          "--no-banner",
+          imagePath
+        ], { timeout: 4000 }).catch(() => {});
+      });
+    }
+
+    if (fs.existsSync(imagePath)) {
+      const buf = fs.readFileSync(imagePath);
+      broadcastFrameToClients(buf);
+    }
+  } catch (err) {
+    console.warn(`[Live Camera Fast Capture Error] ${err.message}`);
+  } finally {
+    isCapturingFastFrame = false;
+  }
+}
 
 // Broadcast frame ảnh mới nhất tới tất cả khách hàng đang xem camera từ xa
 function broadcastFrameToClients(imageBuffer) {
@@ -1050,18 +1090,12 @@ function broadcastFrameToClients(imageBuffer) {
   }
 }
 
-// Tự động phát video stream 2 FPS ngầm khi có người xem từ xa
+// Tự động chụp và truyền video stream 1 FPS trực tiếp từ USB Camera khi có thiết bị kết nối từ xa
 setInterval(() => {
   if (cameraStreamClients.size > 0) {
-    const imagePath = path.join(process.cwd(), "st01.jpg");
-    if (fs.existsSync(imagePath)) {
-      try {
-        const buf = fs.readFileSync(imagePath);
-        broadcastFrameToClients(buf);
-      } catch (e) {}
-    }
+    captureFastLiveFrame();
   }
-}, 500);
+}, 1000);
 
 // Endpoint Stream Video MJPEG chuẩn IP Camera Trực Tiếp Từ Xa (/api/camera/stream)
 app.get("/api/camera/stream", (req, res) => {
@@ -1076,16 +1110,8 @@ app.get("/api/camera/stream", (req, res) => {
 
   cameraStreamClients.add(res);
 
-  // Gửi khung hình đầu tiên ngay lập tức nếu có
-  const imagePath = path.join(process.cwd(), "st01.jpg");
-  if (fs.existsSync(imagePath)) {
-    try {
-      const buf = fs.readFileSync(imagePath);
-      res.write(`--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ${buf.length}\r\n\r\n`);
-      res.write(buf);
-      res.write("\r\n");
-    } catch (e) {}
-  }
+  // Kích hoạt chụp ngay 1 frame tươi mới khi người dùng mở stream
+  captureFastLiveFrame();
 
   req.on("close", () => {
     cameraStreamClients.delete(res);
@@ -1099,6 +1125,18 @@ app.get("/api/camera/image", (req, res) => {
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
   res.setHeader("Access-Control-Allow-Origin", "*");
+
+  // Kiểm tra thời gian tạo ảnh, nếu cũ hơn 1.5 giây thì tự động kích hoạt chụp frame tươi mới
+  let stats = null;
+  if (fs.existsSync(imagePath)) {
+    try {
+      stats = fs.statSync(imagePath);
+    } catch (e) {}
+  }
+
+  if (!stats || Date.now() - stats.mtimeMs > 1500) {
+    captureFastLiveFrame().catch(() => {});
+  }
 
   if (fs.existsSync(imagePath)) {
     return res.sendFile(imagePath);
