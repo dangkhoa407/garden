@@ -589,12 +589,10 @@ function pushWebNotification(messageText, type = "INFO") {
 
 // HELPER KIỂM TRA XEM VỊ TRÍ (0->5 TƯƠNG ỨNG ĐIỂM 1->6 / KHAY 01->06) ĐÃ ĐƯỢC THÊM CÂY TRỒNG TRÊN WEB CHƯA
 function hasPlantAtPoint(pointIndex) {
-  let plants = readJson("plants.json", []);
+  const plants = readJson("plants.json", []);
   if (!Array.isArray(plants) || plants.length === 0) {
-    const store = readJson("garden-store.json", {});
-    if (store.plants && Array.isArray(store.plants)) {
-      plants = store.plants;
-    }
+    console.log(`[Inspection Engine] Danh sách cây trồng (data/plants.json) hiện rỗng (0 cây).`);
+    return false;
   }
 
   const targetNum = pointIndex + 1; // Point index 0..5 -> Point 1..6
