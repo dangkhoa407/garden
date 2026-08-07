@@ -1551,6 +1551,32 @@ app.post("/api/settings/telegram/test", async (req, res) => {
 });
 
 // CAMERA DIAGNOSTICS & TESTING ENDPOINTS FOR DEVICE SETTINGS
+app.get("/api/camera/image", (req, res) => {
+  const imgPath = path.join(process.cwd(), "st01.jpg");
+  if (fs.existsSync(imgPath)) {
+    res.setHeader("Content-Type", "image/jpeg");
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    return res.sendFile(imgPath);
+  }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480" viewBox="0 0 640 480">
+    <rect width="100%" height="100%" fill="#18181b"/>
+    <text x="50%" y="45%" dominant-baseline="middle" text-anchor="middle" fill="#a1a1aa" font-family="sans-serif" font-size="20">Chưa có ảnh chụp từ USB Camera</text>
+    <text x="50%" y="55%" dominant-baseline="middle" text-anchor="middle" fill="#71717a" font-family="sans-serif" font-size="14">Nhấn nút "Chụp thử nghiệm (Snapshot Test)" để chụp ảnh phần cứng</text>
+  </svg>`;
+  res.setHeader("Content-Type", "image/svg+xml");
+  res.send(svg);
+});
+
+app.get("/st01.jpg", (req, res) => {
+  const imgPath = path.join(process.cwd(), "st01.jpg");
+  if (fs.existsSync(imgPath)) {
+    res.setHeader("Content-Type", "image/jpeg");
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    return res.sendFile(imgPath);
+  }
+  res.redirect("/api/camera/image");
+});
+
 app.get("/api/camera/status", async (req, res) => {
   try {
     const isLinux = process.platform === "linux";
@@ -1574,11 +1600,11 @@ app.get("/api/camera/status", async (req, res) => {
     res.json({
       connected,
       model: connected ? "USB Web Camera (v4l2)" : "Chưa nhận diện",
-      resolution: typeof CAMERA_WIDTH !== "undefined" ? `${CAMERA_WIDTH}x${CAMERA_HEIGHT} (${CAMERA_FPS} fps)` : "640x480 (30 fps)",
+      resolution: typeof CAMERA_WIDTH !== "undefined" ? `${CAMERA_WIDTH}x${CAMERA_HEIGHT} (30 fps)` : "640x480 (30 fps)",
       statusMessage,
       device: devPath,
       lastSnapshotTime: new Date().toLocaleTimeString("vi-VN"),
-      streamUrl: "/st01.jpg?t=" + Date.now(),
+      streamUrl: "/api/camera/image?t=" + Date.now(),
     });
   } catch (err) {
     res.status(500).json({
@@ -1587,6 +1613,7 @@ app.get("/api/camera/status", async (req, res) => {
       resolution: "N/A",
       statusMessage: `Lỗi kiểm tra camera: ${err.message}`,
       device: typeof CAMERA_DEVICE !== "undefined" ? CAMERA_DEVICE : "/dev/video0",
+      streamUrl: "/api/camera/image?t=" + Date.now(),
     });
   }
 });
@@ -1604,7 +1631,7 @@ app.post("/api/camera/test", async (req, res) => {
         statusMessage: "Ảnh chụp thử nghiệm thành công",
         device: typeof CAMERA_DEVICE !== "undefined" ? CAMERA_DEVICE : "/dev/video0",
         lastSnapshotTime: new Date().toLocaleTimeString("vi-VN"),
-        streamUrl: "/st01.jpg?t=" + Date.now(),
+        streamUrl: "/api/camera/image?t=" + Date.now(),
       }
     });
   } catch (err) {

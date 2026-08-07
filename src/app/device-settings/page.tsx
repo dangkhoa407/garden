@@ -74,12 +74,12 @@ export default function DeviceSettingsPage() {
 
   // Camera state
   const [cameraStatus, setCameraStatus] = useState<CameraStatus>({
-    connected: true,
-    model: "GrowHub HD AI Vision Camera (USB/ESP32)",
-    resolution: "1920x1080 (1080p Full HD)",
+    connected: false,
+    model: "Đang kiểm tra...",
+    resolution: "640x480 (30 fps)",
     fps: 30,
-    statusMessage: "Camera đang sẵn sàng",
-    streamUrl: "https://images.unsplash.com/photo-1585320806297-9794b3e4eeae?q=80&w=1000&auto=format&fit=crop",
+    statusMessage: "Đang kiểm tra kết nối USB Camera...",
+    streamUrl: "/api/camera/image",
   });
   const [testingCamera, setTestingCamera] = useState(false);
 
@@ -631,11 +631,11 @@ export default function DeviceSettingsPage() {
                   className="w-full h-full object-cover"
                 />
                 <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full text-xs font-mono text-emerald-400 flex items-center gap-2 border border-emerald-500/30">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                  <span>LIVE FEED (1080p @ 30fps)</span>
+                  <span className={`w-2 h-2 rounded-full ${cameraStatus.connected ? "bg-emerald-500 animate-ping" : "bg-rose-500"}`} />
+                  <span>{cameraStatus.connected ? "REAL TIME CAMERA FEED (v4l2)" : "CAMERA OFFLINE"}</span>
                 </div>
                 <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md px-3 py-1 rounded-xl text-xs text-zinc-300">
-                  Chụp gần nhất: {cameraStatus.lastSnapshotTime || "Vừa cập nhật"}
+                  Chụp gần nhất: {cameraStatus.lastSnapshotTime || "Chưa có ảnh chụp mới"}
                 </div>
               </div>
 
@@ -663,8 +663,8 @@ export default function DeviceSettingsPage() {
                   <span className="text-on-surface-variant block font-label-caps text-[10px] font-semibold uppercase mb-1">
                     TỐC ĐỘ KHUNG HÌNH (FPS)
                   </span>
-                  <span className="font-bold text-emerald-600 block">
-                    {cameraStatus.fps} FPS (Mượt mà)
+                  <span className={`font-bold block ${cameraStatus.connected ? "text-emerald-600" : "text-rose-500"}`}>
+                    {cameraStatus.connected ? `${cameraStatus.fps || 30} FPS (Mượt mà)` : "OFFLINE"}
                   </span>
                 </div>
               </div>
