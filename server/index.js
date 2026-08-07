@@ -258,7 +258,61 @@ let nodeConnected = false;
 let captureBusy = false;
 let currentCancellationId = 0;
 
-// HELPER GỬI THÔNG BÁO / CẢNH BÁO TRỰC TIẾP LÊN WEB UI
+// TELEGRAM ENGINE (CẤU HÌNH TRỰC TIẾP TỪ WEB LƯU TRONG SETTINGS.JSON HOẶC FILE .ENV)
+async function sendTelegramText(messageText) {
+  try {
+    const settings = readJson("settings.json", {});
+    const botToken = process.env.BOT_TOKEN || settings.telegramBotToken || settings.botToken;
+    const chatId = process.env.CHAT_ID || settings.telegramChatId || settings.chatId;
+
+    if (!botToken || !chatId) {
+      console.log("[Telegram Text] Bỏ qua: Chưa cấu hình BOT_TOKEN hoặc CHAT_ID (Web/env)");
+      return;
+    }
+
+    const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
+    await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text: messageText }),
+    });
+    console.log("[Telegram Text] Đã gửi thông báo về Telegram!");
+  } catch (err) {
+    console.warn(`[Telegram Text Error] ${err.message}`);
+  }
+}
+
+async function sendTelegramPhoto(imagePath, captionText) {
+  try {
+    const settings = readJson("settings.json", {});
+    const botToken = process.env.BOT_TOKEN || settings.telegramBotToken || settings.botToken;
+    const chatId = process.env.CHAT_ID || settings.telegramChatId || settings.chatId;
+
+    if (!botToken || !chatId) {
+      console.log("[Telegram Photo] Bỏ qua: Chưa cấu hình BOT_TOKEN hoặc CHAT_ID (Web/env)");
+      return;
+    }
+
+    if (!imagePath || !fs.existsSync(imagePath)) {
+      await sendTelegramText(captionText);
+      return;
+    }
+
+    const imageBuffer = fs.readFileSync(imagePath);
+    const formData = new FormData();
+    formData.append("chat_id", chatId);
+    formData.append("caption", (captionText || "").slice(0, 1024));
+    formData.append("photo", new Blob([imageBuffer], { type: "image/jpeg" }), path.basename(imagePath));
+
+    const url = `https://api.telegram.org/bot${botToken}/sendPhoto`;
+    await fetch(url, { method: "POST", body: formData });
+    console.log("[Telegram Photo] Đã gửi thành công ảnh chụp và báo cáo về Telegram!");
+  } catch (err) {
+    console.warn(`[Telegram Photo Error] ${err.message}`);
+  }
+}
+
+// HELPER GỬI THÔNG BÁO / CẢNH BÁO LÊN WEB UI & LOGS
 function pushWebNotification(messageText, type = "INFO") {
   const timestamp = new Date().toLocaleTimeString("vi-VN");
   const logEntry = {
@@ -269,7 +323,7 @@ function pushWebNotification(messageText, type = "INFO") {
   };
   lastArduinoLogs.unshift(logEntry);
   if (lastArduinoLogs.length > 30) lastArduinoLogs.pop();
-  console.log(`[Web Alert Data] ${timestamp} -> ${messageText}`);
+  console.log(`[Web Alert & Data] ${timestamp} -> ${messageText}`);
 }
 
 // ARDUINO SERIAL PORT INITIALIZER & PROTOCOL LISTENER
@@ -365,7 +419,7 @@ async function getOrInitArduinoSerialPort() {
           return;
         }
 
-        // POINT_READY:n Event handling
+        // POINT_READY:n Event handling (Giống v2.mjs)
         const pointReadyMatch = /^POINT_READY:(\d+)$/i.exec(line);
         if (pointReadyMatch) {
           const pointIndex = Number(pointReadyMatch[1]);
@@ -391,7 +445,7 @@ async function getOrInitArduinoSerialPort() {
               
               if (aiResult && aiResult.text) {
                 details = aiResult.text;
-                if (details.includes("SÂU") || details.includes("BỆNH") || details.includes("SPRAY")) {
+                if (details.includes("SÂU") || details.includes("BỆNH") || details.includes("SPRAY") || details.includes("LÁ BỊ SÂU ĂN")) {
                   action = "SPRAY";
                 }
               }
@@ -399,12 +453,16 @@ async function getOrInitArduinoSerialPort() {
               console.warn(`[Point AI fallback] ${aiErr.message}`);
             }
 
-            // Lưu kết quả kiểm tra điểm này để trả về Web UI
+            // Gửi báo cáo + ảnh (nếu có) về Telegram theo thiết lập trong Web UI/env (giống v2.mjs)
+            const reportCaption = `ĐIỂM KIỂM TRA ${pointIndex + 1}\n\n${details}`;
+            await sendTelegramPhoto(null, reportCaption);
+
+            // Lưu kết quả kiểm tra điểm này cho Web UI
             const pointRecord = {
               pointIndex: pointIndex + 1,
               timestamp: new Date().toLocaleTimeString("vi-VN"),
-              action: action === "SPRAY" ? "Cần phun thuốc" : "Không phun",
-              details: details.substring(0, 150),
+              action: action === "SPRAY" ? "Cần phun thuốc (SPRAY)" : "Không phun (NO_SPRAY)",
+              details: details.substring(0, 200),
               status: action === "SPRAY" ? "PEST_DETECTED" : "HEALTHY",
             };
 
@@ -428,12 +486,14 @@ async function getOrInitArduinoSerialPort() {
 
         if (normalized === "CHECK_COMPLETE") {
           pushWebNotification("Robot đã hoàn tất toàn bộ chu trình kiểm tra sâu bệnh!", "COMPLETE");
+          await sendTelegramText("Hệ thống robot đã hoàn tất toàn bộ chu trình kiểm tra các điểm!");
           return;
         }
 
         if (normalized.startsWith("ALERT:")) {
           currentCancellationId++;
           pushWebNotification(`CẢNH BÁO PHẦN CỨNG: ${line}`, "ALERT");
+          await sendTelegramText(`LỖI HỆ THỐNG ROBOT:\n${line}`);
           return;
         }
       } catch (evtErr) {
