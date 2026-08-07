@@ -587,6 +587,30 @@ function pushWebNotification(messageText, type = "INFO") {
   console.log(`[Web Alert & Data] ${timestamp} -> ${messageText}`);
 }
 
+// HELPER KIỂM TRA XEM VỊ TRÍ (0->5 TƯƠNG ỨNG ĐIỂM 1->6 / KHAY 01->06) ĐÃ ĐƯỢC THÊM CÂY TRỒNG TRÊN WEB CHƯA
+function hasPlantAtPoint(pointIndex) {
+  let plants = readJson("plants.json", []);
+  if (!Array.isArray(plants) || plants.length === 0) {
+    const store = readJson("garden-store.json", {});
+    if (store.plants && Array.isArray(store.plants)) {
+      plants = store.plants;
+    }
+  }
+
+  const targetNum = pointIndex + 1; // Point index 0..5 -> Point 1..6
+
+  return plants.some((p) => {
+    if (!p || !p.location) return false;
+    const locStr = String(p.location).trim();
+    // Match tất cả cụm số trong location (VD: "Khay 01" -> 1, "Điểm 2" -> 2, "Vị trí 3" -> 3, "Khay 4" -> 4)
+    const matches = locStr.match(/\d+/g);
+    if (matches) {
+      return matches.some((numStr) => parseInt(numStr, 10) === targetNum);
+    }
+    return false;
+  });
+}
+
 // ARDUINO SERIAL PORT INITIALIZER & PROTOCOL LISTENER
 async function getOrInitArduinoSerialPort() {
   try {
@@ -688,6 +712,19 @@ async function getOrInitArduinoSerialPort() {
             console.warn(`[Arduino Protocol] Busy processing point ${pointIndex}, returning error`);
             activeSerialPort.write(`POINT_RESULT:${pointIndex}:ERROR\n`);
             return;
+          }
+
+          // KIỂM TRA BỎ QUA ĐIỂM NẾU VỊ TRÍ CHƯA ĐƯỢC THÊM CÂY TRỒNG TRÊN WEB
+          if (!hasPlantAtPoint(pointIndex)) {
+            const pointLabel = `Khay ${pointIndex + 1 < 10 ? "0" + (pointIndex + 1) : pointIndex + 1}`;
+            console.log(`[Inspection Engine] Bỏ qua kiểm tra Điểm ${pointIndex + 1} (${pointLabel}) vì chưa được thêm cây trồng trên Web.`);
+            pushWebNotification(`Bỏ qua Vị trí ${pointIndex + 1} (${pointLabel}): Chưa thêm cây trồng.`, "INFO");
+
+            if (activeSerialPort && activeSerialPort.isOpen) {
+              activeSerialPort.write(`POINT_RESULT:${pointIndex}:SKIPPED\n`);
+              console.log(`[Server -> Arduino] POINT_RESULT:${pointIndex}:SKIPPED`);
+            }
+            return; // BỎ QUA KIỂM TRA ĐIỂM NÀY
           }
 
           captureBusy = true;
