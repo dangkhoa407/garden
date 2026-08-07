@@ -39,7 +39,7 @@ export default function ControlsPage() {
 
   const fetchArduinoStatus = async () => {
     try {
-      const res = await fetch(`${BACKEND_URL}/api/arduino/status`);
+      const res = await fetch("/api/arduino/status");
       if (res.ok) {
         const data = await res.json();
         setArduinoStatus(data);
@@ -68,7 +68,7 @@ export default function ControlsPage() {
     setActiveToast(null);
 
     try {
-      const res = await fetch(`${BACKEND_URL}/api/arduino/ping-check`, {
+      const res = await fetch("/api/arduino/ping-check", {
         method: "POST",
       });
       const data = await res.json();
@@ -100,7 +100,7 @@ export default function ControlsPage() {
     setActiveToast(null);
 
     try {
-      const response = await fetch(`${BACKEND_URL}/api/arduino/command`, {
+      const response = await fetch("/api/arduino/command", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ command: cmdKey }),

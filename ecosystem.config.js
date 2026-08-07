@@ -15,7 +15,8 @@ module.exports = {
       args: "start -p 3000",
       watch: false,
       env: {
-        NODE_ENV: "production"
+        NODE_ENV: "production",
+        NEXT_PUBLIC_BACKEND_URL: "https://api.conkudaden.online"
       }
     }
   ]

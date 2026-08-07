@@ -106,7 +106,7 @@ export default function DeviceSettingsPage() {
     setTimeout(() => setToast(null), 4000);
   };
 
-  // Helper fetch an toàn tự động thử các gateway (Relative Proxy -> Localhost:5000)
+  // Helper fetch an toàn tự động thử các gateway (Relative Proxy -> Configured BACKEND_URL -> Localhost fallback)
   const safeFetchJson = async (endpoint: string, options?: RequestInit) => {
     // 1. Thử Relative URL (Next.js rewrites)
     try {
@@ -114,19 +114,19 @@ export default function DeviceSettingsPage() {
       if (res && res.ok) return await res.json();
     } catch (e) {}
 
-    // 2. Thử trực tiếp Localhost Backend (http://localhost:5000)
-    try {
-      const res = await fetch(`http://localhost:5000${endpoint}`, options);
-      if (res && res.ok) return await res.json();
-    } catch (e) {}
-
-    // 3. Thử BACKEND_URL nếu khác localhost
-    if (BACKEND_URL && !BACKEND_URL.includes("localhost")) {
+    // 2. Thử BACKEND_URL được cấu hình
+    if (BACKEND_URL) {
       try {
         const res = await fetch(`${BACKEND_URL}${endpoint}`, options);
         if (res && res.ok) return await res.json();
       } catch (e) {}
     }
+
+    // 3. Fallback thử trực tiếp Localhost Backend (http://localhost:5000)
+    try {
+      const res = await fetch(`http://localhost:5000${endpoint}`, options);
+      if (res && res.ok) return await res.json();
+    } catch (e) {}
 
     return null;
   };
