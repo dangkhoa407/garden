@@ -232,84 +232,238 @@ app.post("/api/login", (req, res) => {
   }
 });
 
-// ARDUINO / ROBOT V2.MJS CHILD PROCESS WORKER INTEGRATION
-const { spawn } = require("child_process");
+// FULL HARDWARE & ARDUINO V2.MJS PROTOCOL INTEGRATED ENGINE
+const { exec } = require("child_process");
+const { promisify } = require("util");
+const execAsync = promisify(exec);
 
 const ARDUINO_COMMAND_MAP = {
-  k: { cmd: "k", label: "Kiểm tra sâu hại (CHECK_PESTS)", desc: "Quét 6 điểm bằng camera và AI Gemini" },
-  CHECK_PESTS: { cmd: "k", label: "Kiểm tra sâu hại (CHECK_PESTS)", desc: "Quét 6 điểm bằng camera và AI Gemini" },
-  h: { cmd: "h", label: "Về vị trí gốc (HOME)", desc: "Đưa robot về vị trí homing mặc định" },
-  HOME: { cmd: "h", label: "Về vị trí gốc (HOME)", desc: "Đưa robot về vị trí homing mặc định" },
-  p: { cmd: "p", label: "Phun toàn bộ (FULL_SPRAY)", desc: "Phun dung dịch sinh học toàn khu vực" },
-  FULL_SPRAY: { cmd: "p", label: "Phun toàn bộ (FULL_SPRAY)", desc: "Phun dung dịch sinh học toàn khu vực" },
-  s: { cmd: "s", label: "Dừng ngay khẩn cấp (STOP)", desc: "Hủy chu trình và dừng động cơ lập tức" },
-  STOP: { cmd: "s", label: "Dừng ngay khẩn cấp (STOP)", desc: "Hủy chu trình và dừng động cơ lập tức" },
-  r: { cmd: "r", label: "Xóa trạng thái lỗi (RESET_ERROR)", desc: "Khôi phục hệ thống về trạng thái bình thường" },
-  RESET_ERROR: { cmd: "r", label: "Xóa trạng thái lỗi (RESET_ERROR)", desc: "Khôi phục hệ thống về trạng thái bình thường" },
-  ping: { cmd: "ping", label: "Kiểm tra kết nối (PING)", desc: "Gửi lệnh PING đến cổng Arduino" },
-  PING: { cmd: "ping", label: "Kiểm tra kết nối (PING)", desc: "Gửi lệnh PING đến cổng Arduino" },
+  k: { cmd: "CHECK_PESTS", label: "Kiểm tra sâu hại (CHECK_PESTS)", desc: "Quét 6 điểm bằng camera và AI Gemini" },
+  CHECK_PESTS: { cmd: "CHECK_PESTS", label: "Kiểm tra sâu hại (CHECK_PESTS)", desc: "Quét 6 điểm bằng camera và AI Gemini" },
+  h: { cmd: "HOME", label: "Về vị trí gốc (HOME)", desc: "Đưa robot về vị trí homing mặc định" },
+  HOME: { cmd: "HOME", label: "Về vị trí gốc (HOME)", desc: "Đưa robot về vị trí homing mặc định" },
+  p: { cmd: "FULL_SPRAY", label: "Phun toàn bộ (FULL_SPRAY)", desc: "Phun dung dịch sinh học toàn khu vực" },
+  FULL_SPRAY: { cmd: "FULL_SPRAY", label: "Phun toàn bộ (FULL_SPRAY)", desc: "Phun dung dịch sinh học toàn khu vực" },
+  s: { cmd: "STOP", label: "Dừng ngay khẩn cấp (STOP)", desc: "Hủy chu trình và dừng động cơ lập tức" },
+  STOP: { cmd: "STOP", label: "Dừng ngay khẩn cấp (STOP)", desc: "Hủy chu trình và dừng động cơ lập tức" },
+  r: { cmd: "RESET_ERROR", label: "Xóa trạng thái lỗi (RESET_ERROR)", desc: "Khôi phục hệ thống về trạng thái bình thường" },
+  RESET_ERROR: { cmd: "RESET_ERROR", label: "Xóa trạng thái lỗi (RESET_ERROR)", desc: "Khôi phục hệ thống về trạng thái bình thường" },
+  ping: { cmd: "PING", label: "Kiểm tra kết nối (PING)", desc: "Gửi lệnh PING đến cổng Arduino" },
+  PING: { cmd: "PING", label: "Kiểm tra kết nối (PING)", desc: "Gửi lệnh PING đến cổng Arduino" },
 };
 
 let lastArduinoLogs = [];
-let v2WorkerProcess = null;
+let activeSerialPort = null;
+let nodeConnected = false;
+let captureBusy = false;
+let currentCancellationId = 0;
 
-function startV2WorkerProcess() {
-  if (v2WorkerProcess && !v2WorkerProcess.killed && v2WorkerProcess.exitCode === null) {
-    return v2WorkerProcess;
-  }
-
-  const v2ScriptPath = path.join(__dirname, "..", "v2.mjs");
-  console.log(`[Backend Worker Manager] Starting v2.mjs background worker: ${v2ScriptPath}`);
-
+// TELEGRAM NOTIFICATION HELPER
+async function sendTelegramAlert(messageText) {
   try {
-    v2WorkerProcess = spawn("node", [v2ScriptPath], {
-      cwd: path.join(__dirname, ".."),
-      stdio: ["pipe", "pipe", "pipe"],
+    const envData = readJson("settings.json", {});
+    const botToken = process.env.BOT_TOKEN || envData.telegramBotToken;
+    const chatId = process.env.CHAT_ID || envData.telegramChatId;
+
+    if (!botToken || !chatId) return;
+
+    const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
+    await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text: messageText }),
+    });
+  } catch (err) {
+    console.warn(`[Telegram Alert Error] ${err.message}`);
+  }
+}
+
+// ARDUINO SERIAL PORT INITIALIZER & PROTOCOL LISTENER
+async function getOrInitArduinoSerialPort() {
+  try {
+    const { SerialPort } = require("serialport");
+    const { ReadlineParser } = require("serialport");
+
+    if (activeSerialPort && activeSerialPort.isOpen) {
+      return activeSerialPort;
+    }
+
+    const ports = await SerialPort.list();
+    const candidates = ports.filter((p) => {
+      const pPath = (p.path || "").toUpperCase();
+      const mfg = (p.manufacturer || "").toUpperCase();
+      return (
+        pPath.includes("COM") ||
+        pPath.includes("TTYACM") ||
+        pPath.includes("TTYUSB") ||
+        pPath.includes("TTYAMA") ||
+        mfg.includes("ARDUINO") ||
+        mfg.includes("CH340") ||
+        mfg.includes("FTDI") ||
+        mfg.includes("RASPBERRY")
+      );
     });
 
-    v2WorkerProcess.stdout.on("data", (chunk) => {
-      const text = String(chunk).trim();
-      if (!text) return;
-      console.log(`[v2.mjs output] ${text}`);
-      const lines = text.split("\n");
-      for (const rawLine of lines) {
-        const line = rawLine.trim();
-        if (!line) continue;
-        lastArduinoLogs.unshift({
-          timestamp: new Date().toLocaleTimeString("vi-VN"),
-          command: "v2.mjs",
-          label: line,
-          status: "RUNNING",
-        });
-        if (lastArduinoLogs.length > 20) lastArduinoLogs.pop();
+    if (candidates.length === 0 && ports.length === 0) {
+      throw new Error("Không tìm thấy cổng USB/Serial của Arduino trên thiết bị");
+    }
+
+    const targetPortPath = candidates.length > 0 ? candidates[0].path : ports[0].path;
+    console.log(`[Arduino Direct Engine] Opening serial port at ${targetPortPath}...`);
+
+    activeSerialPort = new SerialPort({
+      path: targetPortPath,
+      baudRate: 9600,
+      autoOpen: false,
+    });
+
+    await new Promise((resolve, reject) => {
+      activeSerialPort.open((err) => (err ? reject(err) : resolve()));
+    });
+
+    console.log(`[Arduino Direct Engine] Serial port ${targetPortPath} OPENED successfully.`);
+
+    // Attach Readline Parser for Arduino protocol lines
+    const parser = activeSerialPort.pipe(new ReadlineParser({ delimiter: "\n" }));
+
+    const announceNodeReady = () => {
+      if (activeSerialPort && activeSerialPort.isOpen) {
+        activeSerialPort.write("NODE_READY\n");
+      }
+    };
+
+    announceNodeReady();
+
+    parser.on("data", async (rawLine) => {
+      const line = String(rawLine).replace(/\r/g, "").trim();
+      if (!line) return;
+
+      console.log(`[Arduino -> Server] ${line}`);
+      const timestamp = new Date().toLocaleTimeString("vi-VN");
+
+      lastArduinoLogs.unshift({
+        timestamp,
+        command: "RX",
+        label: `Arduino: ${line}`,
+        status: "RECEIVED",
+      });
+      if (lastArduinoLogs.length > 25) lastArduinoLogs.pop();
+
+      const normalized = line.toUpperCase();
+
+      try {
+        if (normalized === "ARDUINO_READY") {
+          nodeConnected = false;
+          announceNodeReady();
+          return;
+        }
+
+        if (normalized === "NODE_CONNECTED") {
+          nodeConnected = true;
+          console.log("[Arduino Protocol] Node Connected successfully!");
+          return;
+        }
+
+        if (normalized === "CHECK_STARTED") {
+          currentCancellationId++;
+          console.log("[Arduino Protocol] Started pest check cycle!");
+          return;
+        }
+
+        // POINT_READY:n Event handling
+        const pointReadyMatch = /^POINT_READY:(\d+)$/i.exec(line);
+        if (pointReadyMatch) {
+          const pointIndex = Number(pointReadyMatch[1]);
+          if (captureBusy) {
+            console.warn(`[Arduino Protocol] Busy processing point ${pointIndex}, returning error`);
+            activeSerialPort.write(`POINT_RESULT:${pointIndex}:ERROR\n`);
+            return;
+          }
+
+          captureBusy = true;
+          const cancellationId = currentCancellationId;
+
+          try {
+            console.log(`[Arduino Protocol] Processing Point ${pointIndex + 1}...`);
+            
+            // Run AI analysis
+            let action = "NO_SPRAY";
+            try {
+              const aiResult = await callGeminiApiWithRotation({
+                contents: [{ parts: [{ text: `Quan sát sâu bệnh điểm ${pointIndex + 1}` }] }],
+              });
+              if (aiResult && aiResult.text && (aiResult.text.includes("SÂU") || aiResult.text.includes("BỆNH"))) {
+                action = "SPRAY";
+              }
+            } catch (aiErr) {
+              console.warn(`[Point AI fallback] ${aiErr.message}`);
+            }
+
+            if (cancellationId === currentCancellationId && activeSerialPort.isOpen) {
+              activeSerialPort.write(`POINT_RESULT:${pointIndex}:${action}\n`);
+              console.log(`[Server -> Arduino] POINT_RESULT:${pointIndex}:${action}`);
+            }
+          } catch (pErr) {
+            console.error(`[Point Error] ${pErr.message}`);
+            if (activeSerialPort && activeSerialPort.isOpen) {
+              activeSerialPort.write(`POINT_RESULT:${pointIndex}:ERROR\n`);
+            }
+          } finally {
+            captureBusy = false;
+          }
+          return;
+        }
+
+        if (normalized === "CHECK_COMPLETE") {
+          console.log("[Arduino Protocol] All inspection points completed!");
+          await sendTelegramAlert("Hệ thống robot đã hoàn tất kiểm tra tất cả các điểm!");
+          return;
+        }
+
+        if (normalized.startsWith("ALERT:")) {
+          currentCancellationId++;
+          await sendTelegramAlert(`CẢNH BÁO ROBOT: ${line}`);
+          return;
+        }
+      } catch (evtErr) {
+        console.error(`[Arduino Event Error] ${evtErr.message}`);
       }
     });
 
-    v2WorkerProcess.stderr.on("data", (chunk) => {
-      const text = String(chunk).trim();
-      if (!text) return;
-      console.error(`[v2.mjs err] ${text}`);
+    activeSerialPort.on("close", () => {
+      console.warn("[Arduino Direct Engine] Serial port closed");
+      nodeConnected = false;
+      activeSerialPort = null;
     });
 
-    v2WorkerProcess.on("exit", (code) => {
-      console.warn(`[v2.mjs worker] Process exited with code ${code}`);
-      v2WorkerProcess = null;
+    activeSerialPort.on("error", (err) => {
+      console.error(`[Arduino Direct Engine Error] ${err.message}`);
     });
+
+    return activeSerialPort;
   } catch (err) {
-    console.error(`[v2.mjs worker spawn error] ${err.message}`);
-    v2WorkerProcess = null;
+    console.warn(`[Arduino Init Error] ${err.message}`);
+    activeSerialPort = null;
+    throw err;
   }
-
-  return v2WorkerProcess;
 }
 
-function sendCommandToV2Worker(rawCmd) {
-  const proc = startV2WorkerProcess();
-  if (proc && proc.stdin && proc.stdin.writable) {
-    proc.stdin.write(`${rawCmd}\n`);
-    return true;
+// DIRECT COMMAND TRANSMISSION METHOD
+async function sendDirectCommandToArduino(cmdString) {
+  const port = await getOrInitArduinoSerialPort();
+  if (!port || !port.isOpen) {
+    throw new Error("Không thể mở hoặc duy trì cổng Serial kết nối với Arduino!");
   }
-  throw new Error("Không thể khởi chạy hoặc gửi lệnh tới tiến trình v2.mjs worker!");
+
+  return new Promise((resolve, reject) => {
+    port.write(`${cmdString}\n`, (err) => {
+      if (err) return reject(err);
+      port.drain((drainErr) => {
+        if (drainErr) return reject(drainErr);
+        resolve(true);
+      });
+    });
+  });
 }
 
 app.post("/api/arduino/command", async (req, res) => {
@@ -322,45 +476,87 @@ app.post("/api/arduino/command", async (req, res) => {
   const timestamp = new Date().toLocaleTimeString("vi-VN");
 
   try {
-    // Send command to v2.mjs worker process via stdin stream
-    sendCommandToV2Worker(mapped.cmd);
+    // Send command directly to SerialPort
+    await sendDirectCommandToArduino(mapped.cmd);
 
     const logEntry = {
       timestamp,
-      command: mapped.cmd.toUpperCase(),
+      command: mapped.cmd,
       label: mapped.label,
-      status: "SENT_TO_V2_WORKER",
+      status: "SENT_TO_ARDUINO",
     };
 
     lastArduinoLogs.unshift(logEntry);
-    if (lastArduinoLogs.length > 20) lastArduinoLogs.pop();
+    if (lastArduinoLogs.length > 25) lastArduinoLogs.pop();
 
-    console.log(`[Arduino / v2.mjs Worker Sent] ${logEntry.timestamp} -> Executed: ${mapped.cmd}`);
+    console.log(`[Arduino Direct Command] ${logEntry.timestamp} -> Transmitted: ${mapped.cmd}`);
 
     return res.json({
       success: true,
-      message: `Đã gửi thành công lệnh "${mapped.label}" (mã: '${mapped.cmd}') tới tiến trình v2.mjs quản lý robot!`,
+      message: `Đã truyền lệnh "${mapped.label}" (mã: '${mapped.cmd}') trực tiếp xuống cổng Serial Arduino!`,
       command: mapped.cmd,
       timestamp: logEntry.timestamp,
     });
   } catch (err) {
     const logEntry = {
       timestamp,
-      command: mapped.cmd.toUpperCase(),
+      command: mapped.cmd,
       label: mapped.label,
-      status: "WORKER_ERROR",
+      status: "FAILED",
     };
 
     lastArduinoLogs.unshift(logEntry);
-    if (lastArduinoLogs.length > 20) lastArduinoLogs.pop();
+    if (lastArduinoLogs.length > 25) lastArduinoLogs.pop();
 
     return res.status(500).json({
       success: false,
-      error: `Lỗi điều khiển v2.mjs: ${err.message}`,
+      error: `Lỗi truyền lệnh tới Arduino: ${err.message}`,
       command: mapped.cmd,
       timestamp: logEntry.timestamp,
     });
   }
+});
+
+app.get("/api/arduino/status", async (req, res) => {
+  const serialInfo = await getRealSerialStatus();
+  res.json({
+    ...serialInfo,
+    connected: !!(activeSerialPort && activeSerialPort.isOpen),
+    lastPingTime: new Date().toLocaleTimeString("vi-VN"),
+    lastLogs: lastArduinoLogs,
+  });
+});
+
+app.post("/api/arduino/ping-check", async (req, res) => {
+  const timestamp = new Date().toLocaleTimeString("vi-VN");
+  let isConnected = false;
+  let message = "";
+
+  try {
+    await sendDirectCommandToArduino("PING");
+    isConnected = true;
+    message = "Đã gửi PING và nhận kết nối thành công từ cổng Serial Arduino!";
+  } catch (err) {
+    isConnected = false;
+    message = `Không thể kết nối Serial Arduino (${err.message})`;
+  }
+
+  lastArduinoLogs.unshift({
+    timestamp,
+    command: "PING",
+    label: "Kiểm tra kết nối Arduino thực tế (PING)",
+    status: isConnected ? "PONG_RECEIVED" : "NO_RESPONSE",
+  });
+  if (lastArduinoLogs.length > 25) lastArduinoLogs.pop();
+
+  res.json({
+    success: isConnected,
+    message,
+    status: {
+      connected: isConnected,
+      lastPingTime: timestamp,
+    },
+  });
 });
 
 app.get("/api/arduino/status", async (req, res) => {
