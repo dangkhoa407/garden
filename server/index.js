@@ -719,8 +719,8 @@ async function getOrInitArduinoSerialPort() {
             pushWebNotification(`Bỏ qua Vị trí ${pointIndex + 1} (${pointLabel}): Chưa thêm cây trồng.`, "INFO");
 
             if (activeSerialPort && activeSerialPort.isOpen) {
-              activeSerialPort.write(`POINT_RESULT:${pointIndex}:SKIPPED\n`);
-              console.log(`[Server -> Arduino] POINT_RESULT:${pointIndex}:SKIPPED`);
+              activeSerialPort.write(`POINT_RESULT:${pointIndex}:NO_SPRAY\n`);
+              console.log(`[Server -> Arduino] POINT_RESULT:${pointIndex}:NO_SPRAY (Skipped plant check)`);
             }
             return; // BỎ QUA KIỂM TRA ĐIỂM NÀY
           }
