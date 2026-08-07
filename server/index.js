@@ -2,6 +2,9 @@ const express = require("express");
 const cors = require("cors");
 const fs = require("fs");
 const path = require("path");
+const { exec } = require("child_process");
+const { promisify } = require("util");
+const execAsync = promisify(exec);
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -233,10 +236,6 @@ app.post("/api/login", (req, res) => {
 });
 
 // FULL HARDWARE & ARDUINO V2.MJS PROTOCOL INTEGRATED ENGINE
-const { exec } = require("child_process");
-const { promisify } = require("util");
-const execAsync = promisify(exec);
-
 const ARDUINO_COMMAND_MAP = {
   k: { cmd: "CHECK_PESTS", label: "Kiểm tra sâu hại (CHECK_PESTS)", desc: "Quét 6 điểm bằng camera và AI Gemini" },
   CHECK_PESTS: { cmd: "CHECK_PESTS", label: "Kiểm tra sâu hại (CHECK_PESTS)", desc: "Quét 6 điểm bằng camera và AI Gemini" },
@@ -645,7 +644,6 @@ app.post("/api/camera/test", (req, res) => {
 });
 
 // REAL SYSTEM WI-FI DIAGNOSTICS & SCANNING (WINDOWS NETSH)
-const { exec } = require("child_process");
 const os = require("os");
 
 function getLocalIpAddress() {
