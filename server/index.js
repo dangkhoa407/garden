@@ -503,6 +503,15 @@ async function captureImage() {
     const sharp = require("sharp");
     await sharp(bestPath).removeAlpha().linear(alpha, beta).jpeg({ quality: JPEG_QUALITY }).toFile(imagePath);
     console.log(`[Camera Engine] Đã chụp và lưu ảnh thành công: ${imagePath}`);
+
+    // Broadcast frame mới nhất tới tất cả khách hàng xem từ xa
+    try {
+      const buf = fs.readFileSync(imagePath);
+      if (typeof broadcastFrameToClients === "function") {
+        broadcastFrameToClients(buf);
+      }
+    } catch (e) {}
+
     return imagePath;
   } finally {
     await fs.promises.rm(directory, { recursive: true, force: true }).catch(() => {});
@@ -1020,8 +1029,68 @@ app.post("/api/arduino/ping-check", async (req, res) => {
 });
 
 // =========================================================
-// REAL USB CAMERA API ENDPOINTS (/dev/video0)
+// REAL USB CAMERA API ENDPOINTS (/dev/video0) & MJPEG REMOTE STREAM
 // =========================================================
+
+// Khởi tạo danh sách các kết nối xem trực tiếp ngầm từ xa (MJPEG Stream Clients)
+const cameraStreamClients = new Set();
+
+// Broadcast frame ảnh mới nhất tới tất cả khách hàng đang xem camera từ xa
+function broadcastFrameToClients(imageBuffer) {
+  if (cameraStreamClients.size === 0 || !imageBuffer) return;
+  const header = `--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ${imageBuffer.length}\r\n\r\n`;
+  for (const clientRes of cameraStreamClients) {
+    try {
+      clientRes.write(header);
+      clientRes.write(imageBuffer);
+      clientRes.write("\r\n");
+    } catch (e) {
+      cameraStreamClients.delete(clientRes);
+    }
+  }
+}
+
+// Tự động phát video stream 2 FPS ngầm khi có người xem từ xa
+setInterval(() => {
+  if (cameraStreamClients.size > 0) {
+    const imagePath = path.join(process.cwd(), "st01.jpg");
+    if (fs.existsSync(imagePath)) {
+      try {
+        const buf = fs.readFileSync(imagePath);
+        broadcastFrameToClients(buf);
+      } catch (e) {}
+    }
+  }
+}, 500);
+
+// Endpoint Stream Video MJPEG chuẩn IP Camera Trực Tiếp Từ Xa (/api/camera/stream)
+app.get("/api/camera/stream", (req, res) => {
+  res.writeHead(200, {
+    "Content-Type": "multipart/x-mixed-replace; boundary=frame",
+    "Cache-Control": "no-cache, no-store, must-revalidate",
+    "Pragma": "no-cache",
+    "Expires": "0",
+    "Connection": "close",
+    "Access-Control-Allow-Origin": "*",
+  });
+
+  cameraStreamClients.add(res);
+
+  // Gửi khung hình đầu tiên ngay lập tức nếu có
+  const imagePath = path.join(process.cwd(), "st01.jpg");
+  if (fs.existsSync(imagePath)) {
+    try {
+      const buf = fs.readFileSync(imagePath);
+      res.write(`--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ${buf.length}\r\n\r\n`);
+      res.write(buf);
+      res.write("\r\n");
+    } catch (e) {}
+  }
+
+  req.on("close", () => {
+    cameraStreamClients.delete(res);
+  });
+});
 
 // 1. Endpoint trả về file ảnh camera chụp thực tế từ USB camera st01.jpg
 app.get("/api/camera/image", (req, res) => {
@@ -1029,6 +1098,7 @@ app.get("/api/camera/image", (req, res) => {
   res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
+  res.setHeader("Access-Control-Allow-Origin", "*");
 
   if (fs.existsSync(imagePath)) {
     return res.sendFile(imagePath);
@@ -1040,8 +1110,8 @@ app.get("/api/camera/image", (req, res) => {
     <svg xmlns="http://www.w3.org/2000/svg" width="640" height="480" viewBox="0 0 640 480" style="background:#09090b;font-family:sans-serif">
       <rect width="640" height="480" fill="#09090b"/>
       <circle cx="320" cy="210" r="40" fill="none" stroke="#10b981" stroke-width="4" opacity="0.6"/>
-      <text x="320" y="290" text-anchor="middle" fill="#f4f4f5" font-size="18" font-weight="bold">USB CAMERA REAL-TIME STREAM</text>
-      <text x="320" y="320" text-anchor="middle" fill="#71717a" font-size="14">Đang kết nối camera /dev/video0...</text>
+      <text x="320" y="290" text-anchor="middle" fill="#f4f4f5" font-size="18" font-weight="bold">REMOTE IP CAMERA LIVE STREAM</text>
+      <text x="320" y="320" text-anchor="middle" fill="#71717a" font-size="14">Đang truyền video trực tiếp từ xa (/dev/video0)...</text>
     </svg>
   `);
 });
