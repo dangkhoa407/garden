@@ -1019,37 +1019,139 @@ app.post("/api/arduino/ping-check", async (req, res) => {
   });
 });
 
-// CAMERA DIAGNOSTICS ENDPOINTS
-app.get("/api/camera/status", (req, res) => {
-  const camConfig = readJson("camera.json", {
-    connected: true,
-    model: "GrowHub HD AI Vision Camera (USB/ESP32)",
-    resolution: "1920x1080 (1080p Full HD)",
-    fps: 30,
-    statusMessage: "Camera đang hoạt động ổn định, khung hình AI sắc nét.",
-    streamUrl: "https://images.unsplash.com/photo-1585320806297-9794b3e4eeae?q=80&w=1000&auto=format&fit=crop",
-    lastSnapshotTime: new Date().toLocaleTimeString("vi-VN"),
-  });
-  res.json(camConfig);
+// =========================================================
+// REAL USB CAMERA API ENDPOINTS (/dev/video0)
+// =========================================================
+
+// 1. Endpoint trả về file ảnh camera chụp thực tế từ USB camera st01.jpg
+app.get("/api/camera/image", (req, res) => {
+  const imagePath = path.join(process.cwd(), "st01.jpg");
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+
+  if (fs.existsSync(imagePath)) {
+    return res.sendFile(imagePath);
+  }
+
+  // Phản hồi ảnh SVG chữ nếu chưa từng chụp ảnh nào từ camera
+  res.setHeader("Content-Type", "image/svg+xml");
+  res.send(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="640" height="480" viewBox="0 0 640 480" style="background:#09090b;font-family:sans-serif">
+      <rect width="640" height="480" fill="#09090b"/>
+      <circle cx="320" cy="210" r="40" fill="none" stroke="#10b981" stroke-width="4" opacity="0.6"/>
+      <text x="320" y="290" text-anchor="middle" fill="#f4f4f5" font-size="18" font-weight="bold">USB CAMERA REAL-TIME STREAM</text>
+      <text x="320" y="320" text-anchor="middle" fill="#71717a" font-size="14">Đang kết nối camera /dev/video0...</text>
+    </svg>
+  `);
 });
 
-app.post("/api/camera/test", (req, res) => {
-  const timestamp = new Date().toLocaleTimeString("vi-VN");
-  const camConfig = {
-    connected: true,
-    model: "GrowHub HD AI Vision Camera (USB/ESP32)",
-    resolution: "1920x1080 (1080p Full HD)",
-    fps: 30,
-    statusMessage: "Đã chụp ảnh test thành công! Camera phản hồi tốt trong 15ms.",
-    streamUrl: "https://images.unsplash.com/photo-1585320806297-9794b3e4eeae?q=80&w=1000&auto=format&fit=crop",
-    lastSnapshotTime: timestamp,
-  };
-  writeJson("camera.json", camConfig);
+// 2. Endpoint kiểm tra trạng thái camera USB thực tế
+app.get("/api/camera/status", async (req, res) => {
+  let connected = false;
+  let device = "/dev/video0";
+  let message = "Đang kiểm tra kết nối Camera USB...";
+
+  try {
+    if (process.platform !== "win32") {
+      const { stdout } = await execAsync("v4l2-ctl --list-devices").catch(() => ({ stdout: "" }));
+      if (stdout.includes("/dev/video")) {
+        connected = true;
+        message = "Đã tìm thấy USB Camera trên /dev/video0";
+      } else if (fs.existsSync("/dev/video0")) {
+        connected = true;
+        message = "Thiết bị USB Camera /dev/video0 sẵn sàng";
+      } else {
+        connected = false;
+        message = "Không phát hiện camera USB tại /dev/video0";
+      }
+    } else {
+      connected = true; // Trên môi trường dev Windows
+      message = "Camera USB (Windows Simulation)";
+    }
+  } catch (err) {
+    connected = false;
+    message = `Lỗi nhận diện camera: ${err.message}`;
+  }
+
+  const imagePath = path.join(process.cwd(), "st01.jpg");
+  let lastCaptured = null;
+  if (fs.existsSync(imagePath)) {
+    const stats = fs.statSync(imagePath);
+    lastCaptured = new Date(stats.mtime).toLocaleTimeString("vi-VN");
+  }
+
   res.json({
-    success: true,
-    message: "Chụp thử (Snapshot Test) thành công! Tốc độ phản hồi: 15ms",
-    status: camConfig,
+    connected,
+    device,
+    resolution: "640x480 @ 30fps",
+    fps: 30,
+    message,
+    lastCaptured,
+    hasImage: fs.existsSync(imagePath),
   });
+});
+
+// 3. Endpoint chụp ảnh trực tiếp ngay lập tức từ USB Camera
+app.post("/api/camera/snapshot", async (req, res) => {
+  try {
+    console.log("[Camera API] Đang yêu cầu chụp ảnh nhanh từ camera...");
+    const imagePath = await captureImage();
+    const timestamp = Date.now();
+    pushWebNotification("Đã chụp ảnh trực tiếp thành công từ USB Camera!", "SUCCESS");
+
+    res.json({
+      success: true,
+      message: "Chụp ảnh camera thành công!",
+      imageUrl: `/api/camera/image?t=${timestamp}`,
+      timestamp: new Date().toLocaleTimeString("vi-VN"),
+    });
+  } catch (err) {
+    console.error(`[Camera Snapshot Error] ${err.message}`);
+    pushWebNotification(`Lỗi chụp ảnh camera: ${err.message}`, "ALERT");
+    res.status(500).json({
+      success: false,
+      error: `Không chụp được ảnh từ camera USB: ${err.message}`,
+    });
+  }
+});
+
+// 4. Endpoint bật/tắt chế độ Night Vision / Hồng ngoại
+app.post("/api/camera/night-vision", async (req, res) => {
+  const { enabled } = req.body;
+  try {
+    if (process.platform !== "win32") {
+      if (enabled) {
+        await setCameraControl("brightness", 160);
+        await setCameraControl("contrast", 160);
+      } else {
+        await setCameraControl("brightness", 105);
+        await setCameraControl("contrast", 135);
+      }
+    }
+    pushWebNotification(`Chế độ Hồng ngoại Night Vision: ${enabled ? "BẬT" : "TẮT"}`, "INFO");
+    res.json({ success: true, nightVision: enabled });
+  } catch (err) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/camera/test", async (req, res) => {
+  try {
+    const imagePath = await captureImage();
+    const timestamp = Date.now();
+    res.json({
+      success: true,
+      message: "Chụp thử thành công từ Camera USB!",
+      imageUrl: `/api/camera/image?t=${timestamp}`,
+      lastSnapshotTime: new Date().toLocaleTimeString("vi-VN"),
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: `Lỗi chụp thử camera: ${err.message}`,
+    });
+  }
 });
 
 // REAL SYSTEM WI-FI DIAGNOSTICS & SCANNING (WINDOWS NETSH)
