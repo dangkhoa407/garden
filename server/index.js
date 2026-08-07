@@ -258,6 +258,126 @@ let nodeConnected = false;
 let captureBusy = false;
 let currentCancellationId = 0;
 
+// =========================================================
+// GEMINI PROMPT & RESPONSE SCHEMA (ĐỒNG BỘ 100% V2.MJS)
+// =========================================================
+const ALLOWED_STATUSES = new Set([
+  "SÂU",
+  "LÁ BỊ SÂU ĂN",
+  "BỆNH",
+  "SÂU VÀ BỆNH",
+  "KHÔNG PHÁT HIỆN SÂU VÀ BỆNH",
+  "KHÔNG CHẮC CHẮN"
+]);
+
+const GEMINI_RESPONSE_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    status: {
+      type: "STRING",
+      enum: [
+        "SÂU",
+        "LÁ BỊ SÂU ĂN",
+        "BỆNH",
+        "SÂU VÀ BỆNH",
+        "KHÔNG PHÁT HIỆN SÂU VÀ BỆNH",
+        "KHÔNG CHẮC CHẮN"
+      ]
+    },
+    description: { type: "STRING" },
+    recommendation: { type: "STRING" }
+  },
+  required: ["status", "description", "recommendation"]
+};
+
+function createPrompt(pointIndex) {
+  return `
+Bạn là chuyên gia quan sát sâu hại và dấu hiệu bệnh trên rau ăn lá.
+
+Đây là ảnh tại điểm kiểm tra số ${pointIndex + 1}.
+
+Phân loại theo đúng các quy tắc sau:
+
+1. Nhìn thấy rõ sâu hoặc côn trùng đang bám hay ăn lá:
+SÂU
+
+2. Không thấy con sâu nhưng lá có lỗ thủng, mép bị ăn hoặc dấu cắn:
+LÁ BỊ SÂU ĂN
+
+3. Có đốm lá, cháy lá, thối lá, nấm, vàng lá, xoăn lá hoặc biến màu:
+BỆNH
+
+4. Có cả sâu và bệnh:
+SÂU VÀ BỆNH
+
+5. Không thấy dấu hiệu sâu hoặc bệnh:
+KHÔNG PHÁT HIỆN SÂU VÀ BỆNH
+
+6. Ảnh mờ, tối, quá xa hoặc không đủ bằng chứng:
+KHÔNG CHẮC CHẮN
+
+Yêu cầu bắt buộc:
+
+- Trả đủ status, description và recommendation.
+- Không để trường nào trống.
+- description phải mô tả rõ vật thể và dấu hiệu nhìn thấy.
+- recommendation phải đưa ra khuyến nghị ngắn gọn.
+- Nếu có sâu, dự đoán loại sâu và mật độ ít, trung bình hoặc nhiều.
+- Nếu lá bị sâu ăn hoặc có bệnh, nêu mức độ nhẹ, trung bình hoặc nặng.
+- Ưu tiên biện pháp sinh học, an toàn cho rau ăn lá.
+- Không khẳng định chắc chắn khi ảnh không rõ.
+`.trim();
+}
+
+function parseGeminiResult(rawText) {
+  let data;
+  try {
+    data = JSON.parse(rawText);
+  } catch {
+    throw new Error("Gemini trả dữ liệu không phải JSON hợp lệ.");
+  }
+
+  const status = String(data?.status || "").normalize("NFC").trim().toUpperCase();
+  const description = String(data?.description || "").replace(/\s+/g, " ").trim();
+  const recommendation = String(data?.recommendation || "").replace(/\s+/g, " ").trim();
+
+  if (!ALLOWED_STATUSES.has(status)) {
+    throw new Error(`Gemini trả tình trạng không hợp lệ: ${status || "trống"}`);
+  }
+  if (description.length < 10) {
+    throw new Error("Gemini trả mô tả bị trống hoặc quá ngắn.");
+  }
+  if (recommendation.length < 10) {
+    throw new Error("Gemini trả khuyến nghị bị trống hoặc quá ngắn.");
+  }
+
+  return { status, description, recommendation };
+}
+
+function formatGeminiResult(data) {
+  const currentTime = new Date().toLocaleString("vi-VN", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    hour12: false
+  });
+
+  return [
+    "KẾT QUẢ KIỂM TRA",
+    `Tình trạng: ${data.status}`,
+    `Mô tả chi tiết: ${data.description}`,
+    `Khuyến nghị: ${data.recommendation}`,
+    `Thời gian kiểm tra: ${currentTime}`
+  ].join("\n");
+}
+
+function needSpray(resultText) {
+  const text = String(resultText).normalize("NFC").toUpperCase();
+  return (
+    text.includes("TÌNH TRẠNG: SÂU VÀ BỆNH") ||
+    text.includes("TÌNH TRẠNG: LÁ BỊ SÂU ĂN") ||
+    text.includes("TÌNH TRẠNG: SÂU")
+  );
+}
+
 // TELEGRAM ENGINE (CẤU HÌNH TRỰC TIẾP TỪ WEB LƯU TRONG SETTINGS.JSON HOẶC FILE .ENV)
 async function sendTelegramText(messageText) {
   try {
@@ -293,20 +413,30 @@ async function sendTelegramPhoto(imagePath, captionText) {
       return;
     }
 
-    if (!imagePath || !fs.existsSync(imagePath)) {
+    let targetImg = imagePath && fs.existsSync(imagePath) ? imagePath : null;
+    if (!targetImg && fs.existsSync("st01.jpg")) {
+      targetImg = "st01.jpg";
+    }
+
+    if (!targetImg) {
       await sendTelegramText(captionText);
       return;
     }
 
-    const imageBuffer = fs.readFileSync(imagePath);
+    const imageBuffer = fs.readFileSync(targetImg);
     const formData = new FormData();
     formData.append("chat_id", chatId);
     formData.append("caption", (captionText || "").slice(0, 1024));
-    formData.append("photo", new Blob([imageBuffer], { type: "image/jpeg" }), path.basename(imagePath));
+    formData.append("photo", new Blob([imageBuffer], { type: "image/jpeg" }), path.basename(targetImg));
 
     const url = `https://api.telegram.org/bot${botToken}/sendPhoto`;
-    await fetch(url, { method: "POST", body: formData });
-    console.log("[Telegram Photo] Đã gửi thành công ảnh chụp và báo cáo về Telegram!");
+    const res = await fetch(url, { method: "POST", body: formData });
+    if (res.ok) {
+      console.log("[Telegram Photo] Đã gửi thành công ảnh chụp và báo cáo về Telegram!");
+    } else {
+      const errText = await res.text();
+      console.warn(`[Telegram Photo Error] ${res.status}: ${errText}`);
+    }
   } catch (err) {
     console.warn(`[Telegram Photo Error] ${err.message}`);
   }
@@ -435,52 +565,77 @@ async function getOrInitArduinoSerialPort() {
           try {
             pushWebNotification(`Đang chụp ảnh & phân tích Gemini tại Điểm ${pointIndex + 1}...`, "AI_ANALYSIS");
 
+            let formattedResult = "";
             let action = "NO_SPRAY";
-            let details = "Cây khỏe mạnh, không phát hiện sâu bệnh.";
 
-            try {
-              const keys = getKeysList();
-              if (keys.length === 0) {
-                details = "Chưa thiết lập Gemini API Key! Vui lòng vào trang 'Cấu hình API' trên Web để thêm chìa khóa Gemini.";
-                pushWebNotification(details, "WARNING");
-              } else {
-                const aiResult = await callGeminiApiWithRotation({
-                  contents: [{ parts: [{ text: `Bạn là chuyên gia quan sát cây trồng. Hãy phân tích sâu bệnh tại Điểm kiểm tra ${pointIndex + 1}. Trả về thông tin: 1. Tình trạng (SÂU, LÁ BỊ SÂU ĂN, BỆNH, SÂU VÀ BỆNH, KHÔNG PHÁT HIỆN SÂU BỆNH). 2. Mô tả chi tiết. 3. Khuyến nghị xử lý sinh học.` }] }],
-                });
-                
+            const keys = getKeysList();
+            if (keys.length === 0) {
+              formattedResult = "Chưa thiết lập Gemini API Key! Vui lòng vào trang 'Cấu hình API' trên Web để thêm chìa khóa Gemini.";
+              pushWebNotification(formattedResult, "WARNING");
+            } else {
+              let imageBase64 = null;
+              const imgPath = path.join(process.cwd(), "st01.jpg");
+              if (fs.existsSync(imgPath)) {
+                try {
+                  const imgBuf = fs.readFileSync(imgPath);
+                  imageBase64 = imgBuf.toString("base64");
+                } catch (e) {}
+              }
+
+              const payload = {
+                contents: [
+                  {
+                    parts: [
+                      ...(imageBase64 ? [{ inlineData: { mimeType: "image/jpeg", data: imageBase64 } }] : []),
+                      { text: createPrompt(pointIndex) }
+                    ]
+                  }
+                ],
+                generationConfig: {
+                  responseMimeType: "application/json",
+                  responseSchema: GEMINI_RESPONSE_SCHEMA
+                }
+              };
+
+              try {
+                const aiResult = await callGeminiApiWithRotation(payload);
                 if (aiResult && aiResult.text) {
-                  details = aiResult.text;
-                  const upperDetails = details.toUpperCase();
-                  if (
-                    upperDetails.includes("SÂU") ||
-                    upperDetails.includes("BỆNH") ||
-                    upperDetails.includes("LÁ BỊ SÂU ĂN") ||
-                    upperDetails.includes("SPRAY")
-                  ) {
-                    action = "SPRAY";
+                  try {
+                    const parsed = parseGeminiResult(aiResult.text);
+                    formattedResult = formatGeminiResult(parsed);
+                  } catch (pErr) {
+                    formattedResult = `KẾT QUẢ KIỂM TRA\nTình trạng: KHÔNG CHẮC CHẮN\nMô tả chi tiết: ${aiResult.text.substring(0, 300)}\nKhuyến nghị: Theo dõi thêm\nThời gian kiểm tra: ${new Date().toLocaleString("vi-VN")}`;
                   }
                 }
+              } catch (aiErr) {
+                formattedResult = `Lỗi phân tích Gemini AI: ${aiErr.message}`;
               }
-            } catch (aiErr) {
-              details = `Lỗi phân tích Gemini AI (dùng Key trong Cấu hình API): ${aiErr.message}`;
-              console.warn(`[Point AI fallback] ${aiErr.message}`);
             }
 
-            // Gửi báo cáo + ảnh (nếu có) về Telegram theo thiết lập trong Web UI/env (giống v2.mjs)
-            const reportCaption = `ĐIỂM KIỂM TRA ${pointIndex + 1}\n\n${details}`;
-            await sendTelegramPhoto(null, reportCaption);
+            // Gửi báo cáo + ảnh st01.jpg về Telegram (chuẩn v2.mjs)
+            const imagePathToSend = path.join(process.cwd(), "st01.jpg");
+            const telegramCaption = `ĐIỂM KIỂM TRA ${pointIndex + 1}\n${formattedResult}`;
+
+            try {
+              await sendTelegramPhoto(imagePathToSend, telegramCaption);
+            } catch (tErr) {
+              console.error(`[Telegram Error] ${tErr.message}`);
+            }
+
+            // CHỈ KHI CÓ SÂU (needSpray returns true) MỚI PHUN THUỐC (SPRAY)
+            action = needSpray(formattedResult) ? "SPRAY" : "NO_SPRAY";
 
             // Lưu kết quả kiểm tra điểm này cho Web UI
             const pointRecord = {
               pointIndex: pointIndex + 1,
               timestamp: new Date().toLocaleTimeString("vi-VN"),
               action: action === "SPRAY" ? "Cần phun thuốc (SPRAY)" : "Không phun (NO_SPRAY)",
-              details: details.substring(0, 200),
+              details: formattedResult,
               status: action === "SPRAY" ? "PEST_DETECTED" : "HEALTHY",
             };
 
             lastInspectionResults.push(pointRecord);
-            pushWebNotification(`Kết quả Điểm ${pointIndex + 1}: ${pointRecord.action} - ${pointRecord.details}`, action === "SPRAY" ? "WARNING" : "SUCCESS");
+            pushWebNotification(`Kết quả Điểm ${pointIndex + 1}: ${pointRecord.action}`, action === "SPRAY" ? "WARNING" : "SUCCESS");
 
             if (cancellationId === currentCancellationId && activeSerialPort.isOpen) {
               activeSerialPort.write(`POINT_RESULT:${pointIndex}:${action}\n`);
