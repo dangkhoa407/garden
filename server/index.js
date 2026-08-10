@@ -2165,6 +2165,20 @@ app.post("/api/settings/telegram/test", async (req, res) => {
   }
 });
 
+// THÔNG BÁO TỰ ĐỘNG QUA TELEGRAM VỀ CẢNH BÁO PHÂN BÓN / SỰ CỐ
+app.post("/api/telegram/notify", async (req, res) => {
+  try {
+    const { message } = req.body;
+    if (!message) {
+      return res.status(400).json({ success: false, error: "Thiếu nội dung thông báo" });
+    }
+    await sendTelegramText(message);
+    res.json({ success: true, message: "Đã gửi thông báo Telegram thành công!" });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // CAMERA DIAGNOSTICS & TESTING ENDPOINTS FOR DEVICE SETTINGS
 app.get("/api/camera/image", (req, res) => {
   const imgPath = path.join(process.cwd(), "st01.jpg");

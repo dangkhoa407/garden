@@ -177,131 +177,221 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
     }
     onClose();
 
-    try {
-      // 1. TRÍCH XUẤT PHÂN BÓN (DOSE)
-      for (const t of tanksToDose) {
-        const expectedSec = Math.round(t.ml * 60);
-        setIrrigateLog((prev) => [
-          ...prev,
-          `🧪 Gửi lệnh DOSE: Đang bơm ${t.ml} ml từ ${t.tankCode} (Tốc độ 1 ml/phút => Bơm chạy trong ${expectedSec} giây)...`,
-        ]);
-        const res = await fetch("/api/esp32/dose", {
+    // Helper gửi thông báo Telegram
+    const sendTelegramAlert = async (textMsg: string) => {
+      try {
+        await fetch("/api/telegram/notify", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tankCode: t.tankCode, ml: t.ml }),
+          body: JSON.stringify({ message: textMsg }),
         });
-        const data = await res.json();
-        const actualSec = data.durationSec || expectedSec;
+      } catch (e) {}
+    };
+
+    try {
+      let cycleCount = 0;
+      let targetReached = false;
+      const MAX_CYCLES = 10;
+
+      while (!targetReached && cycleCount < MAX_CYCLES) {
+        cycleCount++;
         setIrrigateLog((prev) => [
           ...prev,
-          `✅ Đã trích xuất thành công ${t.ml} ml từ ${t.tankCode}! (Thời gian: ${actualSec}s)`,
+          `🔄 === BẮT ĐẦU CHU KỲ PHA & TƯỚI LẦN ${cycleCount} ===`,
         ]);
 
-        await new Promise((r) => setTimeout(r, actualSec * 1000 + 500));
-      }
-
-      // 2. BƠM NƯỚC VÀO BỒN TRỘN (WELL ON - ĐỢI PHAO CAO BẬT)
-      setIrrigateStep("well");
-      setIrrigateLog((prev) => [
-        ...prev,
-        "💧 Gửi lệnh WELL ON: Đang bật bơm giếng nạp nước vào bồn trộn...",
-        "⏳ Đang chờ nước nạp đầy bồn (Đợi phao cao bật / HIGH = 1)...",
-      ]);
-
-      await fetch("/api/esp32/command", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ command: "WELL ON" }),
-      });
-
-      let floatHighTriggered = false;
-      for (let i = 0; i < 15; i++) {
-        await new Promise((r) => setTimeout(r, 2000));
+        // 1. KIỂM TRẢ DUNG TÍCH BÌNH PHÂN XEM CÓ ĐỦ TRÍCH XUẤT KHÔNG
+        let currentFertilizersList: any[] = [];
         try {
-          const sRes = await fetch("/api/esp32/sensors");
-          if (sRes.ok) {
-            const sData = await sRes.json();
-            if (sData.sensors?.floatHigh) {
-              floatHighTriggered = true;
-              setIrrigateLog((prev) => [
-                ...prev,
-                "✅ PHAO CAO ĐÃ BẬT! Bồn trộn đã đầy nước dung dịch.",
-              ]);
-              break;
-            }
-          }
+          const fRes = await fetch("/api/fertilizers");
+          if (fRes.ok) currentFertilizersList = await fRes.json();
         } catch (e) {}
-      }
 
-      if (!floatHighTriggered) {
+        let insufficientTank: { tankCode: string; required: number; remaining: number } | null = null;
+
+        for (const t of tanksToDose) {
+          const fertItem = currentFertilizersList.find(
+            (f) => f.tankCode === t.tankCode || f.name === t.tankCode
+          );
+          const remainingMl = fertItem
+            ? fertItem.currentMl !== undefined
+              ? fertItem.currentMl
+              : fertItem.capacityMl || 0
+            : 999;
+
+          if (remainingMl < t.ml) {
+            insufficientTank = {
+              tankCode: t.tankCode,
+              required: t.ml,
+              remaining: remainingMl,
+            };
+            break;
+          }
+        }
+
+        // Nếu phân không đủ để trích xuất -> Dừng lại và gửi cảnh báo Web + Telegram
+        if (insufficientTank) {
+          const alertMsg = `⚠️ CẢNH BÁO TƯỚI PHÂN (GROW HUB):\nBình [${insufficientTank.tankCode}] chỉ còn ${insufficientTank.remaining}ml, KHÔNG ĐỦ để trích xuất ${insufficientTank.required}ml!\n👉 Hệ thống đã TỰ ĐỘNG DỪNG chu trình tưới phân bón để bảo vệ hệ thống.`;
+
+          setIrrigateLog((prev) => [
+            ...prev,
+            `❌ HẾT PHÂN BÓN: ${insufficientTank.tankCode} chỉ còn ${insufficientTank.remaining}ml (Không đủ trích xuất ${insufficientTank.required}ml)!`,
+            `📢 Đã gửi cảnh báo tới hệ thống Web và Bot Telegram!`,
+          ]);
+
+          await sendTelegramAlert(alertMsg);
+
+          // Ngắt các bơm đảm bảo an toàn
+          await fetch("/api/esp32/command", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ command: "WATER OFF" }),
+          });
+          await fetch("/api/esp32/command", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ command: "WELL OFF" }),
+          });
+
+          setIsIrrigating(false);
+          setIrrigateStep("idle");
+          return;
+        }
+
+        // 2. TRÍCH XUẤT PHÂN BÓN (DOSE)
+        setIrrigateStep("dose");
+        for (const t of tanksToDose) {
+          const expectedSec = Math.round(t.ml * 60);
+          setIrrigateLog((prev) => [
+            ...prev,
+            `🧪 DOSE: Bơm ${t.ml}ml từ ${t.tankCode} (Dự kiến: ${expectedSec}s)...`,
+          ]);
+          const res = await fetch("/api/esp32/dose", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tankCode: t.tankCode, ml: t.ml }),
+          });
+          const data = await res.json();
+          const actualSec = data.durationSec || expectedSec;
+
+          await new Promise((r) => setTimeout(r, actualSec * 1000 + 500));
+        }
+
+        // 3. BƠM NƯỚC GIẾNG VÀO BỒN TRỘN (WELL ON - ĐỢI PHAO CAO BẬT)
+        setIrrigateStep("well");
         setIrrigateLog((prev) => [
           ...prev,
-          "⚠️ Hết thời gian chờ phao cao! Tự động ngắt bơm giếng để đảm bảo an toàn.",
+          "💧 WELL ON: Đang bật bơm giếng nạp nước vào bồn trộn cho tới khi phao cao bật...",
         ]);
+
         await fetch("/api/esp32/command", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ command: "WELL OFF" }),
+          body: JSON.stringify({ command: "WELL ON" }),
         });
-      }
 
-      // 3. TƯỚI PHÂN VÀO VƯỜN (WATER ON - ĐẾN KHI ĐỦ ĐỘ ẨM HOẶC PHAO THẤP BẬT)
-      setIrrigateStep("water");
-      setIrrigateLog((prev) => [
-        ...prev,
-        `🌿 Gửi lệnh WATER ON: Đang bật bơm tưới dung dịch phân bón cho cây...`,
-        `🎯 Mục tiêu: Đạt độ ẩm ${targetMoisture}% từ 2 cảm biến độ ẩm...`,
-      ]);
-
-      await fetch("/api/esp32/command", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ command: "WATER ON" }),
-      });
-
-      let completedSuccess = false;
-      for (let i = 0; i < 30; i++) {
-        await new Promise((r) => setTimeout(r, 2000));
-        try {
-          const sRes = await fetch("/api/esp32/sensors");
-          if (sRes.ok) {
-            const sData = await sRes.json();
-            const sensors = sData.sensors;
-            const currentAvg = sensors?.avgSoilPercent || 0;
-
-            if (sensors?.floatLow) {
-              setIrrigateLog((prev) => [
-                ...prev,
-                "🚨 CẢNH BÁO AN TOÀN: Phao dưới đã bật (Cạn bồn chứa)! Dừng bơm tưới khẩn cấp.",
-              ]);
-              break;
+        let floatHighTriggered = false;
+        for (let i = 0; i < 20; i++) {
+          await new Promise((r) => setTimeout(r, 2000));
+          try {
+            const sRes = await fetch("/api/esp32/sensors");
+            if (sRes.ok) {
+              const sData = await sRes.json();
+              if (sData.sensors?.floatHigh) {
+                floatHighTriggered = true;
+                setIrrigateLog((prev) => [
+                  ...prev,
+                  "✅ PHAO CAO ĐÃ BẬT! Bồn trộn đã đầy nước dung dịch.",
+                ]);
+                break;
+              }
             }
+          } catch (e) {}
+        }
 
-            if (currentAvg >= targetMoisture) {
-              completedSuccess = true;
-              setIrrigateLog((prev) => [
-                ...prev,
-                `🎉 THÀNH CÔNG: Đã đạt độ ẩm mục tiêu ${currentAvg}% >= ${targetMoisture}%!`,
-              ]);
-              break;
+        if (!floatHighTriggered) {
+          setIrrigateLog((prev) => [
+            ...prev,
+            "⚠️ Ngắt bơm giếng để chuyển tiếp bước tưới...",
+          ]);
+          await fetch("/api/esp32/command", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ command: "WELL OFF" }),
+          });
+        }
+
+        // 4. TƯỚI PHÂN VÀO VƯỜN (WATER ON - ĐẾN KHỦ ĐỘ ẨM HOẶC PHAO THẤP BẬT)
+        setIrrigateStep("water");
+        setIrrigateLog((prev) => [
+          ...prev,
+          `🌿 WATER ON: Bật bơm tưới vườn... (Đạt ${targetMoisture}% sẽ ngắt)`,
+        ]);
+
+        await fetch("/api/esp32/command", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ command: "WATER ON" }),
+        });
+
+        let floatLowTriggered = false;
+
+        for (let i = 0; i < 30; i++) {
+          await new Promise((r) => setTimeout(r, 2000));
+          try {
+            const sRes = await fetch("/api/esp32/sensors");
+            if (sRes.ok) {
+              const sData = await sRes.json();
+              const sensors = sData.sensors;
+              const currentAvg = sensors?.avgSoilPercent || 0;
+
+              if (currentAvg >= targetMoisture) {
+                targetReached = true;
+                setIrrigateLog((prev) => [
+                  ...prev,
+                  `🎉 THÀNH CÔNG: Độ ẩm đất đã đạt mục tiêu ${currentAvg}% >= ${targetMoisture}%!`,
+                ]);
+                break;
+              }
+
+              if (sensors?.floatLow) {
+                floatLowTriggered = true;
+                setIrrigateLog((prev) => [
+                  ...prev,
+                  `⚠️ Phao đáy báo cạn nước trong bồn, nhưng độ ẩm đất (${currentAvg}%) chưa đạt ${targetMoisture}%. Chuẩn bị lặp lại quy trình pha phân & nạp nước mới...`,
+                ]);
+                break;
+              }
             }
-          }
-        } catch (e) {}
-      }
+          } catch (e) {}
+        }
 
-      // Tắt bơm tưới
-      await fetch("/api/esp32/command", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ command: "WATER OFF" }),
-      });
+        // Tắt bơm tưới
+        await fetch("/api/esp32/command", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ command: "WATER OFF" }),
+        });
+
+        if (targetReached) {
+          break;
+        }
+
+        if (!floatLowTriggered && !targetReached) {
+          setIrrigateLog((prev) => [
+            ...prev,
+            "⏹️ Đã hết chu trình tưới vườn hiện tại.",
+          ]);
+          break;
+        }
+      }
 
       setIrrigateStep("done");
       setIrrigateLog((prev) => [
         ...prev,
-        completedSuccess
-          ? "✅ Đã hoàn thành chu kỳ tưới phân bón thành công!"
-          : "⏹️ Đã dừng chu kỳ tưới phân bón an toàn.",
+        targetReached
+          ? "✅ Đã hoàn thành toàn bộ quá trình tưới phân bón và đạt độ ẩm mục tiêu!"
+          : "⏹️ Đã dừng chu kỳ tưới phân bón.",
       ]);
 
       if (onSuccess) onSuccess();
