@@ -57,15 +57,50 @@ export default function ControlsPage() {
     avgMoisture: number;
   }
 
-  const [esp32Sensors, setEsp32Sensors] = useState<Esp32SensorData>({
-    soil1Raw: 3171,
-    soil1Percent: 0,
-    soil2Raw: 4095,
-    soil2Percent: 0,
-    floatHigh: false,
-    floatLow: false,
-    avgMoisture: 0,
-  });
+  interface TaskProgressState {
+    taskId: string;
+    label: string;
+    totalSec: number;
+    elapsedSec: number;
+    percent: number;
+  }
+
+  const [taskProgress, setTaskProgress] = useState<TaskProgressState | null>(null);
+
+  const startTaskProgress = (taskId: string, label: string, totalSec: number) => {
+    setTaskProgress({
+      taskId,
+      label,
+      totalSec,
+      elapsedSec: 0,
+      percent: 0,
+    });
+
+    const interval = setInterval(() => {
+      setTaskProgress((prev) => {
+        if (!prev || prev.taskId !== taskId) {
+          clearInterval(interval);
+          return null;
+        }
+        const nextElapsed = prev.elapsedSec + 0.5;
+        if (nextElapsed >= totalSec) {
+          clearInterval(interval);
+          return null;
+        }
+        const percent = Math.min(99, Math.round((nextElapsed / totalSec) * 100));
+        return {
+          ...prev,
+          elapsedSec: nextElapsed,
+          percent,
+        };
+      });
+    }, 500);
+  };
+
+  const handleStartFertilizingFromModal = (durationSec: number) => {
+    startTaskProgress("fertilize", "Tưới Phân ESP32", durationSec || 25);
+    setActiveToast("🚀 Đã kích hoạt tiến trình tưới phân bón tự động ESP32!");
+  };
 
   const fetchEsp32Sensors = async () => {
     try {
@@ -207,6 +242,13 @@ export default function ControlsPage() {
     setSendingCmd(cmdKey);
     setActiveToast(null);
 
+    let estDurationSec = 15;
+    if (cmdKey === "k") estDurationSec = 18;
+    else if (cmdKey === "p") estDurationSec = 25;
+    else if (cmdKey === "h") estDurationSec = 12;
+
+    startTaskProgress(cmdKey, labelName, estDurationSec);
+
     try {
       const response = await fetch("/api/arduino/command", {
         method: "POST",
@@ -218,6 +260,8 @@ export default function ControlsPage() {
 
       if (response.ok && data.success) {
         setActiveToast(data.message);
+        setTaskProgress((prev) => (prev ? { ...prev, percent: 100 } : null));
+        setTimeout(() => setTaskProgress(null), 1200);
         setLogs((prev) => [
           {
             timestamp: data.timestamp || new Date().toLocaleTimeString("vi-VN"),
@@ -228,9 +272,11 @@ export default function ControlsPage() {
         ]);
       } else {
         setActiveToast(`Lỗi: ${data.error || "Không thể gửi lệnh"}`);
+        setTaskProgress(null);
       }
     } catch (err) {
       setActiveToast(`Lỗi gửi lệnh [${labelName}]: Kết nối server không khả dụng`);
+      setTaskProgress(null);
     } finally {
       setSendingCmd(null);
     }
@@ -347,6 +393,23 @@ export default function ControlsPage() {
             <p className="font-body-sm text-xs text-emerald-700/90 mt-1">
               Chụp 6 điểm bằng camera & phân tích hình ảnh qua AI Gemini
             </p>
+            {taskProgress?.taskId === "k" && (
+              <div className="mt-3 pt-2 border-t border-emerald-300/80 w-full space-y-1 animate-fadeIn">
+                <div className="flex items-center justify-between text-[11px] font-bold text-emerald-950">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-600 animate-ping" />
+                    Đang quét 6 điểm...
+                  </span>
+                  <span className="font-mono font-extrabold">{taskProgress.percent}% • Còn ~{Math.max(1, Math.ceil(taskProgress.totalSec - taskProgress.elapsedSec))}s</span>
+                </div>
+                <div className="w-full bg-emerald-200/90 rounded-full h-2 overflow-hidden shadow-inner">
+                  <div
+                    className="bg-emerald-600 h-full rounded-full transition-all duration-300 ease-out"
+                    style={{ width: `${taskProgress.percent}%` }}
+                  />
+                </div>
+              </div>
+            )}
           </button>
 
           {/* Nút Tưới Phân (Vị trí 2) */}
@@ -369,6 +432,23 @@ export default function ControlsPage() {
             <p className="font-body-sm text-xs text-emerald-800/90 mt-1">
               Kích hoạt Popup tưới phân tự động (Tùy chỉnh ml hoặc Phối trộn AI)
             </p>
+            {taskProgress?.taskId === "fertilize" && (
+              <div className="mt-3 pt-2 border-t border-emerald-300/80 w-full space-y-1 animate-fadeIn">
+                <div className="flex items-center justify-between text-[11px] font-bold text-emerald-950">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-600 animate-ping" />
+                    Đang bơm tưới phân...
+                  </span>
+                  <span className="font-mono font-extrabold">{taskProgress.percent}% • Còn ~{Math.max(1, Math.ceil(taskProgress.totalSec - taskProgress.elapsedSec))}s</span>
+                </div>
+                <div className="w-full bg-emerald-200/90 rounded-full h-2 overflow-hidden shadow-inner">
+                  <div
+                    className="bg-emerald-600 h-full rounded-full transition-all duration-300 ease-out"
+                    style={{ width: `${taskProgress.percent}%` }}
+                  />
+                </div>
+              </div>
+            )}
           </button>
 
           {/* Full Spray (p) */}
@@ -391,6 +471,23 @@ export default function ControlsPage() {
             <p className="font-body-sm text-xs text-teal-700/90 mt-1">
               Kích hoạt hệ thống phun dung dịch sinh học trên toàn bộ các khay
             </p>
+            {taskProgress?.taskId === "p" && (
+              <div className="mt-3 pt-2 border-t border-teal-300/80 w-full space-y-1 animate-fadeIn">
+                <div className="flex items-center justify-between text-[11px] font-bold text-teal-950">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-teal-600 animate-ping" />
+                    Đang phun toàn bộ...
+                  </span>
+                  <span className="font-mono font-extrabold">{taskProgress.percent}% • Còn ~{Math.max(1, Math.ceil(taskProgress.totalSec - taskProgress.elapsedSec))}s</span>
+                </div>
+                <div className="w-full bg-teal-200/90 rounded-full h-2 overflow-hidden shadow-inner">
+                  <div
+                    className="bg-teal-600 h-full rounded-full transition-all duration-300 ease-out"
+                    style={{ width: `${taskProgress.percent}%` }}
+                  />
+                </div>
+              </div>
+            )}
           </button>
 
           {/* Emergency Stop (s) */}
@@ -673,6 +770,7 @@ export default function ControlsPage() {
       <IrrigateModal
         isOpen={showIrrigateModal}
         onClose={() => setShowIrrigateModal(false)}
+        onStartIrrigation={handleStartFertilizingFromModal}
       />
     </div>
   );

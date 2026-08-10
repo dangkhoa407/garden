@@ -10,9 +10,10 @@ interface IrrigateModalProps {
   onClose: () => void;
   fertilizers?: any[];
   onSuccess?: () => void;
+  onStartIrrigation?: (durationSec: number) => void;
 }
 
-export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess }: IrrigateModalProps) {
+export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, onStartIrrigation }: IrrigateModalProps) {
   const [mounted, setMounted] = useState(false);
   const [activeFertilizers, setActiveFertilizers] = useState<any[]>(fertilizers);
   const [irrigateTab, setIrrigateTab] = useState<"custom" | "ai">("custom");
@@ -165,6 +166,16 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess }: 
         return;
       }
     }
+
+    let estDurationSec = 20;
+    tanksToDose.forEach((t) => {
+      estDurationSec += Math.max(5, Math.round(t.ml * 5));
+    });
+
+    if (onStartIrrigation) {
+      onStartIrrigation(estDurationSec);
+    }
+    onClose();
 
     try {
       // 1. TRÍCH XUẤT PHÂN BÓN (DOSE)
