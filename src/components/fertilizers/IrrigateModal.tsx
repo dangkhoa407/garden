@@ -431,52 +431,6 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
 
         {/* Content Body */}
         <div className="p-6 overflow-y-auto space-y-5 flex-1">
-          {/* Live Sensor Diagnostics Box */}
-          <div className="p-3.5 rounded-2xl bg-surface-container-low border border-outline-variant/30 space-y-2">
-            <div className="flex items-center justify-between text-xs font-bold text-on-surface">
-              <span className="flex items-center gap-1.5 text-primary">
-                <span className="material-symbols-outlined text-base">sensors</span>
-                CẢM BIẾN THỜI GIAN THỰC (ESP32):
-              </span>
-              <span className="font-mono text-[11px] text-emerald-600 font-bold">
-                Độ ẩm trung bình: {espSensors.avgSoilPercent}%
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
-              <div className="p-2 bg-surface rounded-xl border border-outline-variant/20">
-                <span className="text-[10px] text-on-surface-variant block">CB Độ Ẩm 1:</span>
-                <strong className="text-primary">{espSensors.soil1Percent}%</strong>
-                <span className="text-[10px] text-zinc-400 block font-normal">
-                  Raw: {espSensors.soil1Raw}
-                </span>
-              </div>
-              <div className="p-2 bg-surface rounded-xl border border-outline-variant/20">
-                <span className="text-[10px] text-on-surface-variant block">CB Độ Ẩm 2:</span>
-                <strong className="text-primary">{espSensors.soil2Percent}%</strong>
-                <span className="text-[10px] text-zinc-400 block font-normal">
-                  Raw: {espSensors.soil2Raw}
-                </span>
-              </div>
-              <div className="p-2 bg-surface rounded-xl border border-outline-variant/20">
-                <span className="text-[10px] text-on-surface-variant block">Phao Cao (Đầy):</span>
-                <strong
-                  className={espSensors.floatHigh ? "text-emerald-500 font-bold" : "text-zinc-400"}
-                >
-                  {espSensors.floatHigh ? "BẬT (ĐẦY)" : "TẮT"}
-                </strong>
-              </div>
-              <div className="p-2 bg-surface rounded-xl border border-outline-variant/20">
-                <span className="text-[10px] text-on-surface-variant block">Phao Thấp (Cạn):</span>
-                <strong
-                  className={espSensors.floatLow ? "text-rose-500 font-bold" : "text-zinc-400"}
-                >
-                  {espSensors.floatLow ? "BẬT (CẠN)" : "TẮT"}
-                </strong>
-              </div>
-            </div>
-          </div>
-
           {/* 2 Tabs Header */}
           <div className="flex bg-surface-container-high p-1 rounded-2xl border border-outline-variant/30">
             <button
