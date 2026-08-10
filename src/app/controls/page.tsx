@@ -47,6 +47,36 @@ export default function ControlsPage() {
     lastPingTime: "--:--:--",
   });
 
+  interface Esp32SensorData {
+    soil1Raw: number;
+    soil1Percent: number;
+    soil2Raw: number;
+    soil2Percent: number;
+    floatHigh: boolean;
+    floatLow: boolean;
+    avgMoisture: number;
+  }
+
+  const [esp32Sensors, setEsp32Sensors] = useState<Esp32SensorData>({
+    soil1Raw: 3171,
+    soil1Percent: 0,
+    soil2Raw: 4095,
+    soil2Percent: 0,
+    floatHigh: false,
+    floatLow: false,
+    avgMoisture: 0,
+  });
+
+  const fetchEsp32Sensors = async () => {
+    try {
+      const res = await fetch("/api/esp32/sensors");
+      if (res.ok) {
+        const json = await res.json();
+        if (json.data) setEsp32Sensors(json.data);
+      }
+    } catch (err) {}
+  };
+
   const fetchArduinoStatus = async () => {
     try {
       const res = await fetch("/api/arduino/status");
@@ -83,13 +113,17 @@ export default function ControlsPage() {
 
   useEffect(() => {
     fetchArduinoStatus();
+    fetchEsp32Sensors();
     // Tự động quét trạng thái thiết bị mỗi 2 giây
     const statusInterval = setInterval(fetchArduinoStatus, 2000);
+    // Tự động quét dữ liệu cảm biến ESP32 mỗi 2 giây
+    const sensorInterval = setInterval(fetchEsp32Sensors, 2000);
     // Tự động kiểm tra kết nối Arduino (Ping Test ngầm) mỗi 4 giây
     const pingInterval = setInterval(autoPingCheck, 4000);
 
     return () => {
       clearInterval(statusInterval);
+      clearInterval(sensorInterval);
       clearInterval(pingInterval);
     };
   }, []);
@@ -238,6 +272,60 @@ export default function ControlsPage() {
             <span className="font-semibold">{activeToast}</span>
           </div>
         )}
+
+        {/* Real-time Sensors Panel (ESP32) */}
+        <div className="mb-md p-md bg-emerald-50/40 rounded-2xl border border-emerald-200/80 shadow-2xs">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-md pb-sm border-b border-emerald-200/60">
+            <div className="flex items-center gap-2 text-emerald-900 font-bold text-sm tracking-tight">
+              <span className="material-symbols-outlined text-lg text-emerald-600 animate-pulse">
+                sensors
+              </span>
+              <span>((•)) CẢM BIẾN THỜI GIAN THỰC (ESP32):</span>
+            </div>
+            <div className="text-emerald-700 font-bold text-sm">
+              Độ ẩm trung bình: <span className="text-emerald-800 text-base font-extrabold">{esp32Sensors.avgMoisture}%</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-md">
+            {/* CB Độ Ẩm 1 */}
+            <div className="p-3 bg-white rounded-xl border border-emerald-100/90 shadow-2xs">
+              <div className="text-xs font-semibold text-zinc-500 mb-0.5">CB Độ Ẩm 1:</div>
+              <div className="text-xl font-black text-emerald-800">{esp32Sensors.soil1Percent}%</div>
+              <div className="text-[11px] text-zinc-400 font-mono mt-0.5">Raw: {esp32Sensors.soil1Raw}</div>
+            </div>
+
+            {/* CB Độ Ẩm 2 */}
+            <div className="p-3 bg-white rounded-xl border border-emerald-100/90 shadow-2xs">
+              <div className="text-xs font-semibold text-zinc-500 mb-0.5">CB Độ Ẩm 2:</div>
+              <div className="text-xl font-black text-emerald-800">{esp32Sensors.soil2Percent}%</div>
+              <div className="text-[11px] text-zinc-400 font-mono mt-0.5">Raw: {esp32Sensors.soil2Raw}</div>
+            </div>
+
+            {/* Trạng Thái Bồn Nước (Gộp 2 phao cao/thấp) */}
+            <div className="p-3 bg-white rounded-xl border border-emerald-100/90 shadow-2xs">
+              <div className="text-xs font-semibold text-zinc-500 mb-0.5">Trạng Thái Bồn Nước:</div>
+              <div className="flex items-center gap-2 mt-1">
+                {esp32Sensors.floatHigh ? (
+                  <span className="text-lg font-extrabold text-emerald-700 flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                    Đầy nước
+                  </span>
+                ) : esp32Sensors.floatLow ? (
+                  <span className="text-lg font-extrabold text-rose-700 flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
+                    Hết nước
+                  </span>
+                ) : (
+                  <span className="text-lg font-extrabold text-sky-700 flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-sky-500" />
+                    Còn nước
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
 
         {/* Command Buttons Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-md">

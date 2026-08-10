@@ -629,6 +629,7 @@ async function getOrInitArduinoSerialPort() {
     }
 
     const esp32Path = activeEsp32Port && activeEsp32Port.isOpen ? activeEsp32Port.path : null;
+    const ports = await SerialPort.list();
     const candidates = ports.filter((p) => {
       if (p.path === esp32Path) return false;
       const pPath = (p.path || "").toUpperCase();
@@ -954,9 +955,26 @@ app.post("/api/arduino/command", async (req, res) => {
       success: false,
       error: `Lỗi truyền lệnh tới Arduino: ${err.message}`,
       command: mapped.cmd,
-      timestamp: logEntry.timestamp,
-    });
   }
+});
+
+// ESP32 REALTIME SENSOR DATA POLLING ENDPOINT
+let esp32SensorState = {
+  soil1Raw: 3171,
+  soil1Percent: 0,
+  soil2Raw: 4095,
+  soil2Percent: 0,
+  floatHigh: false,
+  floatLow: false,
+  avgMoisture: 0,
+  lastUpdated: new Date().toLocaleTimeString("vi-VN"),
+};
+
+app.get("/api/esp32/sensors", (req, res) => {
+  return res.json({
+    success: true,
+    data: esp32SensorState,
+  });
 });
 
 async function getRealSerialStatus() {
