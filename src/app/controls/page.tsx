@@ -292,14 +292,12 @@ export default function ControlsPage() {
             <div className="p-3 bg-white rounded-xl border border-emerald-100/90 shadow-2xs">
               <div className="text-xs font-semibold text-zinc-500 mb-0.5">CB Độ Ẩm 1:</div>
               <div className="text-xl font-black text-emerald-800">{esp32Sensors.soil1Percent}%</div>
-              <div className="text-[11px] text-zinc-400 font-mono mt-0.5">Raw: {esp32Sensors.soil1Raw}</div>
             </div>
 
             {/* CB Độ Ẩm 2 */}
             <div className="p-3 bg-white rounded-xl border border-emerald-100/90 shadow-2xs">
               <div className="text-xs font-semibold text-zinc-500 mb-0.5">CB Độ Ẩm 2:</div>
               <div className="text-xl font-black text-emerald-800">{esp32Sensors.soil2Percent}%</div>
-              <div className="text-[11px] text-zinc-400 font-mono mt-0.5">Raw: {esp32Sensors.soil2Raw}</div>
             </div>
 
             {/* Trạng Thái Bồn Nước (Gộp 2 phao cao/thấp) */}
