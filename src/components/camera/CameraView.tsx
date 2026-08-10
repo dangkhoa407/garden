@@ -23,6 +23,29 @@ export function CameraView({ nightVision = false }: CameraViewProps) {
     fps: 60,
   });
 
+  const [espMoisture, setEspMoisture] = useState<number | null>(null);
+
+  // Real-time ESP32 Soil Moisture Polling
+  useEffect(() => {
+    const fetchEspSensors = async () => {
+      try {
+        const res = await fetch("/api/esp32/sensors");
+        if (res.ok) {
+          const json = await res.json();
+          if (json.data?.avgMoisture !== undefined) {
+            setEspMoisture(json.data.avgMoisture);
+          } else if (json.sensors?.avgSoilPercent !== undefined) {
+            setEspMoisture(json.sensors.avgSoilPercent);
+          }
+        }
+      } catch (err) {}
+    };
+
+    fetchEspSensors();
+    const interval = setInterval(fetchEspSensors, 2000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Real-time clock HUD
   useEffect(() => {
     const updateTime = () => {
@@ -169,7 +192,9 @@ export function CameraView({ nightVision = false }: CameraViewProps) {
         </div>
         <div className="bg-black/70 backdrop-blur-md px-3.5 py-1.5 rounded-xl flex items-center gap-2 shadow-lg border border-white/10 text-white">
           <span className="material-symbols-outlined text-cyan-400 text-base">water_drop</span>
-          <span className="font-mono text-xs font-bold">{controls.targetHumidity || 72}%</span>
+          <span className="font-mono text-xs font-bold">
+            {espMoisture !== null ? `${espMoisture}%` : `${controls.targetHumidity || 0}%`}
+          </span>
         </div>
         <div className="bg-black/70 backdrop-blur-md px-3.5 py-1.5 rounded-xl flex items-center gap-2 shadow-lg border border-white/10 text-white">
           <span className="material-symbols-outlined text-amber-400 text-base">light_mode</span>
