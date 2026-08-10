@@ -65,6 +65,16 @@ export default function ControlsPage() {
     percent: number;
   }
 
+  const [esp32Sensors, setEsp32Sensors] = useState<Esp32SensorData>({
+    soil1Raw: 3171,
+    soil1Percent: 0,
+    soil2Raw: 4095,
+    soil2Percent: 0,
+    floatHigh: false,
+    floatLow: false,
+    avgMoisture: 0,
+  });
+
   const [taskProgress, setTaskProgress] = useState<TaskProgressState | null>(null);
 
   const startTaskProgress = (taskId: string, label: string, totalSec: number) => {
