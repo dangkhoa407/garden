@@ -1,10 +1,10 @@
 {
   "connected": true,
-  "ssid": "THANH DANH",
-  "ipAddress": "192.168.1.18",
-  "macAddress": "E0:D7:68:20:EC:24",
-  "rssi": -66,
-  "signalPercent": 68,
+  "ssid": "saidepchiuu",
+  "ipAddress": "172.21.160.1",
+  "macAddress": "5C:E0:C5:D9:33:7A",
+  "rssi": -50,
+  "signalPercent": 99,
   "security": "WPA2-Personal",
-  "lastUpdated": "10:19:34"
+  "lastUpdated": "16:26:59"
 }

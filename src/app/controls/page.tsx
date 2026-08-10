@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { QuickToggleCard } from "@/components/controls/QuickToggleCard";
 import { RangeSliderCard } from "@/components/controls/RangeSliderCard";
 import { useGarden } from "@/context/GardenContext";
+import { IrrigateModal } from "@/components/fertilizers/IrrigateModal";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
 
@@ -36,6 +37,7 @@ export default function ControlsPage() {
   const [logs, setLogs] = useState<SystemLog[]>([]);
   const [logFilter, setLogFilter] = useState<"ALL" | "ERRORS" | "AI" | "SERIAL">("ALL");
   const [checkingStatus, setCheckingStatus] = useState(false);
+  const [showIrrigateModal, setShowIrrigateModal] = useState(false);
   const [arduinoStatus, setArduinoStatus] = useState<ArduinoStatus>({
     connected: false,
     port: "Đang dò cổng Serial...",
@@ -207,100 +209,13 @@ export default function ControlsPage() {
           Điều Khiển Thiết Bị & Robot GrowHub
         </h1>
         <p className="font-body-lg text-body-lg text-on-surface-variant">
-          Tích hợp mã v2.mjs điều khiển Arduino, quét sâu AI và tự động hóa nhà kính
+          Tích hợp hệ thống điều khiển Arduino, quét sâu bệnh AI Gemini và tự động hóa nhà kính
         </p>
       </div>
 
-      {/* REAL ARDUINO CONNECTION STATUS BANNER */}
-      <section className="bg-surface-container-lowest rounded-2xl p-lg border border-primary/20 shadow-md">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-md">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
-              <span className="material-symbols-outlined text-3xl">developer_board</span>
-            </div>
-            <div>
-              <div className="flex items-center gap-2 mb-0.5">
-                <h2 className="font-headline-md text-headline-md text-on-surface font-bold">
-                  Trạng Thái Kết Nối Arduino Thực Tế
-                </h2>
-                {arduinoStatus.connected ? (
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    ĐÃ KẾT NỐI (TỰ ĐỘNG QUÉT 4S/LẦN)
-                  </span>
-                ) : (
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-300 flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
-                    CHƯA KẾT NỐI (TỰ ĐỘNG THỬ LẠI 4S/LẦN)
-                  </span>
-                )}
-              </div>
-              <p className="font-body-sm text-xs text-on-surface-variant">
-                {arduinoStatus.statusMessage}
-              </p>
-            </div>
-          </div>
 
-          <button
-            onClick={handleCheckConnection}
-            disabled={checkingStatus}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-primary text-on-primary rounded-xl font-semibold text-body-sm hover:bg-primary-container transition-all active:scale-95 disabled:opacity-50 shrink-0"
-          >
-            {checkingStatus ? (
-              <>
-                <span className="material-symbols-outlined text-lg animate-spin">
-                  progress_activity
-                </span>
-                Đang quét cổng Serial...
-              </>
-            ) : (
-              <>
-                <span className="material-symbols-outlined text-lg">sync_lock</span>
-                Kiểm tra ngay (Ping Now)
-              </>
-            )}
-          </button>
-        </div>
 
-        {/* Detailed Hardware Specs Bar */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-sm p-md bg-surface-container-low rounded-xl border border-outline-variant/20 text-xs">
-          <div>
-            <span className="text-on-surface-variant block font-label-caps text-[10px] font-semibold uppercase">
-              CỔNG SERIAL THỰC TẾ
-            </span>
-            <span className="font-bold text-on-surface text-body-sm">
-              {arduinoStatus.port}
-            </span>
-          </div>
-          <div>
-            <span className="text-on-surface-variant block font-label-caps text-[10px] font-semibold uppercase">
-              TỐC ĐỘ BAUD
-            </span>
-            <span className="font-bold text-on-surface text-body-sm">
-              {arduinoStatus.baudRate} Baud
-            </span>
-          </div>
-          <div>
-            <span className="text-on-surface-variant block font-label-caps text-[10px] font-semibold uppercase">
-              SỐ ĐIỂM QUÉT
-            </span>
-            <span className="font-bold text-on-surface text-body-sm">
-              {arduinoStatus.pointCount} Điểm kiểm tra
-            </span>
-          </div>
-          <div>
-            <span className="text-on-surface-variant block font-label-caps text-[10px] font-semibold uppercase flex items-center gap-1">
-              LẦN PING CUỐI (TỰ ĐỘNG)
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping inline-block" />
-            </span>
-            <span className="font-bold text-primary text-body-sm">
-              {arduinoStatus.lastPingTime || "Đang tự động gửi..."}
-            </span>
-          </div>
-        </div>
-      </section>
-
-      {/* Robot v2.mjs Control Panel */}
+      {/* Robot Control Panel */}
       <section className="bg-surface-container-lowest rounded-2xl p-lg border border-primary/20 shadow-md">
         <div className="flex items-center gap-3 mb-md pb-sm border-b border-outline-variant/15">
           <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
@@ -308,7 +223,7 @@ export default function ControlsPage() {
           </div>
           <div>
             <h2 className="font-headline-md text-headline-md text-on-surface font-bold">
-              Bộ Điều Khiển Robot (v2.mjs)
+              Bộ Điều Khiển Robot AI
             </h2>
             <p className="font-body-sm text-xs text-on-surface-variant">
               Các nút gửi lệnh trực tiếp xuống mạch điều khiển Arduino
@@ -344,29 +259,29 @@ export default function ControlsPage() {
               Kiểm tra sâu hại
             </h3>
             <p className="font-body-sm text-xs text-emerald-700/90 mt-1">
-              Chụp 6 điểm bằng camera & phân tích hình ảnh qua AI Gemini (v2.mjs)
+              Chụp 6 điểm bằng camera & phân tích hình ảnh qua AI Gemini
             </p>
           </button>
 
-          {/* Homing (h) */}
+          {/* Nút Tưới Phân (Vị trí 2) */}
           <button
-            onClick={() => sendRobotCommand("h", "Homing (h)")}
-            disabled={sendingCmd === "h"}
-            className="flex flex-col p-4 bg-sky-50 hover:bg-sky-100/80 border border-sky-200 rounded-2xl text-left transition-all active:scale-[0.98] group"
+            onClick={() => setShowIrrigateModal(true)}
+            className="flex flex-col p-4 bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-300 rounded-2xl text-left transition-all active:scale-[0.98] group shadow-sm"
           >
             <div className="flex items-center justify-between w-full mb-2">
-              <span className="material-symbols-outlined text-3xl text-sky-700 group-hover:scale-110 transition-transform">
-                home_pin
+              <span className="material-symbols-outlined text-3xl text-emerald-700 group-hover:scale-110 transition-transform">
+                water_drop
               </span>
-              <span className="font-mono text-xs px-2 py-0.5 bg-sky-200 text-sky-800 rounded font-bold">
-                Phím h
+              <span className="font-mono text-xs px-2.5 py-1 bg-emerald-200 text-emerald-900 rounded-full font-bold flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
+                ESP32
               </span>
             </div>
-            <h3 className="font-headline-sm text-body-lg font-bold text-sky-900">
-              Về vị trí gốc (Homing)
+            <h3 className="font-headline-sm text-body-lg font-bold text-emerald-950">
+              Tưới Phân
             </h3>
-            <p className="font-body-sm text-xs text-sky-700/90 mt-1">
-              Đưa robot về vị trí homing ban đầu và thiết lập lại điểm chuẩn
+            <p className="font-body-sm text-xs text-emerald-800/90 mt-1">
+              Kích hoạt Popup tưới phân tự động (Tùy chỉnh ml hoặc Phối trộn AI)
             </p>
           </button>
 
@@ -436,25 +351,25 @@ export default function ControlsPage() {
             </p>
           </button>
 
-          {/* Ping Connection (ping) */}
+          {/* Homing (h) - Vị trí 6 */}
           <button
-            onClick={() => sendRobotCommand("ping", "Ping Arduino (ping)")}
-            disabled={sendingCmd === "ping"}
-            className="flex flex-col p-4 bg-indigo-50 hover:bg-indigo-100/80 border border-indigo-200 rounded-2xl text-left transition-all active:scale-[0.98] group"
+            onClick={() => sendRobotCommand("h", "Homing (h)")}
+            disabled={sendingCmd === "h"}
+            className="flex flex-col p-4 bg-sky-50 hover:bg-sky-100/80 border border-sky-200 rounded-2xl text-left transition-all active:scale-[0.98] group"
           >
             <div className="flex items-center justify-between w-full mb-2">
-              <span className="material-symbols-outlined text-3xl text-indigo-700 group-hover:scale-110 transition-transform">
-                sensors
+              <span className="material-symbols-outlined text-3xl text-sky-700 group-hover:scale-110 transition-transform">
+                home_pin
               </span>
-              <span className="font-mono text-xs px-2 py-0.5 bg-indigo-200 text-indigo-800 rounded font-bold">
-                ping
+              <span className="font-mono text-xs px-2 py-0.5 bg-sky-200 text-sky-800 rounded font-bold">
+                Phím h
               </span>
             </div>
-            <h3 className="font-headline-sm text-body-lg font-bold text-indigo-900">
-              Kiểm tra kết nối (Ping)
+            <h3 className="font-headline-sm text-body-lg font-bold text-sky-900">
+              Về vị trí gốc (Homing)
             </h3>
-            <p className="font-body-sm text-xs text-indigo-700/90 mt-1">
-              Gửi tín hiệu PING kiểm tra phản hồi PONG từ mạch Arduino
+            <p className="font-body-sm text-xs text-sky-700/90 mt-1">
+              Đưa robot về vị trí homing ban đầu và thiết lập lại điểm chuẩn
             </p>
           </button>
         </div>
@@ -667,6 +582,12 @@ export default function ControlsPage() {
           HOẠT ĐỘNG
         </span>
       </section>
+
+      {/* Shared 2-Tab Irrigation Modal */}
+      <IrrigateModal
+        isOpen={showIrrigateModal}
+        onClose={() => setShowIrrigateModal(false)}
+      />
     </div>
   );
 }

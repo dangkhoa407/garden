@@ -1,8 +1,13 @@
-import Image from "next/image";
+"use client";
+
+import { useState } from "react";
 import { Plant } from "@/lib/data";
+import { useGarden } from "@/context/GardenContext";
 
 interface PlantCardProps {
   plant: Plant;
+  onObserve?: (plant: Plant) => void;
+  onWater?: (plant: Plant) => void;
 }
 
 function cleanLocation(loc?: string): string {
@@ -11,49 +16,176 @@ function cleanLocation(loc?: string): string {
   if (match) {
     return match[0].replace(/khay/i, "Khay");
   }
-  return loc.replace(/\s*-\s*Tầng\s*\d+/gi, "").replace(/Vị trí\s*\d+\s*/gi, "").replace(/\s*\(.*\)/g, "").trim() || "Khay 01";
+  return (
+    loc
+      .replace(/\s*-\s*Tầng\s*\d+/gi, "")
+      .replace(/Vị trí\s*\d+\s*/gi, "")
+      .replace(/\s*\(.*\)/g, "")
+      .trim() || "Khay 01"
+  );
 }
 
-export function PlantCard({ plant }: PlantCardProps) {
+export function PlantCard({ plant, onObserve, onWater }: PlantCardProps) {
+  const { triggerQuickAction, updateControls, controls } = useGarden();
+  const [actionLoading, setActionLoading] = useState<"observe" | "water" | null>(null);
+
   const now = new Date();
   const defaultDateStr = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`;
   const displayDate = plant.createdDate || defaultDateStr;
   const displayLocation = cleanLocation(plant.location);
 
+  const handleObserveClick = async () => {
+    setActionLoading("observe");
+    try {
+      if (onObserve) {
+        onObserve(plant);
+      } else {
+        // Send command to Arduino to move camera to tray
+        await fetch("/api/arduino/command", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ command: "CHECK" }),
+        }).catch(() => {});
+        triggerQuickAction(
+          `🔍 Đang di chuyển camera robot tới ${displayLocation} để quan sát cây ${plant.name}...`
+        );
+      }
+    } finally {
+      setTimeout(() => setActionLoading(null), 1200);
+    }
+  };
+
+  const handleFertilizeClick = async () => {
+    setActionLoading("water");
+    try {
+      if (onWater) {
+        onWater(plant);
+      } else {
+        // 1. Gửi lệnh di chuyển robot tới vị trí khay cây trồng được chọn qua Arduino
+        triggerQuickAction(
+          `🤖 Robot đang di chuyển tới ${displayLocation} để tiến hành tưới phân...`
+        );
+
+        await fetch("/api/arduino/command", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ command: "CHECK" }),
+        }).catch(() => {});
+
+        // Đợi 1.5s để robot di chuyển đến khay
+        await new Promise((res) => setTimeout(res, 1500));
+
+        // 2. Kích hoạt bơm tưới phân (Gửi SPRAY cho Arduino & WATER ON cho ESP32)
+        await fetch("/api/arduino/command", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ command: "SPRAY" }),
+        }).catch(() => {});
+
+        await fetch("/api/esp32/command", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ command: "WATER ON" }),
+        }).catch(() => {});
+
+        updateControls({
+          watering: true,
+          soilMoisture: Math.min(100, (controls.soilMoisture || 60) + 10),
+        });
+
+        triggerQuickAction(
+          `🌱 Robot đã tới ${displayLocation} và kích hoạt tưới phân thành công cho cây ${plant.name}!`
+        );
+
+        // 3. Tự động ngắt bơm tưới sau 5s
+        setTimeout(async () => {
+          await fetch("/api/esp32/command", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ command: "WATER OFF" }),
+          }).catch(() => {});
+          updateControls({ watering: false });
+        }, 5000);
+      }
+    } finally {
+      setTimeout(() => setActionLoading(null), 1200);
+    }
+  };
+
   return (
-    <div className="bg-surface rounded-xl p-md card-shadow border border-outline-variant/20 hover:shadow-md transition-all hover:-translate-y-0.5 group">
-      <div className="flex justify-between items-start mb-md">
-        <div>
-          <h4 className="font-body-lg text-body-lg font-bold text-on-surface group-hover:text-primary transition-colors">
-            {plant.name}
-          </h4>
-          <p className="font-body-sm text-body-sm text-on-surface-variant mt-0.5">
-            {displayLocation}- {displayDate}
-          </p>
+    <div className="bg-surface rounded-2xl p-md card-shadow border border-outline-variant/20 hover:shadow-lg transition-all hover:-translate-y-0.5 group flex flex-col justify-between">
+      <div>
+        <div className="flex justify-between items-start mb-md">
+          <div>
+            <h4 className="font-body-lg text-body-lg font-bold text-on-surface group-hover:text-primary transition-colors">
+              {plant.name}
+            </h4>
+            <p className="font-body-sm text-body-sm text-on-surface-variant mt-0.5">
+              {displayLocation} - {displayDate}
+            </p>
+          </div>
+          <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-surface-container-high relative flex-shrink-0">
+            <img
+              src={plant.image}
+              alt={plant.name}
+              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+            />
+          </div>
         </div>
-        <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-surface-container-high relative flex-shrink-0">
-          <img
-            src={plant.image}
-            alt={plant.name}
-            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-          />
+
+        <div className="mb-md">
+          <div className="flex justify-between items-center mb-1.5">
+            <span
+              className={`font-label-caps text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${plant.statusColor}`}
+            >
+              {plant.status}
+            </span>
+            <span className="font-label-caps text-[10px] text-on-surface-variant font-medium">
+              {plant.progress}%
+            </span>
+          </div>
+          <div className="w-full bg-surface-container-high rounded-full h-2 overflow-hidden">
+            <div
+              className="bg-primary h-2 rounded-full transition-all duration-500"
+              style={{ width: `${plant.progress}%` }}
+            />
+          </div>
         </div>
       </div>
-      <div className="mb-sm">
-        <div className="flex justify-between items-center mb-1.5">
-          <span className={`font-label-caps text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${plant.statusColor}`}>
-            {plant.status}
-          </span>
-          <span className="font-label-caps text-[10px] text-on-surface-variant font-medium">
-            {plant.progress}%
-          </span>
-        </div>
-        <div className="w-full bg-surface-container-high rounded-full h-2 overflow-hidden">
-          <div
-            className="bg-primary h-2 rounded-full transition-all duration-500"
-            style={{ width: `${plant.progress}%` }}
-          />
-        </div>
+
+      {/* Action Buttons: Nút Quan Sát & Nút Tưới Phân */}
+      <div className="pt-3 border-t border-outline-variant/15 flex items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={handleObserveClick}
+          disabled={actionLoading === "observe"}
+          className="flex-1 py-2 px-3 bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/40 dark:hover:bg-sky-900/60 text-sky-700 dark:text-sky-300 border border-sky-200/80 dark:border-sky-800/80 rounded-xl font-bold text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
+        >
+          {actionLoading === "observe" ? (
+            <span className="material-symbols-outlined text-sm animate-spin">
+              progress_activity
+            </span>
+          ) : (
+            <span className="material-symbols-outlined text-base">visibility</span>
+          )}
+          Quan sát
+        </button>
+
+        <button
+          type="button"
+          onClick={handleFertilizeClick}
+          disabled={actionLoading === "water"}
+          className="flex-1 py-2 px-3 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/80 rounded-xl font-bold text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
+        >
+          {actionLoading === "water" ? (
+            <span className="material-symbols-outlined text-sm animate-spin">
+              progress_activity
+            </span>
+          ) : (
+            <span className="material-symbols-outlined text-base">water_drop</span>
+          )}
+          Tưới phân
+        </button>
       </div>
     </div>
   );

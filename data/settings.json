@@ -1,4 +1,14 @@
 {
-  "activeModel": "gemini-2.5-flash",
-  "geminiApiKeys": []
+  "activeModel": "gemini-3.5-flash-lite",
+  "geminiApiKeys": [
+    {
+      "id": "key-1786379365055",
+      "key": "YOUR_GEMINI_API_KEY_HERE",
+      "status": "active",
+      "failCount": 0,
+      "addedAt": "2026-08-10T16:29:25.055Z",
+      "lastUsed": "2026-08-10T16:29:35.384Z",
+      "lastError": ""
+    }
+  ]
 }

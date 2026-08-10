@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { IrrigateModal } from "@/components/fertilizers/IrrigateModal";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
 
@@ -9,6 +10,16 @@ interface ArduinoStatus {
   port: string;
   baudRate: number;
   pointCount: number;
+  statusMessage: string;
+  lastPingTime?: string;
+  allPorts?: string[];
+}
+
+interface Esp32Status {
+  connected: boolean;
+  port: string;
+  baudRate: number;
+  tankCount: number;
   statusMessage: string;
   lastPingTime?: string;
   allPorts?: string[];
@@ -72,7 +83,19 @@ export default function DeviceSettingsPage() {
   });
   const [checkingArduino, setCheckingArduino] = useState(false);
 
+  // ESP32 state
+  const [esp32Status, setEsp32Status] = useState<Esp32Status>({
+    connected: false,
+    port: "Đang kiểm tra...",
+    baudRate: 115200,
+    tankCount: 4,
+    statusMessage: "Đang phân biệt cổng với Arduino...",
+  });
+  const [checkingEsp32, setCheckingEsp32] = useState(false);
+  const [showIrrigateModal, setShowIrrigateModal] = useState(false);
+
   // Camera state
+  const diagVideoRef = useRef<HTMLVideoElement | null>(null);
   const [cameraStatus, setCameraStatus] = useState<CameraStatus>({
     connected: false,
     model: "Đang kiểm tra...",
@@ -152,6 +175,20 @@ export default function DeviceSettingsPage() {
     }
   };
 
+  // Fetch ESP32 Status
+  const fetchEsp32Status = async () => {
+    const data = await safeFetchJson("/api/esp32/status");
+    if (data) {
+      setEsp32Status(data);
+    } else {
+      setEsp32Status((prev) => ({
+        ...prev,
+        connected: false,
+        statusMessage: "Không thể kết nối đến Backend Server",
+      }));
+    }
+  };
+
   // Ping Check Arduino
   const handlePingArduino = async () => {
     setCheckingArduino(true);
@@ -167,6 +204,24 @@ export default function DeviceSettingsPage() {
       showToast("Lỗi kiểm tra Arduino: Không thể kết nối server", "error");
     } finally {
       setCheckingArduino(false);
+    }
+  };
+
+  // Ping Check ESP32
+  const handlePingEsp32 = async () => {
+    setCheckingEsp32(true);
+    try {
+      const data = await safeFetchJson("/api/esp32/ping-check", { method: "POST" });
+      if (data) {
+        if (data.status) setEsp32Status(data.status);
+        showToast(data.message, data.success ? "success" : "error");
+      } else {
+        showToast("Không thể phản hồi từ máy chủ kiểm tra ESP32", "error");
+      }
+    } catch (err) {
+      showToast("Lỗi kiểm tra ESP32: Không thể kết nối server", "error");
+    } finally {
+      setCheckingEsp32(false);
     }
   };
 
@@ -377,6 +432,7 @@ export default function DeviceSettingsPage() {
 
   useEffect(() => {
     fetchArduinoStatus();
+    fetchEsp32Status();
     fetchCameraStatus();
     fetchWifiStatus();
     fetchSavedWifiNetworks();
@@ -399,6 +455,52 @@ export default function DeviceSettingsPage() {
       clearInterval(wifiInterval);
     };
   }, []);
+
+  // WebRTC direct USB camera stream for Diagnostics tab (Local App Camera Mode)
+  useEffect(() => {
+    let localStream: MediaStream | null = null;
+
+    if (activeTab === "diagnostics") {
+      navigator.mediaDevices
+        .getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } } })
+        .then((stream) => {
+          localStream = stream;
+          if (diagVideoRef.current) {
+            diagVideoRef.current.srcObject = stream;
+          }
+          const track = stream.getVideoTracks()[0];
+          setCameraStatus((prev) => ({
+            ...prev,
+            connected: true,
+            model: track.label || "USB Web Camera 1080P",
+            statusMessage: `Đang phát trực tiếp từ ${track.label || "Camera USB"}`,
+          }));
+
+          track.onended = () => {
+            setCameraStatus((prev) => ({
+              ...prev,
+              connected: false,
+              model: "Không tìm thấy",
+              statusMessage: "Chưa kết nối: Vui lòng cắm lại cáp USB Camera!",
+            }));
+          };
+        })
+        .catch((err) => {
+          setCameraStatus((prev) => ({
+            ...prev,
+            connected: false,
+            model: "Mất kết nối",
+            statusMessage: "Không thể phát hiện Camera USB! Vui lòng kiểm tra lại dây cáp.",
+          }));
+        });
+    }
+
+    return () => {
+      if (localStream) {
+        localStream.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, [activeTab]);
 
   return (
     <div className="space-y-xl max-w-5xl mx-auto pb-16">
@@ -586,7 +688,100 @@ export default function DeviceSettingsPage() {
             )}
           </section>
 
-          {/* SECTION 2: CAMERA CONNECTION DIAGNOSTICS */}
+          {/* SECTION 2: ESP32 CONNECTION DIAGNOSTICS */}
+          <section className="bg-surface-container-lowest rounded-2xl p-lg border border-primary/20 shadow-md space-y-md">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-md border-b border-outline-variant/15">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-600">
+                  <span className="material-symbols-outlined text-3xl">memory</span>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h2 className="font-headline-md text-headline-md text-on-surface font-bold">
+                      2. Kiểm Tra Kết Nối Mạch ESP32 (Bơm Tưới & Phân Bón)
+                    </h2>
+                    {esp32Status.connected ? (
+                      <span className="px-3 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                        ĐÃ KẾT NỐI (ONLINE)
+                      </span>
+                    ) : (
+                      <span className="px-3 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-300 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-rose-500" />
+                        CHƯA KẾT NỐI (OFFLINE)
+                      </span>
+                    )}
+                  </div>
+                  <p className="font-body-sm text-xs text-on-surface-variant">
+                    {esp32Status.statusMessage}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handlePingEsp32}
+                  disabled={checkingEsp32}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white rounded-xl font-bold text-body-sm hover:bg-emerald-700 transition-all active:scale-95 shadow-md disabled:opacity-50"
+                >
+                  {checkingEsp32 ? (
+                    <>
+                      <span className="material-symbols-outlined text-lg animate-spin">
+                        progress_activity
+                      </span>
+                      Đang kiểm tra...
+                    </>
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined text-lg">sync</span>
+                      Kiểm Tra Lại
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* ESP32 Technical Details */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-md pt-sm">
+              <div className="p-md bg-surface-container-low rounded-xl border border-outline-variant/20">
+                <span className="text-on-surface-variant block font-label-caps text-[10px] font-semibold uppercase mb-1">
+                  CỔNG SERIAL ESP32 THỰC TẾ
+                </span>
+                <span className="font-bold text-on-surface text-body-sm block truncate">
+                  {esp32Status.port}
+                </span>
+              </div>
+
+              <div className="p-md bg-surface-container-low rounded-xl border border-outline-variant/20">
+                <span className="text-on-surface-variant block font-label-caps text-[10px] font-semibold uppercase mb-1">
+                  TỐC ĐỘ BAUD RATE
+                </span>
+                <span className="font-bold text-on-surface text-body-sm block">
+                  {esp32Status.baudRate} Baud
+                </span>
+              </div>
+
+              <div className="p-md bg-surface-container-low rounded-xl border border-outline-variant/20">
+                <span className="text-on-surface-variant block font-label-caps text-[10px] font-semibold uppercase mb-1">
+                  SỐ BÌNH PHÂN ĐIỀU KHIỂN
+                </span>
+                <span className="font-bold text-on-surface text-body-sm block">
+                  {esp32Status.tankCount} Bình (A, B, C, D)
+                </span>
+              </div>
+
+              <div className="p-md bg-surface-container-low rounded-xl border border-outline-variant/20">
+                <span className="text-on-surface-variant block font-label-caps text-[10px] font-semibold uppercase mb-1">
+                  LẦN PHẢN HỒI CUỐI
+                </span>
+                <span className="font-bold text-emerald-600 text-body-sm block">
+                  {esp32Status.lastPingTime || "Vừa kiểm tra"}
+                </span>
+              </div>
+            </div>
+          </section>
+
+          {/* SECTION 3: CAMERA CONNECTION DIAGNOSTICS */}
           <section className="bg-surface-container-lowest rounded-2xl p-lg border border-primary/20 shadow-md space-y-md">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-md border-b border-outline-variant/15">
               <div className="flex items-center gap-3">
@@ -596,7 +791,7 @@ export default function DeviceSettingsPage() {
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <h2 className="font-headline-md text-headline-md text-on-surface font-bold">
-                      2. Kiểm Tra Kết Nối Camera AI Vision
+                      3. Kiểm Tra Kết Nối Camera AI Vision
                     </h2>
                     {cameraStatus.connected ? (
                       <span className="px-3 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1.5">
@@ -639,18 +834,38 @@ export default function DeviceSettingsPage() {
 
             {/* Camera Preview Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-lg items-center">
-              {/* Live Preview Image Container */}
-              <div className="md:col-span-2 relative bg-black rounded-2xl overflow-hidden aspect-video border border-outline-variant/30 group">
-                <img
-                  src={cameraStatus.streamUrl}
-                  alt="Camera Diagnostic Stream"
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full text-xs font-mono text-emerald-400 flex items-center gap-2 border border-emerald-500/30">
-                  <span className={`w-2 h-2 rounded-full ${cameraStatus.connected ? "bg-emerald-500 animate-ping" : "bg-rose-500"}`} />
-                  <span>{cameraStatus.connected ? "REAL TIME CAMERA FEED (v4l2)" : "CAMERA OFFLINE"}</span>
+              {/* Live Preview Image/Video Container */}
+              <div className="md:col-span-2 relative bg-zinc-950 rounded-2xl overflow-hidden aspect-video border border-outline-variant/30 group flex flex-col justify-center items-center">
+                {cameraStatus.connected ? (
+                  <video
+                    ref={diagVideoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center p-6 text-center space-y-2 text-zinc-400">
+                    <span className="material-symbols-outlined text-5xl text-rose-500 animate-bounce">
+                      videocam_off
+                    </span>
+                    <p className="font-bold text-white text-base">KHÔNG PHÁT HIỆN CAMERA USB</p>
+                    <p className="text-xs text-zinc-400 max-w-sm">{cameraStatus.statusMessage}</p>
+                  </div>
+                )}
+                <div className="absolute top-3 left-3 bg-black/70 backdrop-blur-md px-3 py-1 rounded-full text-xs font-mono text-emerald-400 flex items-center gap-2 border border-emerald-500/30">
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      cameraStatus.connected ? "bg-emerald-500 animate-ping" : "bg-rose-500"
+                    }`}
+                  />
+                  <span>
+                    {cameraStatus.connected
+                      ? "APP CAMERA FEED (LIVE 60FPS)"
+                      : "CAMERA CHƯA KẾT NỐI (OFFLINE)"}
+                  </span>
                 </div>
-                <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md px-3 py-1 rounded-xl text-xs text-zinc-300">
+                <div className="absolute bottom-3 left-3 bg-black/70 backdrop-blur-md px-3 py-1 rounded-xl text-xs text-zinc-300">
                   Chụp gần nhất: {cameraStatus.lastSnapshotTime || "Chưa có ảnh chụp mới"}
                 </div>
               </div>
@@ -1162,6 +1377,11 @@ export default function DeviceSettingsPage() {
           </section>
         </div>
       )}
+      {/* Shared 2-Tab Irrigation Modal */}
+      <IrrigateModal
+        isOpen={showIrrigateModal}
+        onClose={() => setShowIrrigateModal(false)}
+      />
     </div>
   );
 }

@@ -1,12 +1,12 @@
 {
-  "watering": true,
+  "watering": false,
   "lights": false,
   "fan": true,
   "misting": false,
   "lightIntensity": 80,
   "waterFlowRate": 65,
   "targetHumidity": 70,
-  "soilMoisture": 65,
+  "soilMoisture": 75,
   "temperature": 28,
   "phValue": 6.2
 }

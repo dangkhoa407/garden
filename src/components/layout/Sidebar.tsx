@@ -40,6 +40,7 @@ export function Sidebar({ className, isOpenMobile, onCloseMobile }: SidebarProps
     { label: "Trợ lý AI Garden", href: "/ai-chat", icon: "psychology" },
     { label: "Cấu hình API Key", href: "/api-key", icon: "vpn_key" },
     { label: "Vườn của tôi", href: "/plants", icon: "potted_plant" },
+    { label: "Quản lý bình phân", href: "/fertilizers", icon: "science" },
     { label: "Điều khiển thiết bị", href: "/controls", icon: "tune" },
     { label: "Lịch trình", href: "/schedule", icon: "calendar_today" },
     { label: "Quan sát Camera", href: "/camera", icon: "videocam" },

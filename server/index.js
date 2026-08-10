@@ -628,27 +628,40 @@ async function getOrInitArduinoSerialPort() {
       return activeSerialPort;
     }
 
-    const ports = await SerialPort.list();
+    const esp32Path = activeEsp32Port && activeEsp32Port.isOpen ? activeEsp32Port.path : null;
     const candidates = ports.filter((p) => {
+      if (p.path === esp32Path) return false;
       const pPath = (p.path || "").toUpperCase();
       const mfg = (p.manufacturer || "").toUpperCase();
+
+      // Bỏ qua các chip thuộc về ESP32 tuyệt đối
+      if (
+        mfg.includes("SILICON") ||
+        mfg.includes("CP210") ||
+        mfg.includes("ESPRESSIF") ||
+        mfg.includes("ESP32") ||
+        mfg.includes("CH9102")
+      ) {
+        return false;
+      }
+
       return (
-        pPath.includes("COM") ||
-        pPath.includes("TTYACM") ||
-        pPath.includes("TTYUSB") ||
-        pPath.includes("TTYAMA") ||
         mfg.includes("ARDUINO") ||
+        mfg.includes("GENUINO") ||
         mfg.includes("CH340") ||
+        mfg.includes("CH341") ||
         mfg.includes("FTDI") ||
-        mfg.includes("RASPBERRY")
+        mfg.includes("QINHENG") ||
+        mfg.includes("RASPBERRY") ||
+        pPath.includes("TTYACM")
       );
     });
 
-    if (candidates.length === 0 && ports.length === 0) {
-      throw new Error("Không tìm thấy cổng USB/Serial của Arduino trên thiết bị");
+    if (candidates.length === 0) {
+      throw new Error("Không phát hiện mạch Arduino nào kết nối (Chưa cắm USB Arduino)");
     }
 
-    const targetPortPath = candidates.length > 0 ? candidates[0].path : ports[0].path;
+    const targetPortPath = candidates[0].path;
     console.log(`[Arduino Direct Engine] Opening serial port at ${targetPortPath}...`);
 
     activeSerialPort = new SerialPort({
@@ -946,55 +959,153 @@ app.post("/api/arduino/command", async (req, res) => {
   }
 });
 
+async function getRealSerialStatus() {
+  try {
+    const { SerialPort } = require("serialport");
+    const ports = await SerialPort.list();
+    const allPortPaths = ports.map(
+      (p) => `${p.path}${p.manufacturer ? ` (${p.manufacturer})` : ""}`
+    );
+
+    if (activeSerialPort && activeSerialPort.isOpen) {
+      return {
+        connected: true,
+        port: activeSerialPort.path,
+        baudRate: activeSerialPort.baudRate || 9600,
+        pointCount: 6,
+        statusMessage: `Đã kết nối trực tiếp với mạch Arduino trên cổng ${activeSerialPort.path}`,
+        allPorts: allPortPaths,
+      };
+    }
+
+    // Lọc duy nhất các cổng thực sự thuộc về Arduino (loại trừ hẳn chip ESP32/CP210x/Silicon Labs)
+    const arduinoPorts = ports.filter((p) => {
+      const pathStr = (p.path || "").toUpperCase();
+      const mfg = (p.manufacturer || "").toUpperCase();
+
+      // Bỏ qua các chip đặc trưng của ESP32 để không nhận nhầm!
+      if (
+        mfg.includes("SILICON") ||
+        mfg.includes("CP210") ||
+        mfg.includes("ESPRESSIF") ||
+        mfg.includes("ESP32") ||
+        mfg.includes("CH9102")
+      ) {
+        return false;
+      }
+
+      return (
+        mfg.includes("ARDUINO") ||
+        mfg.includes("GENUINO") ||
+        pathStr.includes("TTYACM") ||
+        mfg.includes("CH340") ||
+        mfg.includes("CH341") ||
+        mfg.includes("FTDI") ||
+        mfg.includes("QINHENG")
+      );
+    });
+
+    // Chỉ chọn port khi thực sự tìm thấy thiết bị Arduino, KHÔNG fallback lấy bậy cổng ESP32!
+    const chosenPort = arduinoPorts.length > 0 ? arduinoPorts[0] : null;
+
+    return {
+      connected: !!chosenPort,
+      port: chosenPort ? chosenPort.path : "Chưa kết nối cổng Arduino",
+      baudRate: 9600,
+      pointCount: 6,
+      statusMessage: chosenPort
+        ? `Phát hiện cổng Arduino tại ${chosenPort.path}${chosenPort.manufacturer ? ` (${chosenPort.manufacturer})` : ""}`
+        : "Chưa kết nối: Không phát hiện mạch Arduino (UNO/Mega/Nano) nào cắm vào USB!",
+      allPorts: allPortPaths,
+    };
+  } catch (err) {
+    return {
+      connected: false,
+      port: "Không có cổng Serial/USB",
+      baudRate: 9600,
+      pointCount: 6,
+      statusMessage: `Lỗi quét Serial Arduino: ${err.message}`,
+      allPorts: [],
+    };
+  }
+}
+
+let activeEsp32Port = null;
+
+async function getRealEsp32Status() {
+  try {
+    const { SerialPort } = require("serialport");
+    const ports = await SerialPort.list();
+    const allPortPaths = ports.map(
+      (p) => `${p.path}${p.manufacturer ? ` (${p.manufacturer})` : ""}`
+    );
+
+    if (activeEsp32Port && activeEsp32Port.isOpen) {
+      return {
+        connected: true,
+        port: activeEsp32Port.path,
+        baudRate: activeEsp32Port.baudRate || 115200,
+        tankCount: 4,
+        statusMessage: `Đã kết nối trực tiếp với mạch ESP32 trên cổng ${activeEsp32Port.path}`,
+        allPorts: allPortPaths,
+      };
+    }
+
+    const arduinoPortPath = activeSerialPort && activeSerialPort.isOpen ? activeSerialPort.path : null;
+
+    // Lọc duy nhất các cổng thuộc về ESP32 (CP210x, Silicon Labs, Espressif, CH9102)
+    const esp32Candidates = ports.filter((p) => {
+      if (p.path === arduinoPortPath) return false; // Không lấy trùng cổng với Arduino
+      const pathStr = (p.path || "").toUpperCase();
+      const mfg = (p.manufacturer || "").toUpperCase();
+
+      // Bỏ qua chip đặc trưng của Arduino
+      if (mfg.includes("ARDUINO") || mfg.includes("GENUINO")) {
+        return false;
+      }
+
+      return (
+        mfg.includes("SILICON") ||
+        mfg.includes("CP210") ||
+        mfg.includes("ESPRESSIF") ||
+        mfg.includes("ESP32") ||
+        mfg.includes("CH9102") ||
+        pathStr.includes("TTYUSB") ||
+        (pathStr.includes("COM") && !mfg.includes("CH340") && !mfg.includes("FTDI"))
+      );
+    });
+
+    const chosenPort = esp32Candidates.length > 0 ? esp32Candidates[0] : null;
+
+    return {
+      connected: !!chosenPort,
+      port: chosenPort ? chosenPort.path : "Chưa kết nối cổng ESP32",
+      baudRate: 115200,
+      tankCount: 4,
+      statusMessage: chosenPort
+        ? `Phát hiện cổng ESP32 tại ${chosenPort.path}${chosenPort.manufacturer ? ` (${chosenPort.manufacturer})` : ""}`
+        : "Chưa kết nối: Không phát hiện mạch ESP32 nào cắm vào cổng USB/Serial!",
+      allPorts: allPortPaths,
+    };
+  } catch (err) {
+    return {
+      connected: false,
+      port: "Không tìm thấy cổng ESP32",
+      baudRate: 115200,
+      tankCount: 4,
+      statusMessage: `Lỗi quét Serial ESP32: ${err.message}`,
+      allPorts: [],
+    };
+  }
+}
+
 app.get("/api/arduino/status", async (req, res) => {
   const serialInfo = await getRealSerialStatus();
   res.json({
     ...serialInfo,
-    connected: !!(activeSerialPort && activeSerialPort.isOpen),
     lastPingTime: new Date().toLocaleTimeString("vi-VN"),
     lastLogs: lastArduinoLogs,
     inspectionResults: lastInspectionResults,
-  });
-});
-
-app.post("/api/arduino/ping-check", async (req, res) => {
-  const timestamp = new Date().toLocaleTimeString("vi-VN");
-  let isConnected = false;
-  let message = "";
-
-  try {
-    await sendDirectCommandToArduino("PING");
-    isConnected = true;
-    message = "Đã gửi PING và nhận kết nối thành công từ cổng Serial Arduino!";
-  } catch (err) {
-    isConnected = false;
-    message = `Không thể kết nối Serial Arduino (${err.message})`;
-  }
-
-  lastArduinoLogs.unshift({
-    timestamp,
-    command: "PING",
-    label: "Kiểm tra kết nối Arduino thực tế (PING)",
-    status: isConnected ? "PONG_RECEIVED" : "NO_RESPONSE",
-  });
-  if (lastArduinoLogs.length > 25) lastArduinoLogs.pop();
-
-  res.json({
-    success: isConnected,
-    message,
-    status: {
-      connected: isConnected,
-      lastPingTime: timestamp,
-    },
-  });
-});
-
-app.get("/api/arduino/status", async (req, res) => {
-  const serialInfo = await getRealSerialStatus();
-  res.json({
-    ...serialInfo,
-    lastPingTime: new Date().toLocaleTimeString("vi-VN"),
-    lastLogs: lastArduinoLogs,
   });
 });
 
@@ -1004,7 +1115,7 @@ app.post("/api/arduino/ping-check", async (req, res) => {
 
   try {
     if (serialInfo.connected) {
-      await sendSerialCommandToArduino("ping");
+      await sendDirectCommandToArduino("PING");
     }
   } catch (err) {}
 
@@ -1014,17 +1125,232 @@ app.post("/api/arduino/ping-check", async (req, res) => {
     label: "Kiểm tra kết nối Arduino thực tế (PING)",
     status: serialInfo.connected ? "PONG_RECEIVED" : "NO_RESPONSE",
   });
-  if (lastArduinoLogs.length > 20) lastArduinoLogs.pop();
+  if (lastArduinoLogs.length > 25) lastArduinoLogs.pop();
 
   res.json({
     success: serialInfo.connected,
     message: serialInfo.connected
-      ? `Đã nhận diện thiết bị trên cổng ${serialInfo.port}!`
+      ? `Đã nhận diện thiết bị Arduino trên cổng ${serialInfo.port}!`
       : "Chưa kết nối: Không phát hiện thiết bị Arduino trên các cổng Serial/USB!",
     status: {
       ...serialInfo,
       lastPingTime: timestamp,
     },
+  });
+});
+
+// ESP32 CONNECTION DIAGNOSTICS ENDPOINTS
+app.get("/api/esp32/status", async (req, res) => {
+  const espInfo = await getRealEsp32Status();
+  res.json({
+    ...espInfo,
+    lastPingTime: new Date().toLocaleTimeString("vi-VN"),
+  });
+});
+
+app.post("/api/esp32/ping-check", async (req, res) => {
+  const timestamp = new Date().toLocaleTimeString("vi-VN");
+  const espInfo = await getRealEsp32Status();
+
+  try {
+    if (espInfo.connected) {
+      await sendDirectCommandToEsp32("STATUS");
+    }
+  } catch (err) {}
+
+  res.json({
+    success: espInfo.connected,
+    message: espInfo.connected
+      ? `Đã nhận diện thành công mạch ESP32 trên cổng ${espInfo.port} (${espInfo.statusMessage})!`
+      : "Chưa kết nối: Không phát hiện mạch ESP32 nào cắm vào cổng USB/Serial!",
+    status: {
+      ...espInfo,
+      lastPingTime: timestamp,
+    },
+  });
+});
+
+// =========================================================
+// ESP32 SERIAL COMMAND & REAL-TIME SOIL SENSOR SYSTEM
+// =========================================================
+
+let lastEsp32Sensors = {
+  soil1Raw: 3171,
+  soil2Raw: 4095,
+  soil1Percent: 0,
+  soil2Percent: 0,
+  avgSoilPercent: 0,
+  floatLow: false,
+  floatHigh: false,
+  running: false,
+  lastUpdate: new Date().toLocaleTimeString("vi-VN"),
+};
+
+function parseEsp32Moisture(soil1Raw, soil2Raw) {
+  // Quy định độ ẩm của 2 cảm biến:
+  // Mức 3171 là 0%, mức 1307 là 100%
+  // Mức 4095 là 0%, mức 1038 là 100%
+  const pct1 = Math.min(100, Math.max(0, Math.round(((3171 - soil1Raw) / (3171 - 1307)) * 100)));
+  const pct2 = Math.min(100, Math.max(0, Math.round(((4095 - soil2Raw) / (4095 - 1038)) * 100)));
+  const avg = Math.round((pct1 + pct2) / 2);
+  return { pct1, pct2, avg };
+}
+
+async function sendDirectCommandToEsp32(cmdString) {
+  try {
+    const { SerialPort } = require("serialport");
+    if (activeEsp32Port && activeEsp32Port.isOpen) {
+      activeEsp32Port.write(`${cmdString}\n`);
+      return true;
+    }
+
+    const ports = await SerialPort.list();
+    const arduinoPath = activeSerialPort && activeSerialPort.isOpen ? activeSerialPort.path : null;
+    const candidates = ports.filter((p) => {
+      if (p.path === arduinoPath) return false;
+      const pathStr = (p.path || "").toUpperCase();
+      const mfg = (p.manufacturer || "").toUpperCase();
+
+      if (mfg.includes("ARDUINO") || mfg.includes("GENUINO")) {
+        return false;
+      }
+
+      return (
+        mfg.includes("SILICON") ||
+        mfg.includes("CP210") ||
+        mfg.includes("ESPRESSIF") ||
+        mfg.includes("ESP32") ||
+        mfg.includes("CH9102") ||
+        pathStr.includes("TTYUSB") ||
+        (pathStr.includes("COM") && !mfg.includes("CH340") && !mfg.includes("FTDI"))
+      );
+    });
+
+    if (candidates.length > 0) {
+      const { ReadlineParser } = require("serialport");
+      activeEsp32Port = new SerialPort({
+        path: candidates[0].path,
+        baudRate: 115200,
+        autoOpen: false,
+      });
+
+      await new Promise((res, rej) => activeEsp32Port.open((err) => (err ? rej(err) : res())));
+      const parser = activeEsp32Port.pipe(new ReadlineParser({ delimiter: "\n" }));
+
+      parser.on("data", (rawLine) => {
+        const line = String(rawLine).trim();
+        if (!line) return;
+        console.log(`[ESP32 -> Server] ${line}`);
+
+        if (line.startsWith("STATUS,")) {
+          const parts = line.split(",");
+          let s1 = 3171, s2 = 4095, low = 0, high = 0, run = 0;
+          parts.forEach((p) => {
+            const [k, v] = p.split("=");
+            if (k === "SOIL1") s1 = parseInt(v, 10) || 3171;
+            if (k === "SOIL2") s2 = parseInt(v, 10) || 4095;
+            if (k === "LOW") low = parseInt(v, 10) || 0;
+            if (k === "HIGH") high = parseInt(v, 10) || 0;
+            if (k === "RUN") run = parseInt(v, 10) || 0;
+          });
+
+          const { pct1, pct2, avg } = parseEsp32Moisture(s1, s2);
+          lastEsp32Sensors = {
+            soil1Raw: s1,
+            soil2Raw: s2,
+            soil1Percent: pct1,
+            soil2Percent: pct2,
+            avgSoilPercent: avg,
+            floatLow: low === 1,
+            floatHigh: high === 1,
+            running: run === 1,
+            lastUpdate: new Date().toLocaleTimeString("vi-VN"),
+          };
+        }
+      });
+
+      activeEsp32Port.write(`${cmdString}\n`);
+      return true;
+    }
+  } catch (err) {
+    console.warn(`[ESP32 Direct Command Warning] ${err.message}`);
+  }
+  return false;
+}
+
+// Tự động gửi STATUS định kỳ 1.5s xuống ESP32 để đọc độ ẩm cảm biến thực tế liên tục
+setInterval(async () => {
+  try {
+    if (activeEsp32Port && activeEsp32Port.isOpen) {
+      activeEsp32Port.write("STATUS\n");
+    } else {
+      await sendDirectCommandToEsp32("STATUS");
+    }
+  } catch (e) {}
+}, 1500);
+
+app.get("/api/esp32/sensors", async (req, res) => {
+  res.json({
+    success: true,
+    sensors: lastEsp32Sensors,
+  });
+});
+
+app.post("/api/esp32/command", async (req, res) => {
+  const { command } = req.body;
+  if (!command) {
+    return res.status(400).json({ success: false, error: "Thiếu tham số command" });
+  }
+
+  const success = await sendDirectCommandToEsp32(command);
+  res.json({
+    success: true,
+    command,
+    sentToHardware: success,
+    timestamp: new Date().toLocaleTimeString("vi-VN"),
+  });
+});
+
+app.post("/api/esp32/dose", async (req, res) => {
+  const { tankCode, ml } = req.body; // e.g. tankCode: "Bình A", ml: 3.5
+  if (!tankCode || !ml) {
+    return res.status(400).json({ success: false, error: "Thiếu tankCode hoặc lượng ml" });
+  }
+
+  // Chuyển mã bình ("Bình A" -> 'A')
+  const pumpLetter = (tankCode.replace(/bình\s*/i, "").trim() || "A").toUpperCase();
+  const durationSec = Math.max(1, Math.round(ml * 60)); // Quy đổi: 1 ml = 60 giây (1 phút)
+  const cmdStr = `DOSE ${pumpLetter} ${durationSec}`;
+
+  // Trừ dung tích phân còn lại trong file data/fertilizers.json
+  const dataPath = path.join(process.cwd(), "data", "fertilizers.json");
+  if (fs.existsSync(dataPath)) {
+    try {
+      let ferts = JSON.parse(fs.readFileSync(dataPath, "utf-8"));
+      ferts = ferts.map((f) => {
+        if (f.tankCode === tankCode) {
+          const newMl = Math.max(0, Number((f.currentMl - ml).toFixed(1)));
+          return {
+            ...f,
+            currentMl: newMl,
+            status: newMl <= 0 ? "Hết phân" : newMl < (f.capacityMl || 6) * 0.2 ? "Cần thêm" : "Sẵn sàng",
+          };
+        }
+        return f;
+      });
+      fs.writeFileSync(dataPath, JSON.stringify(ferts, null, 2), "utf-8");
+    } catch (e) {}
+  }
+
+  const success = await sendDirectCommandToEsp32(cmdStr);
+  res.json({
+    success: true,
+    tankCode,
+    pumpLetter,
+    ml,
+    durationSec,
+    command: cmdStr,
+    sentToHardware: success,
   });
 });
 
@@ -1183,8 +1509,25 @@ app.get("/api/camera/status", async (req, res) => {
         message = "Không phát hiện camera USB tại /dev/video0";
       }
     } else {
-      connected = true; // Trên môi trường dev Windows
-      message = "Camera USB (Windows Simulation)";
+      try {
+        const { stdout } = await execAsync(
+          'powershell -Command "Get-PnpDevice -Class Camera, Image -Status OK | Select-Object -ExpandProperty FriendlyName"'
+        );
+        const camName = stdout ? stdout.trim() : "";
+        if (camName.length > 0) {
+          connected = true;
+          device = camName.split("\n")[0].trim();
+          message = `Đã kết nối Camera USB: ${device}`;
+        } else {
+          connected = false;
+          device = "Không có thiết bị";
+          message = "Chưa kết nối: Vui lòng cắm Camera USB vào máy tính!";
+        }
+      } catch (winErr) {
+        connected = false;
+        device = "Lỗi thiết bị";
+        message = "Không phát hiện Camera USB cắm trên thiết bị!";
+      }
     }
   } catch (err) {
     connected = false;
@@ -2116,6 +2459,40 @@ app.delete("/api/ai-chat", (req, res) => {
   ];
   writeJson("chat.json", resetChat);
   res.json(resetChat);
+});
+
+// FERTILIZERS API ENDPOINTS (Saved to data/fertilizers.json)
+app.get("/api/fertilizers", (req, res) => {
+  const fertilizers = readJson("fertilizers.json", []);
+  res.json(fertilizers);
+});
+
+app.post("/api/fertilizers", (req, res) => {
+  const newFertilizer = req.body;
+  let fertilizers = readJson("fertilizers.json", []);
+  if (!newFertilizer.id) {
+    newFertilizer.id = `fert-${Date.now()}`;
+  }
+  fertilizers.unshift(newFertilizer);
+  writeJson("fertilizers.json", fertilizers);
+  res.json(fertilizers);
+});
+
+app.put("/api/fertilizers/:id", (req, res) => {
+  const { id } = req.params;
+  const updates = req.body;
+  let fertilizers = readJson("fertilizers.json", []);
+  fertilizers = fertilizers.map((f) => (f.id === id ? { ...f, ...updates } : f));
+  writeJson("fertilizers.json", fertilizers);
+  res.json(fertilizers);
+});
+
+app.delete("/api/fertilizers/:id", (req, res) => {
+  const { id } = req.params;
+  let fertilizers = readJson("fertilizers.json", []);
+  fertilizers = fertilizers.filter((f) => f.id !== id);
+  writeJson("fertilizers.json", fertilizers);
+  res.json(fertilizers);
 });
 
 app.listen(PORT, () => {
