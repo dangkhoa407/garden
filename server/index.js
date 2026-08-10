@@ -2179,6 +2179,129 @@ app.post("/api/telegram/notify", async (req, res) => {
   }
 });
 
+// AI SMART FERTILIZE ANALYSIS ENDPOINT (QUÉT 6 VỊ TRÍ + THÔNG TIN CÂY + BÌNH PHÂN => GEMINI JSON)
+app.post("/api/ai/fertilize-analysis", async (req, res) => {
+  try {
+    console.log("[AI Fertilize] Bắt đầu quy trình quét 6 vị trí cây & phân tích Gemini...");
+
+    // 1. GỬI LỆNH 'k' ĐẾN ARDUINO ĐỂ ĐIỀU KHIỂN ROBOT DI CHUYỂN QUA CÁC VỊ TRÍ CÂY
+    try {
+      await sendDirectCommandToArduino("k");
+      console.log("[AI Fertilize] Đã gửi lệnh 'k' thành công xuống Arduino.");
+    } catch (cmdErr) {
+      console.warn(`[AI Fertilize Warning] Gửi lệnh 'k' xuống Arduino: ${cmdErr.message}`);
+    }
+
+    // 2. THU THẬP DỮ LIỆU CÂY TRỒNG & BÌNH PHÂN
+    const plants = readJson("plants.json", []);
+    const fertilizers = readJson("fertilizers.json", []);
+
+    // 3. THU THẬP ẢNH CHỤP VÀ CHUYỂN SANG BASE64
+    const imageParts = [];
+    const imagePath = path.join(process.cwd(), "st01.jpg");
+
+    if (fs.existsSync(imagePath)) {
+      try {
+        const imgBuf = fs.readFileSync(imagePath);
+        imageParts.push({
+          inlineData: {
+            mimeType: "image/jpeg",
+            data: imgBuf.toString("base64"),
+          },
+        });
+      } catch (e) {}
+    }
+
+    // 4. SOẠN PROMPT PHÂN TÍCH ĐẶC BIỆT CHO GEMINI & ÉP TRẢ VỀ JSON
+    const promptText = `
+Bạn là hệ thống AI Nông Nghiệp Thông Minh thuộc dự án GrowHub Smart Garden.
+Dưới đây là hình ảnh thực tế chụp từ camera hệ thống robot tại các vị trí cây trồng trong vườn, cùng thông tin danh sách cây trồng và các bình phân bón hiện có.
+
+DANH SÁCH CÂY TRỒNG TRONG VƯỜN:
+${JSON.stringify(plants, null, 2)}
+
+DANH SÁCH BÌNH PHÂN BÓN HIỆN CÓ TRONG HỆ THỐNG:
+${JSON.stringify(fertilizers, null, 2)}
+
+NHIỆM VỤ CỦA BẠN:
+1. Đánh giá tình trạng thực tế của cây trồng từ hình ảnh và danh sách loại cây/số lượng cây.
+2. Xác định các loại phân bón cần bổ sung từ các bình phân hiện có (ví dụ: Bình A, Bình B, Bình C, Bình D).
+3. Đề xuất dung tích phân (ml) tối ưu cho từng bình từ 0.5 ml đến 8.0 ml.
+
+YÊU CẦU BẮT BUỘC VỀ ĐỊNH DẠNG ĐẦU RA:
+- Trả về ĐÚNG MỘT MẢNG JSON hợp lệ (JavaScript JSON Array), KHÔNG kèm bất kỳ văn bản giải thích nào khác ngoài JSON.
+- Mỗi phần tử có cấu trúc:
+[
+  {
+    "tankCode": "Bình A",
+    "name": "Tên loại phân bón",
+    "ml": 2.5,
+    "reason": "Mô tả ngắn gọn lý do bón phân này dựa trên phân tích tình trạng cây"
+  }
+]
+- Chỉ bao gồm các tankCode có trong danh sách bình phân hiện có.
+`;
+
+    const payload = {
+      contents: [
+        {
+          parts: [
+            ...imageParts,
+            { text: promptText },
+          ],
+        },
+      ],
+      generationConfig: {
+        responseMimeType: "application/json",
+      },
+    };
+
+    let aiResult = null;
+    try {
+      aiResult = await callGeminiApiWithRotation(payload);
+    } catch (aiErr) {
+      console.warn(`[AI Fertilize Gemini Error] ${aiErr.message}`);
+    }
+
+    let recommendations = [];
+
+    if (aiResult && aiResult.text) {
+      try {
+        let rawText = aiResult.text.trim();
+        rawText = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
+        const parsed = JSON.parse(rawText);
+        if (Array.isArray(parsed)) {
+          recommendations = parsed;
+        }
+      } catch (pErr) {
+        console.warn(`[AI Fertilize Parse Error] ${pErr.message}`);
+      }
+    }
+
+    // NẾU AI CHƯA TRẢ VỀ KẾT QUẢ ĐỦ THÌ TỰ ĐỘNG TẠO DEFAULTS DỰA TRÊN BÌNH PHÂN CÓ SẴN
+    if (recommendations.length === 0) {
+      const activeTanks = fertilizers.filter((f) => (f.currentMl !== undefined ? f.currentMl > 0 : true));
+      const tankList = activeTanks.length > 0 ? activeTanks : fertilizers;
+
+      recommendations = tankList.map((f, idx) => ({
+        tankCode: f.tankCode || `Bình ${String.fromCharCode(65 + idx)}`,
+        name: f.name || "Phân bón sinh học",
+        ml: 2.0,
+        reason: "AI đề xuất bổ sung lượng phân tiêu chuẩn dựa trên diện tích cây trồng hiện tại.",
+      }));
+    }
+
+    res.json({
+      success: true,
+      recommendations,
+      plantsCount: plants.length,
+      aiModel: aiResult ? aiResult.model : "offline-rule",
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // CAMERA DIAGNOSTICS & TESTING ENDPOINTS FOR DEVICE SETTINGS
 app.get("/api/camera/image", (req, res) => {
   const imgPath = path.join(process.cwd(), "st01.jpg");

@@ -132,5 +132,17 @@
     "sender": "ai",
     "text": "✨ **Google Gemini AI (gemini-3.5-flash-lite - Key: AQ.Ab8...iiYw):**\n\nChào bạn! 🌱 Mình là **GrowAI** - Trợ lý Trí Tuệ Nhân Tạo của Hệ thống Quản lý Vườn Rau Thông Minh GrowHub đây ạ! 🤖🌿\n\nHiện tại, hệ thống cảm biến IoT trong vườn của chúng ta đang ghi nhận các thông số rất ổn định:\n• 💧 **Độ ẩm đất:** 65% (Đang được tưới phun sương để đạt mục tiêu 70%)\n• 🌡️ **Nhiệt độ phòng kính:** 28°C (Quạt thông gió đang bật để làm mát)\n• 💡 **Ánh sáng LED:** Cường độ 80%\n• 🧪 **Độ pH thủy canh:** 6.2 (Mức lý tưởng cho nhiều loại cây)\n• 📋 **Lịch trình:** Có 4 nhiệm vụ chăm sóc đang chờ xử lý.\n\n*(Hiện tại cơ sở dữ liệu chưa ghi nhận loài cây cụ thể nào trong vườn).*\n\nHôm nay mình có thể hỗ trợ gì cho khu vườn thông minh của bạn không? Bạn muốn thêm cây trồng mới hay kiểm tra lịch chăm sóc nào không nào? 😊",
     "timestamp": "23:29"
+  },
+  {
+    "id": "user-1786388560377",
+    "sender": "user",
+    "text": "bạn tên là gigf",
+    "timestamp": "2:02"
+  },
+  {
+    "id": "ai-1786388560936",
+    "sender": "ai",
+    "text": "🤖 **GrowAI Assistant (Tất cả Key đều gặp sự cố):**\n\nLỗi: *Tất cả 1 API Key trong danh sách đều gặp lỗi với các mô hình Gemini: API key not valid. Please pass a valid API key.*\n\nHệ thống đã tự động đẩy các Key bị lỗi xuống cuối hàng chờ rotation.",
+    "timestamp": "2:02"
   }
 ]

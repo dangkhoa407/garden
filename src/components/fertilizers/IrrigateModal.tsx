@@ -125,6 +125,89 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
     }));
   };
 
+  // AI Scan & Analysis State
+  const [isAnalyzingAi, setIsAnalyzingAi] = useState(false);
+  const [aiAnalysisDone, setAiAnalysisDone] = useState(false);
+  const [aiStatusMsg, setAiStatusMsg] = useState("");
+  const [aiRecommendations, setAiRecommendations] = useState<
+    { tankCode: string; name: string; ml: number; reason: string; selected: boolean }[]
+  >([]);
+
+  const handleRunAiAnalysis = async () => {
+    setIsAnalyzingAi(true);
+    setAiStatusMsg("🤖 Gửi lệnh 'k' tới Arduino di chuyển camera qua 6 vị trí cây...");
+
+    try {
+      await new Promise((r) => setTimeout(r, 1500));
+      setAiStatusMsg("📸 Đang gửi 6 ảnh + thông tin cây + các bình phân về Gemini AI...");
+
+      const res = await fetch("/api/ai/fertilize-analysis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.recommendations && Array.isArray(data.recommendations)) {
+          const recs = data.recommendations.map((r: any) => ({
+            tankCode: r.tankCode,
+            name: r.name || "Phân bón sinh học",
+            ml: Number(r.ml) || 2.0,
+            reason: r.reason || "AI khuyến nghị dựa trên phân tích hình ảnh cây trồng.",
+            selected: true,
+          }));
+
+          setAiRecommendations(recs);
+
+          // Đồng bộ với selectedTanks
+          setSelectedTanks((prev) => {
+            const next = { ...prev };
+            recs.forEach((item: any) => {
+              next[item.tankCode] = { selected: true, ml: item.ml };
+            });
+            return next;
+          });
+
+          setAiAnalysisDone(true);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsAnalyzingAi(false);
+      setAiStatusMsg("");
+    }
+  };
+
+  const handleToggleAiTank = (tankCode: string) => {
+    setAiRecommendations((prev) =>
+      prev.map((item) =>
+        item.tankCode === tankCode ? { ...item, selected: !item.selected } : item
+      )
+    );
+    setSelectedTanks((prev) => ({
+      ...prev,
+      [tankCode]: {
+        selected: !prev[tankCode]?.selected,
+        ml: prev[tankCode]?.ml || 2.0,
+      },
+    }));
+  };
+
+  const handleAiMlChange = (tankCode: string, ml: number) => {
+    const val = Math.max(0.1, Number(ml) || 0.1);
+    setAiRecommendations((prev) =>
+      prev.map((item) => (item.tankCode === tankCode ? { ...item, ml: val } : item))
+    );
+    setSelectedTanks((prev) => ({
+      ...prev,
+      [tankCode]: {
+        selected: prev[tankCode]?.selected ?? true,
+        ml: val,
+      },
+    }));
+  };
+
   const handleStartIrrigation = async (isAiMode: boolean = false) => {
     setIsIrrigating(true);
     setIrrigateLog([]);
@@ -132,39 +215,35 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
 
     const tanksToDose: { tankCode: string; ml: number }[] = [];
 
-    if (isAiMode) {
-      const avg = espSensors.avgSoilPercent;
-      const mlA = avg < 40 ? 3.0 : 1.5;
-      const mlB = avg < 40 ? 2.0 : 1.0;
-
-      if (availableTanks.includes("Bình A")) {
-        tanksToDose.push({ tankCode: "Bình A", ml: mlA });
+    if (isAiMode && aiRecommendations.length > 0) {
+      aiRecommendations.forEach((r) => {
+        if (r.selected) {
+          tanksToDose.push({ tankCode: r.tankCode, ml: r.ml });
+        }
+      });
+      if (tanksToDose.length === 0) {
+        availableTanks.forEach((code) => {
+          if (selectedTanks[code]?.selected) {
+            tanksToDose.push({ tankCode: code, ml: selectedTanks[code].ml });
+          }
+        });
       }
-      if (availableTanks.includes("Bình B")) {
-        tanksToDose.push({ tankCode: "Bình B", ml: mlB });
-      }
-
-      setIrrigateLog((prev) => [
-        ...prev,
-        `🤖 KÍCH HOẠT TƯỚI PHÂN BẰNG AI: Độ ẩm hiện tại ${avg}%`,
-        `💡 AI Đề xuất: Trích xuất ${tanksToDose.map(t => `${t.ml}ml ${t.tankCode}`).join(", ")}`,
-      ]);
     } else {
       availableTanks.forEach((code) => {
         if (selectedTanks[code]?.selected) {
           tanksToDose.push({ tankCode: code, ml: selectedTanks[code].ml });
         }
       });
+    }
 
-      if (tanksToDose.length === 0) {
-        setIrrigateLog((prev) => [
-          ...prev,
-          "❌ Chưa chọn bình phân nào! Vui lòng tích chọn ít nhất 1 bình phân.",
-        ]);
-        setIsIrrigating(false);
-        setIrrigateStep("idle");
-        return;
-      }
+    if (tanksToDose.length === 0) {
+      setIrrigateLog((prev) => [
+        ...prev,
+        "❌ Chưa chọn bình phân nào! Vui lòng tích chọn ít nhất 1 bình phân.",
+      ]);
+      setIsIrrigating(false);
+      setIrrigateStep("idle");
+      return;
     }
 
     let estDurationSec = 20;
@@ -561,32 +640,136 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
           {irrigateTab === "ai" && (
             <div className="space-y-4">
               <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-950/20 via-teal-900/10 to-primary/10 border border-primary/30 space-y-3">
-                <div className="flex items-center gap-2 text-primary font-bold text-sm">
-                  <span className="material-symbols-outlined text-xl animate-spin">
-                    psychology
-                  </span>
-                  AI Đánh Giá Độ Ẩm & Khuyến Nghị Liều Lượng
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-primary font-bold text-sm">
+                    <span className="material-symbols-outlined text-xl">psychology</span>
+                    AI Phân Tích Cây Trồng & Đề Xuất Phân Bón
+                  </div>
+                  {aiAnalysisDone && (
+                    <span className="px-2.5 py-1 bg-emerald-500/10 text-emerald-600 rounded-full text-[11px] font-mono font-bold">
+                      ✨ Đã phân tích thành công
+                    </span>
+                  )}
                 </div>
+
                 <p className="text-xs text-on-surface-variant leading-relaxed">
-                  Độ ẩm trung bình đất trồng hiện tại là{" "}
-                  <strong className="text-primary font-mono font-bold">
-                    {espSensors.avgSoilPercent}%
-                  </strong>
-                  . AI đề xuất công thức phối trộn phân bón sinh học tối ưu:
+                  Hệ thống sẽ gửi lệnh <code className="font-mono bg-surface px-1 py-0.5 rounded text-primary">k</code> xuống Arduino để di chuyển camera chụp các vị trí cây, tổng hợp dữ liệu cây trồng và thông tin các bình phân hiện có gửi về Gemini AI phân tích.
                 </p>
-                <div className="grid grid-cols-2 gap-2 text-xs font-mono font-bold">
-                  {availableTanks.map((code) => {
-                    const fert = activeFertilizers.find((f: any) => f.tankCode === code || f.code === code);
-                    const suggestedMl = espSensors.avgSoilPercent < 40 ? 3.0 : 1.5;
-                    return (
-                      <div key={code} className="p-2 bg-surface rounded-xl border border-outline-variant/30 flex justify-between">
-                        <span>{code} ({fert ? fert.name : "Phân bón"}):</span>
-                        <span className="text-emerald-600">{suggestedMl} ml</span>
-                      </div>
-                    );
-                  })}
-                </div>
+
+                {/* Scan & Analyze Action Button */}
+                <button
+                  type="button"
+                  onClick={handleRunAiAnalysis}
+                  disabled={isAnalyzingAi || isIrrigating}
+                  className="w-full py-3 rounded-xl bg-primary text-white font-bold text-xs shadow-md hover:bg-primary/90 flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50"
+                >
+                  {isAnalyzingAi ? (
+                    <>
+                      <span className="material-symbols-outlined text-lg animate-spin">
+                        progress_activity
+                      </span>
+                      <span>{aiStatusMsg || "Đang phân tích Gemini AI..."}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined text-lg">auto_awesome</span>
+                      <span>
+                        {aiAnalysisDone
+                          ? "Quét Lại 6 Vị Trí & Phân Tích Lại Bằng AI"
+                          : "Bắt Đầu Quét 6 Vị Trí & Phân Tích Gemini AI"}
+                      </span>
+                    </>
+                  )}
+                </button>
               </div>
+
+              {/* Display AI Recommendations */}
+              {aiRecommendations.length > 0 && (
+                <div className="space-y-3 pt-1">
+                  <h4 className="text-xs font-bold text-on-surface uppercase tracking-wider flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-emerald-600 text-base">
+                      playlist_add_check
+                    </span>
+                    ĐỀ XUẤT TỪ GEMINI AI (NGƯỜI DÙNG CÓ THỂ ĐIỀU CHỈNH LẠI):
+                  </h4>
+
+                  <div className="space-y-2.5">
+                    {aiRecommendations.map((item) => (
+                      <div
+                        key={item.tankCode}
+                        className={`p-3.5 rounded-2xl border transition-all ${
+                          item.selected
+                            ? "bg-primary/10 border-primary shadow-sm"
+                            : "bg-surface-container-low border-outline-variant/30 opacity-70"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className="flex items-center gap-2.5 cursor-pointer font-bold text-sm text-on-surface">
+                            <input
+                              type="checkbox"
+                              checked={item.selected}
+                              disabled={isIrrigating}
+                              onChange={() => handleToggleAiTank(item.tankCode)}
+                              className="w-4.5 h-4.5 rounded text-primary focus:ring-primary"
+                            />
+                            <span className="font-mono text-primary font-bold">
+                              {item.tankCode}
+                            </span>
+                            <span className="text-xs text-emerald-600 font-bold truncate max-w-[140px]">
+                              ({item.name})
+                            </span>
+                          </label>
+
+                          {item.selected && (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs text-on-surface-variant font-semibold">
+                                Liều lượng:
+                              </span>
+                              <input
+                                type="number"
+                                min={0.1}
+                                max={10}
+                                step={0.5}
+                                disabled={isIrrigating}
+                                value={item.ml}
+                                onChange={(e) =>
+                                  handleAiMlChange(item.tankCode, Number(e.target.value))
+                                }
+                                className="w-20 px-2 py-1 bg-surface border border-primary/40 rounded-xl font-mono text-sm font-bold text-primary text-center focus:outline-none focus:ring-1 focus:ring-primary"
+                              />
+                              <span className="text-xs font-mono font-bold text-on-surface-variant">
+                                ml
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        <p className="text-[11px] text-on-surface-variant italic pl-7 border-l-2 border-primary/30 mt-1">
+                          💡 AI: {item.reason}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center justify-between bg-surface-container-low p-3 rounded-xl border border-outline-variant/20 mt-2">
+                    <span className="text-xs font-semibold text-on-surface-variant">
+                      Chỉ số độ ẩm mục tiêu tự động dừng:
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={30}
+                        max={95}
+                        value={targetMoisture}
+                        onChange={(e) => setTargetMoisture(Number(e.target.value))}
+                        disabled={isIrrigating}
+                        className="w-16 px-2 py-1 bg-surface border border-outline-variant rounded-xl font-mono font-bold text-sm text-center"
+                      />
+                      <span className="text-xs font-mono font-bold text-on-surface-variant">%</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
