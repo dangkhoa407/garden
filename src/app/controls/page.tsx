@@ -280,7 +280,7 @@ export default function ControlsPage() {
               <span className="material-symbols-outlined text-lg text-emerald-600 animate-pulse">
                 sensors
               </span>
-              <span>((•)) CẢM BIẾN THỜI GIAN THỰC (ESP32):</span>
+              <span>DỮ LIỆU VƯỜN RAU:</span>
             </div>
             <div className="text-emerald-700 font-bold text-sm">
               Độ ẩm trung bình: <span className="text-emerald-800 text-base font-extrabold">{esp32Sensors.avgMoisture}%</span>
