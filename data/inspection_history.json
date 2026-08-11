@@ -1,13 +1,13 @@
 [
   {
-    "id": "insp-1786416257097",
-    "plantId": "plant-1786414787818",
+    "id": "insp-1786416897977",
+    "plantId": "plant-1",
     "type": "PEST",
-    "timestamp": "09:44:17 11/8/2026",
+    "timestamp": "09:54:57 11/8/2026",
     "title": "Kiểm tra sâu hại - test",
-    "detail": "KẾT QUẢ KIỂM TRA TẠI KHAY 02\nCây: test\nTình trạng: KHÔNG PHÁT HIỆN SÂU HẠI (HEALTHY)\nMô tả chi tiết: Thân và lá phát triển khỏe mạnh. Diệp lục 90%.\nKhuyến nghị: Tiếp tục theo dõi định kỳ.\nThời gian kiểm tra: 09:44:17 11/8/2026",
-    "telegramCaption": "🐛 KIỂM TRA SÂU BỆNH - KHAY 02\n🌱 Cây: test\n\nKẾT QUẢ KIỂM TRA TẠI KHAY 02\nCây: test\nTình trạng: KHÔNG PHÁT HIỆN SÂU HẠI (HEALTHY)\nMô tả chi tiết: Thân và lá phát triển khỏe mạnh. Diệp lục 90%.\nKhuyến nghị: Tiếp tục theo dõi định kỳ.\nThời gian kiểm tra: 09:44:17 11/8/2026",
-    "status": "Phát hiện sâu hại",
-    "image": "/api/camera/image?t=1786416257097"
+    "detail": "KẾT QUẢ KIỂM TRA TẠI KHAY 02\nTình trạng: Sức khỏe tốt\nMô tả chi tiết: Hình ảnh hiển thị giao diện kiểm tra dạng đồ họa trừu tượng (vùng hiển thị hệ thống), không chứa hình ảnh cây trồng thực tế. Do đó không phát hiện dấu hiệu sâu bệnh, diệp lục và bề mặt lá bình thường.\nKhuyến nghị: Tiếp tục theo dõi và kiểm tra lại khi hệ thống camera truyền tải hình ảnh thực tế của cây trồng.\nThời gian kiểm tra: 09:54:54 11/8/2026",
+    "telegramCaption": "🐛 KIỂM TRA SÂU BỆNH - KHAY 02\n🌱 Cây: test\n\nKẾT QUẢ KIỂM TRA TẠI KHAY 02\nTình trạng: Sức khỏe tốt\nMô tả chi tiết: Hình ảnh hiển thị giao diện kiểm tra dạng đồ họa trừu tượng (vùng hiển thị hệ thống), không chứa hình ảnh cây trồng thực tế. Do đó không phát hiện dấu hiệu sâu bệnh, diệp lục và bề mặt lá bình thường.\nKhuyến nghị: Tiếp tục theo dõi và kiểm tra lại khi hệ thống camera truyền tải hình ảnh thực tế của cây trồng.\nThời gian kiểm tra: 09:54:54 11/8/2026",
+    "status": "Sức khỏe tốt",
+    "image": "/api/camera/image?t=1786416897977"
   }
 ]

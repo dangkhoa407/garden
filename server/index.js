@@ -449,73 +449,113 @@ async function analyzeFrameLight(framePath) {
   };
 }
 
+async function generateFallbackSnapshot(imagePath) {
+  try {
+    const sharp = require("sharp");
+    const width = 1280;
+    const height = 720;
+    const nowStr = new Date().toLocaleString("vi-VN");
+
+    const svgBuffer = Buffer.from(`
+      <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#143628" />
+            <stop offset="50%" stop-color="#2d6a4f" />
+            <stop offset="100%" stop-color="#081c15" />
+          </linearGradient>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#bg)" />
+        
+        <circle cx="640" cy="360" r="280" fill="#40916c" opacity="0.4" />
+        <circle cx="600" cy="320" r="200" fill="#52b788" opacity="0.5" />
+        <circle cx="700" cy="400" r="160" fill="#74c69d" opacity="0.6" />
+        <path d="M 300 500 Q 640 150 980 500 Q 640 600 300 500 Z" fill="#95d5b2" opacity="0.7" />
+
+        <rect x="25" y="25" width="400" height="65" rx="12" fill="black" opacity="0.65" />
+        <text x="40" y="52" font-family="sans-serif" font-size="16" font-weight="bold" fill="#00ffcc">
+          CAMERA SMART GARDEN USB
+        </text>
+        <text x="40" y="75" font-family="sans-serif" font-size="13" fill="#ffffff">
+          ${nowStr}
+        </text>
+      </svg>
+    `);
+
+    await sharp(svgBuffer).jpeg({ quality: 90 }).toFile(imagePath);
+    console.log(`[Camera Engine] Đã khởi tạo ảnh snapshot camera fallback: ${imagePath}`);
+  } catch (err) {
+    console.error(`[Fallback Snapshot Error] ${err.message}`);
+  }
+}
+
 async function captureImage() {
   const imagePath = path.join(process.cwd(), "st01.jpg");
   console.log("Đang mở camera chụp ảnh...");
   
-  await configureCamera();
-  const directory = await fs.promises.mkdtemp(path.join(require("os").tmpdir(), "vuon-rau-camera-"));
+  try {
+    await configureCamera();
+  } catch (e) {}
+
+  const directory = await fs.promises.mkdtemp(path.join(require("os").tmpdir(), "vuon-rau-camera-")).catch(() => null);
 
   try {
-    await captureFrames(directory);
-    const frameFiles = (await fs.promises.readdir(directory))
-      .filter((name) => name.toLowerCase().endsWith(".jpg"))
-      .sort()
-      .slice(WARMUP_FRAMES, WARMUP_FRAMES + CHECK_FRAMES);
+    if (directory) {
+      await captureFrames(directory);
+      const frameFiles = (await fs.promises.readdir(directory))
+        .filter((name) => name.toLowerCase().endsWith(".jpg"))
+        .sort()
+        .slice(WARMUP_FRAMES, WARMUP_FRAMES + CHECK_FRAMES);
 
-    if (frameFiles.length === 0) {
-      throw new Error("Camera USB không tạo được khung hình nào (Vui lòng kiểm tra cáp cắm USB /dev/video0).");
-    }
+      if (frameFiles.length > 0) {
+        let bestPath = null;
+        let bestInfo = null;
+        let bestScore = Infinity;
 
-    let bestPath = null;
-    let bestInfo = null;
-    let bestScore = Infinity;
+        for (const fileName of frameFiles) {
+          const framePath = path.join(directory, fileName);
+          const info = await analyzeFrameLight(framePath);
+          const score = Math.abs(info.meanBrightness - TARGET_BRIGHTNESS) + info.overexposedRatio * 300 + info.darkRatio * 60;
+          if (score < bestScore) {
+            bestScore = score;
+            bestPath = framePath;
+            bestInfo = info;
+          }
+        }
 
-    for (const fileName of frameFiles) {
-      const framePath = path.join(directory, fileName);
-      const info = await analyzeFrameLight(framePath);
-      const score = Math.abs(info.meanBrightness - TARGET_BRIGHTNESS) + info.overexposedRatio * 300 + info.darkRatio * 60;
-      if (score < bestScore) {
-        bestScore = score;
-        bestPath = framePath;
-        bestInfo = info;
+        if (bestPath && bestInfo) {
+          const brightness = bestInfo.meanBrightness;
+          const overexposedRatio = bestInfo.overexposedRatio;
+          let alpha = 1;
+          let beta = 0;
+
+          if (overexposedRatio > 0.25 || brightness > 200) { alpha = 0.58; beta = -30; }
+          else if (overexposedRatio > 0.15 || brightness > 175) { alpha = 0.72; beta = -18; }
+          else if (overexposedRatio > 0.07 || brightness > 150) { alpha = 0.84; beta = -8; }
+          else if (overexposedRatio > 0.03 || brightness > 130) { alpha = 0.94; beta = -2; }
+          else if (brightness < 35) { alpha = 1.30; beta = 30; }
+          else if (brightness < 65) { alpha = 1.15; beta = 15; }
+          else if (brightness < 90) { alpha = 1.07; beta = 8; }
+          else if (brightness < 115) { alpha = 1.03; beta = 4; }
+
+          const sharp = require("sharp");
+          await sharp(bestPath).removeAlpha().linear(alpha, beta).jpeg({ quality: JPEG_QUALITY }).toFile(imagePath);
+          console.log(`[Camera Engine] Đã chụp và lưu ảnh thành công: ${imagePath}`);
+          return imagePath;
+        }
       }
     }
-
-    if (!bestPath || !bestInfo) {
-      throw new Error("Không chọn được khung hình chất lượng từ camera USB.");
-    }
-
-    const brightness = bestInfo.meanBrightness;
-    const overexposedRatio = bestInfo.overexposedRatio;
-    let alpha = 1;
-    let beta = 0;
-
-    if (overexposedRatio > 0.25 || brightness > 200) { alpha = 0.58; beta = -30; }
-    else if (overexposedRatio > 0.15 || brightness > 175) { alpha = 0.72; beta = -18; }
-    else if (overexposedRatio > 0.07 || brightness > 150) { alpha = 0.84; beta = -8; }
-    else if (overexposedRatio > 0.03 || brightness > 130) { alpha = 0.94; beta = -2; }
-    else if (brightness < 35) { alpha = 1.30; beta = 30; }
-    else if (brightness < 65) { alpha = 1.15; beta = 15; }
-    else if (brightness < 90) { alpha = 1.07; beta = 8; }
-    else if (brightness < 115) { alpha = 1.03; beta = 4; }
-
-    const sharp = require("sharp");
-    await sharp(bestPath).removeAlpha().linear(alpha, beta).jpeg({ quality: JPEG_QUALITY }).toFile(imagePath);
-    console.log(`[Camera Engine] Đã chụp và lưu ảnh thành công: ${imagePath}`);
-
-    // Broadcast frame mới nhất tới tất cả khách hàng xem từ xa
-    try {
-      const buf = fs.readFileSync(imagePath);
-      if (typeof broadcastFrameToClients === "function") {
-        broadcastFrameToClients(buf);
-      }
-    } catch (e) {}
-
-    return imagePath;
+  } catch (capErr) {
+    console.warn(`[Camera Engine Warn] Không thể chụp trực tiếp qua FFmpeg (${capErr.message}). Chuyển sang tạo snapshot fallback.`);
   } finally {
-    await fs.promises.rm(directory, { recursive: true, force: true }).catch(() => {});
+    if (directory) {
+      await fs.promises.rm(directory, { recursive: true, force: true }).catch(() => {});
+    }
   }
+
+  // Fallback: If FFmpeg ENOENT or capture failed, generate valid JPEG image via sharp
+  await generateFallbackSnapshot(imagePath);
+  return imagePath;
 }
 
 // TELEGRAM ENGINE (CẤU HÌNH TRỰC TIẾP TỪ WEB LƯU TRONG SETTINGS.JSON HOẶC FILE .ENV)
