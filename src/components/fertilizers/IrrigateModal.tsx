@@ -53,6 +53,14 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
     "Bình D": { selected: false, ml: 2.0 },
   });
 
+  // AI Scan & Analysis State
+  const [isAnalyzingAi, setIsAnalyzingAi] = useState(false);
+  const [aiAnalysisDone, setAiAnalysisDone] = useState(false);
+  const [aiStatusMsg, setAiStatusMsg] = useState("");
+  const [aiRecommendations, setAiRecommendations] = useState<
+    { tankCode: string; name: string; ml: number; reason: string; selected: boolean }[]
+  >([]);
+
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -124,14 +132,6 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
       },
     }));
   };
-
-  // AI Scan & Analysis State
-  const [isAnalyzingAi, setIsAnalyzingAi] = useState(false);
-  const [aiAnalysisDone, setAiAnalysisDone] = useState(false);
-  const [aiStatusMsg, setAiStatusMsg] = useState("");
-  const [aiRecommendations, setAiRecommendations] = useState<
-    { tankCode: string; name: string; ml: number; reason: string; selected: boolean }[]
-  >([]);
 
   const handleRunAiAnalysis = async () => {
     setIsAnalyzingAi(true);
