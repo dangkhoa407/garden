@@ -1,24 +1,13 @@
 [
   {
-    "id": "insp-1786416025811",
-    "plantId": "plant-1",
+    "id": "insp-1786416257097",
+    "plantId": "plant-1786414787818",
     "type": "PEST",
-    "timestamp": "09:40:25 11/8/2026",
+    "timestamp": "09:44:17 11/8/2026",
     "title": "Kiểm tra sâu hại - test",
-    "detail": "KẾT QUẢ KIỂM TRA TẠI KHAY 02\nCây: test\nTình trạng: KHÔNG PHÁT HIỆN SÂU HẠI (HEALTHY)\nMô tả chi tiết: Thân và lá phát triển khỏe mạnh. Diệp lục 90%.\nKhuyến nghị: Tiếp tục theo dõi định kỳ.\nThời gian kiểm tra: 09:40:25 11/8/2026",
-    "telegramCaption": "🐛 KIỂM TRA SÂU BỆNH - KHAY 02\n🌱 Cây: test\n\nKẾT QUẢ KIỂM TRA TẠI KHAY 02\nCây: test\nTình trạng: KHÔNG PHÁT HIỆN SÂU HẠI (HEALTHY)\nMô tả chi tiết: Thân và lá phát triển khỏe mạnh. Diệp lục 90%.\nKhuyến nghị: Tiếp tục theo dõi định kỳ.\nThời gian kiểm tra: 09:40:25 11/8/2026",
+    "detail": "KẾT QUẢ KIỂM TRA TẠI KHAY 02\nCây: test\nTình trạng: KHÔNG PHÁT HIỆN SÂU HẠI (HEALTHY)\nMô tả chi tiết: Thân và lá phát triển khỏe mạnh. Diệp lục 90%.\nKhuyến nghị: Tiếp tục theo dõi định kỳ.\nThời gian kiểm tra: 09:44:17 11/8/2026",
+    "telegramCaption": "🐛 KIỂM TRA SÂU BỆNH - KHAY 02\n🌱 Cây: test\n\nKẾT QUẢ KIỂM TRA TẠI KHAY 02\nCây: test\nTình trạng: KHÔNG PHÁT HIỆN SÂU HẠI (HEALTHY)\nMô tả chi tiết: Thân và lá phát triển khỏe mạnh. Diệp lục 90%.\nKhuyến nghị: Tiếp tục theo dõi định kỳ.\nThời gian kiểm tra: 09:44:17 11/8/2026",
     "status": "Phát hiện sâu hại",
-    "image": "/api/camera/image?t=1786416025811"
-  },
-  {
-    "id": "insp-real-101",
-    "type": "PEST",
-    "timestamp": "11/08/2026 08:30:15",
-    "pointIndex": 1,
-    "title": "ĐIỂM KIỂM TRA 1",
-    "detail": "KẾT QUẢ KIỂM TRA:\nTình trạng: KHÔNG PHÁT HIỆN SÂU HẠI (HEALTHY)\nMô tả chi tiết: Thân và lá cây phát triển bình thường, diệp lục ổn định. Mật độ lá phủ đều, không phát hiện trứng sâu hay bọ trĩ.\nKhuyến nghị: Duy trì chế độ tưới phân vi lượng và phun sinh học định kỳ.\nThời gian kiểm tra: 11/08/2026 08:30:15",
-    "telegramCaption": "ĐIỂM KIỂM TRA 1\n\nKẾT QUẢ KIỂM TRA:\nTình trạng: KHÔNG PHÁT HIỆN SÂU HẠI (HEALTHY)\nMô tả chi tiết: Thân và lá cây phát triển bình thường, diệp lục ổn định. Mật độ lá phủ đều, không phát hiện trứng sâu hay bọ trĩ.\nKhuyến nghị: Duy trì chế độ tưới phân vi lượng và phun sinh học định kỳ.",
-    "status": "Sức khỏe tốt",
-    "image": "/api/camera/image"
+    "image": "/api/camera/image?t=1786416257097"
   }
 ]

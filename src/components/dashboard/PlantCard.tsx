@@ -40,10 +40,21 @@ export function PlantCard({ plant, onObserve, onWater, onHistory }: PlantCardPro
   const handleObserveClick = async () => {
     setActionLoading("observe");
     try {
+      // 1. Kiểm tra kết nối Arduino thực tế
+      const arduinoRes = await fetch("/api/arduino/status")
+        .then((r) => r.json())
+        .catch(() => ({ connected: false }));
+
+      if (arduinoRes && !arduinoRes.connected) {
+        triggerQuickAction(
+          `❌ Lỗi kết nối phần cứng: Chưa nhận diện mạch Arduino trên cổng Serial/USB! Không thể di chuyển robot tới ${displayLocation}.`
+        );
+        return;
+      }
+
       if (onObserve) {
         onObserve(plant);
       } else {
-        // Send command to Arduino to move camera to tray
         await fetch("/api/arduino/command", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -53,18 +64,36 @@ export function PlantCard({ plant, onObserve, onWater, onHistory }: PlantCardPro
           `🔍 Đang di chuyển camera robot tới ${displayLocation} để quan sát cây ${plant.name}...`
         );
       }
+    } catch (e) {
+      triggerQuickAction(`❌ Lỗi hệ thống khi kết nối thiết bị quan sát tại ${displayLocation}`);
     } finally {
-      setTimeout(() => setActionLoading(null), 1200);
+      setTimeout(() => setActionLoading(null), 1000);
     }
   };
 
   const handleInspectClick = async () => {
     setActionLoading("inspect");
-    triggerQuickAction(
-      `🐛 Đang điều khiển Robot di chuyển tới ${displayLocation} để kiểm tra sâu bệnh trên cây ${plant.name}...`
-    );
-
     try {
+      // 1. Kiểm tra kết nối Arduino và USB Camera
+      const [arduinoRes, cameraRes] = await Promise.all([
+        fetch("/api/arduino/status").then((r) => r.json()).catch(() => ({ connected: false })),
+        fetch("/api/camera/status").then((r) => r.json()).catch(() => ({ connected: false })),
+      ]);
+
+      if (!arduinoRes?.connected || !cameraRes?.connected) {
+        const missing = [];
+        if (!arduinoRes?.connected) missing.push("Arduino");
+        if (!cameraRes?.connected) missing.push("USB Camera");
+        triggerQuickAction(
+          `❌ Lỗi kết nối phần cứng (${missing.join(" & ")} chưa cắm/kết nối)! Không thể quét sâu bệnh cho ${plant.name}.`
+        );
+        return;
+      }
+
+      triggerQuickAction(
+        `🐛 Đang điều khiển Robot di chuyển tới ${displayLocation} để kiểm tra sâu bệnh trên cây ${plant.name}...`
+      );
+
       const res = await fetch("/api/plant-inspect", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -79,25 +108,39 @@ export function PlantCard({ plant, onObserve, onWater, onHistory }: PlantCardPro
         triggerQuickAction(
           `✅ Đã quét xong sâu bệnh cho cây ${plant.name}! Ảnh & báo cáo đã được lưu vào Lịch sử và gửi về Telegram.`
         );
+        setShowHistoryModal(true);
       } else {
-        triggerQuickAction(`⚠️ Không thể kết nối quét sâu bệnh cho ${plant.name}`);
+        const json = await res.json().catch(() => ({}));
+        triggerQuickAction(
+          `❌ Lỗi kiểm tra sâu cho ${plant.name}: ${json.error || "Không có phản hồi từ mạch phần cứng"}`
+        );
       }
     } catch (e) {
-      triggerQuickAction(`⚠️ Lỗi khi kích hoạt kiểm tra sâu cho ${plant.name}`);
+      triggerQuickAction(`❌ Lỗi kết nối phần cứng khi kiểm tra sâu cho ${plant.name}`);
     } finally {
       setActionLoading(null);
-      // Open history modal to display the freshly captured image & AI report
-      setShowHistoryModal(true);
     }
   };
 
   const handleFertilizeClick = async () => {
     setActionLoading("water");
     try {
+      // 1. Kiểm tra kết nối ESP32 và Arduino
+      const [espRes, ardRes] = await Promise.all([
+        fetch("/api/esp32/status").then((r) => r.json()).catch(() => ({ connected: false })),
+        fetch("/api/arduino/status").then((r) => r.json()).catch(() => ({ connected: false })),
+      ]);
+
+      if (!espRes?.connected && !ardRes?.connected) {
+        triggerQuickAction(
+          `❌ Lỗi kết nối phần cứng: Chưa nhận diện mạch ESP32 hoặc Arduino! Không thể kích hoạt bơm tưới phân cho ${plant.name}.`
+        );
+        return;
+      }
+
       if (onWater) {
         onWater(plant);
       } else {
-        // 1. Gửi lệnh di chuyển robot tới vị trí khay cây trồng được chọn qua Arduino
         triggerQuickAction(
           `🤖 Robot đang di chuyển tới ${displayLocation} để tiến hành tưới phân...`
         );
@@ -108,10 +151,8 @@ export function PlantCard({ plant, onObserve, onWater, onHistory }: PlantCardPro
           body: JSON.stringify({ command: "CHECK" }),
         }).catch(() => {});
 
-        // Đợi 1.5s để robot di chuyển đến khay
         await new Promise((res) => setTimeout(res, 1500));
 
-        // 2. Kích hoạt bơm tưới phân (Gửi SPRAY cho Arduino & WATER ON cho ESP32)
         await fetch("/api/arduino/command", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -133,7 +174,6 @@ export function PlantCard({ plant, onObserve, onWater, onHistory }: PlantCardPro
           `🌱 Robot đã tới ${displayLocation} và kích hoạt tưới phân thành công cho cây ${plant.name}!`
         );
 
-        // 3. Tự động ngắt bơm tưới sau 5s
         setTimeout(async () => {
           await fetch("/api/esp32/command", {
             method: "POST",
@@ -143,8 +183,10 @@ export function PlantCard({ plant, onObserve, onWater, onHistory }: PlantCardPro
           updateControls({ watering: false });
         }, 5000);
       }
+    } catch (e) {
+      triggerQuickAction(`❌ Lỗi phần cứng khi tưới phân cho ${plant.name}`);
     } finally {
-      setTimeout(() => setActionLoading(null), 1200);
+      setTimeout(() => setActionLoading(null), 1000);
     }
   };
 
@@ -198,7 +240,7 @@ export function PlantCard({ plant, onObserve, onWater, onHistory }: PlantCardPro
             onClick={handleObserveClick}
             disabled={actionLoading === "observe"}
             className="py-2 px-2.5 bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/40 dark:hover:bg-sky-900/60 text-sky-700 dark:text-sky-300 border border-sky-200/80 dark:border-sky-800/80 rounded-xl font-bold text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
-            title="Di chuyển camera robot tới khay này để quan sát trực tiếp"
+            title="Di chuyển camera robot tới khay này để quan sát trực tiếp (yêu cầu kết nối Arduino)"
           >
             {actionLoading === "observe" ? (
               <span className="material-symbols-outlined text-sm animate-spin">
@@ -215,7 +257,7 @@ export function PlantCard({ plant, onObserve, onWater, onHistory }: PlantCardPro
             onClick={handleInspectClick}
             disabled={actionLoading === "inspect"}
             className="py-2 px-2.5 bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/40 dark:hover:bg-teal-900/60 text-teal-700 dark:text-teal-300 border border-teal-200/80 dark:border-teal-800/80 rounded-xl font-bold text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
-            title="Chụp ảnh & quét sâu bệnh qua AI Gemini tại vị trí cây này"
+            title="Chụp ảnh & quét sâu bệnh qua AI Gemini tại vị trí cây này (yêu cầu Arduino & USB Camera)"
           >
             {actionLoading === "inspect" ? (
               <span className="material-symbols-outlined text-sm animate-spin">
@@ -232,7 +274,7 @@ export function PlantCard({ plant, onObserve, onWater, onHistory }: PlantCardPro
             onClick={handleFertilizeClick}
             disabled={actionLoading === "water"}
             className="py-2 px-2.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/80 rounded-xl font-bold text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
-            title="Điều khiển robot tới khay này để tiến hành tưới phân bón"
+            title="Điều khiển robot tới khay này để tiến hành tưới phân bón (yêu cầu ESP32/Arduino)"
           >
             {actionLoading === "water" ? (
               <span className="material-symbols-outlined text-sm animate-spin">

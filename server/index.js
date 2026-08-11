@@ -2872,6 +2872,15 @@ app.post("/api/plant-inspect", async (req, res) => {
     const { plantId, plantName, location } = req.body;
     const trayName = location || "Khay 01";
 
+    const arduinoStatus = await getRealSerialStatus();
+    if (!arduinoStatus.connected && process.platform === "linux") {
+      pushWebNotification(`❌ Lỗi kết nối phần cứng: Mạch Arduino chưa được cắm vào cổng USB/Serial!`, "ALERT");
+      return res.status(400).json({
+        success: false,
+        error: "Mạch Arduino chưa được kết nối với hệ thống! Vui lòng cắm cáp USB Arduino.",
+      });
+    }
+
     pushWebNotification(`🐛 Đang điều khiển Robot di chuyển tới ${trayName} để kiểm tra sâu bệnh trên cây ${plantName || ""}...`, "AI_ANALYSIS");
 
     // 1. Send command to Arduino to move camera to tray/point
