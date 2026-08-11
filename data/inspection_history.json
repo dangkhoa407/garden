@@ -1,5 +1,25 @@
 [
   {
+    "id": "insp-1786417053470",
+    "type": "PEST",
+    "timestamp": "09:57:33 11/8/2026",
+    "title": "Quét Camera Serial Arduino",
+    "detail": "Chưa thiết lập Gemini API Key! Vui lòng vào trang 'Cấu hình API' trên Web để thêm chìa khóa Gemini.",
+    "telegramCaption": "📸 ĐIỂM QUÉT CAMERA KẾT NỐI ARDUINO\n\nChưa thiết lập Gemini API Key! Vui lòng vào trang 'Cấu hình API' trên Web để thêm chìa khóa Gemini.",
+    "status": "Sức khỏe tốt",
+    "image": "/api/camera/image?t=1786417053470"
+  },
+  {
+    "id": "insp-1786417014430",
+    "type": "PEST",
+    "timestamp": "09:56:54 11/8/2026",
+    "title": "Quét Camera Serial Arduino",
+    "detail": "Chưa thiết lập Gemini API Key! Vui lòng vào trang 'Cấu hình API' trên Web để thêm chìa khóa Gemini.",
+    "telegramCaption": "📸 ĐIỂM QUÉT CAMERA KẾT NỐI ARDUINO\n\nChưa thiết lập Gemini API Key! Vui lòng vào trang 'Cấu hình API' trên Web để thêm chìa khóa Gemini.",
+    "status": "Sức khỏe tốt",
+    "image": "/api/camera/image?t=1786417014430"
+  },
+  {
     "id": "insp-1786416897977",
     "plantId": "plant-1",
     "type": "PEST",

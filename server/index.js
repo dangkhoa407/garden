@@ -832,7 +832,9 @@ async function getOrInitArduinoSerialPort() {
                   }
                 }
               } catch (aiErr) {
+                console.error(`[Serial Gemini AI Error] ${aiErr.message}`);
                 formattedResult = `Lỗi phân tích Gemini AI: ${aiErr.message}`;
+                pushWebNotification(`❌ Lỗi gọi Gemini AI API: ${aiErr.message}`, "ALERT");
               }
             }
 
@@ -847,10 +849,10 @@ async function getOrInitArduinoSerialPort() {
             if (action === "SPRAY" && activeSerialPort && activeSerialPort.isOpen) {
               activeSerialPort.write("SPRAY\n");
               console.log("[Server -> Arduino Serial] SPRAY (Kích hoạt bơm phun thuốc)");
-              pushWebNotification("🚨 AI phát hiện sâu bệnh! Đã gửi lệnh SPRAY tới Arduino bật bơm 1.5s.", "WARNING");
+              pushWebNotification("🚨 Gemini AI phát hiện sâu bệnh! Đã gửi lệnh SPRAY tới Arduino bật bơm 1.5s.", "WARNING");
             } else {
-              console.log("[Server -> Arduino Serial] NO_SPRAY (Sức khỏe cây tốt)");
-              pushWebNotification("🌿 Cây phát triển khỏe mạnh! Không cần phun thuốc.", "SUCCESS");
+              console.log("[Server -> Arduino Serial] NO_SPRAY");
+              pushWebNotification("🌿 Gemini AI: Không phát hiện sâu bệnh trên lá.", "SUCCESS");
             }
 
             // Save history
@@ -3160,47 +3162,68 @@ app.post("/api/plant-inspect", async (req, res) => {
     let formattedResult = "";
     const keys = getKeysList();
     if (keys.length === 0) {
-      formattedResult = `KẾT QUẢ KIỂM TRA TẠI ${trayName.toUpperCase()}\nCây: ${plantName || "Cây trồng"}\nTình trạng: KHÔNG PHÁT HIỆN SÂU HẠI (HEALTHY)\nMô tả chi tiết: Thân và lá phát triển khỏe mạnh, diệp lục đồng đều. Không có dấu hiệu bọ trĩ hay nấm mốc.\nKhuyến nghị: Duy trì tưới phân sinh học theo lịch trình.\nThời gian kiểm tra: ${new Date().toLocaleString("vi-VN")}`;
-    } else {
-      let imageBase64 = null;
-      if (imagePathToSend && fs.existsSync(imagePathToSend)) {
-        try {
-          const imgBuf = fs.readFileSync(imagePathToSend);
-          imageBase64 = imgBuf.toString("base64");
-        } catch (e) {}
-      }
+      pushWebNotification(`❌ Chưa thiết lập Gemini API Key! Vui lòng vào trang 'Cấu hình API' để nhập Key trước khi quét sâu.`, "ALERT");
+      return res.status(400).json({
+        success: false,
+        error: "Chưa cấu hình Gemini API Key! Vui lòng vào trang Cấu hình API trên Web để nhập chìa khóa Gemini.",
+      });
+    }
 
-      const promptText = `Bạn là chuyên gia nông nghiệp thông minh. Hãy phân tích hình ảnh cây ${plantName || "trồng"} tại vị trí ${trayName}. Phát hiện sâu hại, bệnh hại lá (bọ trĩ, nhện đỏ, nấm mốc, đốm lá). Đưa ra câu trả lời tiếng Việt ngắn gọn theo định dạng:
+    let imageBase64 = null;
+    if (imagePathToSend && fs.existsSync(imagePathToSend)) {
+      try {
+        const imgBuf = fs.readFileSync(imagePathToSend);
+        imageBase64 = imgBuf.toString("base64");
+      } catch (e) {}
+    }
+
+    const promptText = `Bạn là chuyên gia nông nghiệp thông minh. Hãy phân tích hình ảnh cây ${plantName || "trồng"} tại vị trí ${trayName}. Phát hiện sâu hại, bệnh hại lá (bọ trĩ, nhện đỏ, nấm mốc, đốm lá). Đưa ra câu trả lời tiếng Việt ngắn gọn theo định dạng:
 KẾT QUẢ KIỂM TRA TẠI ${trayName.toUpperCase()}
-Tình trạng: [Sức khỏe tốt / Có sâu hại / Cần phun thuốc]
-Mô tả chi tiết: [Mô tả diệp lục, bề mặt lá]
-Khuyến nghị: [Hướng xử lý]
+Tình trạng: [SÂU / BỆNH / SÂU VÀ BỆNH / KHÔNG PHÁT HIỆN SÂU VÀ BỆNH]
+Mô tả chi tiết: [Mô tả diệp lục, bề mặt lá và dấu hiệu bệnh thực tế trên ảnh]
+Khuyến nghị: [Hướng xử lý cụ thể]
 Thời gian kiểm tra: ${new Date().toLocaleString("vi-VN")}`;
 
-      const payload = {
-        contents: [
-          {
-            parts: [
-              ...(imageBase64 ? [{ inlineData: { mimeType: "image/jpeg", data: imageBase64 } }] : []),
-              { text: promptText }
-            ]
-          }
-        ]
-      };
-
-      try {
-        const aiResult = await callGeminiApiWithRotation(payload);
-        if (aiResult && aiResult.text) {
-          try {
-            const parsed = parseGeminiResult(aiResult.text);
-            formattedResult = formatGeminiResult(parsed);
-          } catch (pErr) {
-            formattedResult = aiResult.text;
-          }
+    const payload = {
+      contents: [
+        {
+          parts: [
+            ...(imageBase64 ? [{ inlineData: { mimeType: "image/jpeg", data: imageBase64 } }] : []),
+            { text: promptText }
+          ]
         }
-      } catch (aiErr) {
-        formattedResult = `KẾT QUẢ KIỂM TRA TẠI ${trayName.toUpperCase()}\nCây: ${plantName || "Cây trồng"}\nTình trạng: KHÔNG PHÁT HIỆN SÂU HẠI (HEALTHY)\nMô tả chi tiết: Thân và lá phát triển khỏe mạnh. Diệp lục 90%.\nKhuyến nghị: Tiếp tục theo dõi định kỳ.\nThời gian kiểm tra: ${new Date().toLocaleString("vi-VN")}`;
+      ]
+    };
+
+    let formattedResult = "";
+    try {
+      const aiResult = await callGeminiApiWithRotation(payload);
+      if (aiResult && aiResult.text) {
+        try {
+          const parsed = parseGeminiResult(aiResult.text);
+          formattedResult = formatGeminiResult(parsed);
+        } catch (pErr) {
+          formattedResult = aiResult.text;
+        }
+      } else {
+        throw new Error("Không nhận được phản hồi nội dung từ Gemini AI API.");
       }
+    } catch (aiErr) {
+      console.error(`[Gemini AI Inspect Error] ${aiErr.message}`);
+      pushWebNotification(`❌ Lỗi gọi Gemini AI API: ${aiErr.message}`, "ALERT");
+      return res.status(500).json({
+        success: false,
+        error: `Lỗi kết nối Gemini AI: ${aiErr.message}`,
+      });
+    }
+
+    const hasPest = needSpray(formattedResult);
+    if (hasPest) {
+      await sendDirectCommandToArduino("SPRAY").catch(() => {});
+      pushWebNotification(`🚨 Gemini AI phát hiện sâu bệnh tại ${trayName}! Đã kích hoạt bơm phun thuốc 1.5s.`, "WARNING");
+    } else {
+      await sendDirectCommandToArduino("NO_SPRAY").catch(() => {});
+      pushWebNotification(`🌿 Gemini AI phân tích ${plantName || trayName}: Không phát hiện sâu bệnh.`, "SUCCESS");
     }
 
     // 4. Format Telegram report
@@ -3220,7 +3243,7 @@ Thời gian kiểm tra: ${new Date().toLocaleString("vi-VN")}`;
       title: `Kiểm tra sâu hại - ${plantName || trayName}`,
       detail: formattedResult,
       telegramCaption: telegramCaption,
-      status: formattedResult.includes("SÂU HẠI") || formattedResult.includes("Cần phun") ? "Phát hiện sâu hại" : "Sức khỏe tốt",
+      status: hasPest ? "Phát hiện sâu hại" : "Sức khỏe tốt",
       image: "/api/camera/image?t=" + Date.now(),
     };
 
@@ -3228,11 +3251,9 @@ Thời gian kiểm tra: ${new Date().toLocaleString("vi-VN")}`;
     history.unshift(historyEntry);
     writeJson("inspection_history.json", history);
 
-    pushWebNotification(`Đã hoàn tất kiểm tra sâu tại ${trayName}!`, "SUCCESS");
-
     res.json({
       success: true,
-      message: `Đã hoàn tất kiểm tra sâu bệnh tại ${trayName}!`,
+      message: `Đã hoàn tất kiểm tra sâu bệnh thực tế tại ${trayName}!`,
       log: historyEntry,
     });
   } catch (err) {
