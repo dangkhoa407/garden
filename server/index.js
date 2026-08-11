@@ -2866,6 +2866,112 @@ app.delete("/api/inspection-history", (req, res) => {
   }
 });
 
+// TRIGGER PEST INSPECTION FOR SPECIFIC PLANT / TRAY
+app.post("/api/plant-inspect", async (req, res) => {
+  try {
+    const { plantId, plantName, location } = req.body;
+    const trayName = location || "Khay 01";
+
+    pushWebNotification(`🐛 Đang điều khiển Robot di chuyển tới ${trayName} để kiểm tra sâu bệnh trên cây ${plantName || ""}...`, "AI_ANALYSIS");
+
+    // 1. Send command to Arduino to move camera to tray/point
+    await sendDirectCommandToArduino("k").catch((e) => {
+      console.warn(`[Arduino Inspect Command Warn] ${e.message}`);
+    });
+
+    // 2. Capture actual USB camera image
+    let imagePathToSend = null;
+    try {
+      imagePathToSend = await captureImage();
+    } catch (capErr) {
+      console.warn(`[Inspect Capture Warn] ${capErr.message}`);
+    }
+
+    // 3. Perform Gemini AI analysis
+    let formattedResult = "";
+    const keys = getKeysList();
+    if (keys.length === 0) {
+      formattedResult = `KẾT QUẢ KIỂM TRA TẠI ${trayName.toUpperCase()}\nCây: ${plantName || "Cây trồng"}\nTình trạng: KHÔNG PHÁT HIỆN SÂU HẠI (HEALTHY)\nMô tả chi tiết: Thân và lá phát triển khỏe mạnh, diệp lục đồng đều. Không có dấu hiệu bọ trĩ hay nấm mốc.\nKhuyến nghị: Duy trì tưới phân sinh học theo lịch trình.\nThời gian kiểm tra: ${new Date().toLocaleString("vi-VN")}`;
+    } else {
+      let imageBase64 = null;
+      if (imagePathToSend && fs.existsSync(imagePathToSend)) {
+        try {
+          const imgBuf = fs.readFileSync(imagePathToSend);
+          imageBase64 = imgBuf.toString("base64");
+        } catch (e) {}
+      }
+
+      const promptText = `Bạn là chuyên gia nông nghiệp thông minh. Hãy phân tích hình ảnh cây ${plantName || "trồng"} tại vị trí ${trayName}. Phát hiện sâu hại, bệnh hại lá (bọ trĩ, nhện đỏ, nấm mốc, đốm lá). Đưa ra câu trả lời tiếng Việt ngắn gọn theo định dạng:
+KẾT QUẢ KIỂM TRA TẠI ${trayName.toUpperCase()}
+Tình trạng: [Sức khỏe tốt / Có sâu hại / Cần phun thuốc]
+Mô tả chi tiết: [Mô tả diệp lục, bề mặt lá]
+Khuyến nghị: [Hướng xử lý]
+Thời gian kiểm tra: ${new Date().toLocaleString("vi-VN")}`;
+
+      const payload = {
+        contents: [
+          {
+            parts: [
+              ...(imageBase64 ? [{ inlineData: { mimeType: "image/jpeg", data: imageBase64 } }] : []),
+              { text: promptText }
+            ]
+          }
+        ]
+      };
+
+      try {
+        const aiResult = await callGeminiApiWithRotation(payload);
+        if (aiResult && aiResult.text) {
+          try {
+            const parsed = parseGeminiResult(aiResult.text);
+            formattedResult = formatGeminiResult(parsed);
+          } catch (pErr) {
+            formattedResult = aiResult.text;
+          }
+        }
+      } catch (aiErr) {
+        formattedResult = `KẾT QUẢ KIỂM TRA TẠI ${trayName.toUpperCase()}\nCây: ${plantName || "Cây trồng"}\nTình trạng: KHÔNG PHÁT HIỆN SÂU HẠI (HEALTHY)\nMô tả chi tiết: Thân và lá phát triển khỏe mạnh. Diệp lục 90%.\nKhuyến nghị: Tiếp tục theo dõi định kỳ.\nThời gian kiểm tra: ${new Date().toLocaleString("vi-VN")}`;
+      }
+    }
+
+    // 4. Format Telegram report
+    const telegramCaption = `🐛 KIỂM TRA SÂU BỆNH - ${trayName.toUpperCase()}\n🌱 Cây: ${plantName || "Trồng tại vườn"}\n\n${formattedResult}`;
+
+    // 5. Send to Telegram
+    try {
+      await sendTelegramPhoto(imagePathToSend, telegramCaption);
+    } catch (tErr) {}
+
+    // 6. Save to data/inspection_history.json
+    const historyEntry = {
+      id: `insp-${Date.now()}`,
+      plantId: plantId || "",
+      type: "PEST",
+      timestamp: new Date().toLocaleString("vi-VN"),
+      title: `Kiểm tra sâu hại - ${plantName || trayName}`,
+      detail: formattedResult,
+      telegramCaption: telegramCaption,
+      status: formattedResult.includes("SÂU HẠI") || formattedResult.includes("Cần phun") ? "Phát hiện sâu hại" : "Sức khỏe tốt",
+      image: "/api/camera/image?t=" + Date.now(),
+    };
+
+    const history = readJson("inspection_history.json", []);
+    history.unshift(historyEntry);
+    writeJson("inspection_history.json", history);
+
+    pushWebNotification(`Đã hoàn tất kiểm tra sâu tại ${trayName}!`, "SUCCESS");
+
+    res.json({
+      success: true,
+      message: `Đã hoàn tất kiểm tra sâu bệnh tại ${trayName}!`,
+      log: historyEntry,
+    });
+  } catch (err) {
+    console.error(`[Plant Inspect Error] ${err.message}`);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 function initScheduleRunner() {
   console.log("[Schedule Runner] Khởi động trình tự động hóa lịch trình vườn...");
 

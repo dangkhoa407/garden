@@ -29,7 +29,7 @@ function cleanLocation(loc?: string): string {
 
 export function PlantCard({ plant, onObserve, onWater, onHistory }: PlantCardProps) {
   const { triggerQuickAction, updateControls, controls } = useGarden();
-  const [actionLoading, setActionLoading] = useState<"observe" | "water" | null>(null);
+  const [actionLoading, setActionLoading] = useState<"inspect" | "water" | null>(null);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
 
   const now = new Date();
@@ -37,24 +37,40 @@ export function PlantCard({ plant, onObserve, onWater, onHistory }: PlantCardPro
   const displayDate = plant.createdDate || defaultDateStr;
   const displayLocation = cleanLocation(plant.location);
 
-  const handleObserveClick = async () => {
-    setActionLoading("observe");
+  const handleInspectClick = async () => {
+    setActionLoading("inspect");
+    triggerQuickAction(
+      `🐛 Đang điều khiển Robot di chuyển tới ${displayLocation} để kiểm tra sâu bệnh trên cây ${plant.name}...`
+    );
+
     try {
       if (onObserve) {
         onObserve(plant);
       } else {
-        // Send command to Arduino to move camera to tray
-        await fetch("/api/arduino/command", {
+        const res = await fetch("/api/plant-inspect", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ command: "CHECK" }),
-        }).catch(() => {});
-        triggerQuickAction(
-          `🔍 Đang di chuyển camera robot tới ${displayLocation} để quan sát cây ${plant.name}...`
-        );
+          body: JSON.stringify({
+            plantId: plant.id,
+            plantName: plant.name,
+            location: displayLocation,
+          }),
+        });
+
+        if (res.ok) {
+          triggerQuickAction(
+            `✅ Đã quét xong sâu bệnh cho cây ${plant.name}! Ảnh & báo cáo đã được lưu vào Lịch sử và gửi về Telegram.`
+          );
+        } else {
+          triggerQuickAction(`⚠️ Không thể kết nối quét sâu bệnh cho ${plant.name}`);
+        }
       }
+    } catch (e) {
+      triggerQuickAction(`⚠️ Lỗi khi kích hoạt kiểm tra sâu cho ${plant.name}`);
     } finally {
-      setTimeout(() => setActionLoading(null), 1200);
+      setActionLoading(null);
+      // Open history modal to display the freshly captured image & AI report
+      setShowHistoryModal(true);
     }
   };
 
@@ -158,22 +174,23 @@ export function PlantCard({ plant, onObserve, onWater, onHistory }: PlantCardPro
           </div>
         </div>
 
-        {/* Action Buttons: Quan sát, Tưới phân, Lịch sử */}
+        {/* Action Buttons: Kiểm tra sâu, Tưới phân, Lịch sử */}
         <div className="pt-3 border-t border-outline-variant/15 flex items-center justify-between gap-1.5">
           <button
             type="button"
-            onClick={handleObserveClick}
-            disabled={actionLoading === "observe"}
+            onClick={handleInspectClick}
+            disabled={actionLoading === "inspect"}
             className="flex-1 py-2 px-2 bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/40 dark:hover:bg-sky-900/60 text-sky-700 dark:text-sky-300 border border-sky-200/80 dark:border-sky-800/80 rounded-xl font-bold text-xs transition-all active:scale-95 flex items-center justify-center gap-1 disabled:opacity-50"
+            title="Điều khiển Robot tới khay này để chụp ảnh & quét sâu bệnh qua AI Gemini"
           >
-            {actionLoading === "observe" ? (
+            {actionLoading === "inspect" ? (
               <span className="material-symbols-outlined text-sm animate-spin">
                 progress_activity
               </span>
             ) : (
-              <span className="material-symbols-outlined text-sm">visibility</span>
+              <span className="material-symbols-outlined text-sm">bug_report</span>
             )}
-            Quan sát
+            Kiểm tra sâu
           </button>
 
           <button
