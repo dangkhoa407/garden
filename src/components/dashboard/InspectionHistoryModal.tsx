@@ -91,13 +91,38 @@ export function InspectionHistoryModal({
     localStorage.setItem(`plant_history_${plant.id}`, JSON.stringify(updated));
   };
 
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+
   if (!isOpen || !mounted) return null;
 
   const currentTabLogs = logs.filter((l) => l.type === activeTab);
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="bg-surface rounded-3xl p-6 max-w-2xl w-full shadow-2xl border border-outline-variant/30 space-y-5 animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
+      <div className="bg-surface rounded-3xl p-6 max-w-2xl w-full shadow-2xl border border-outline-variant/30 space-y-5 animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col relative">
+        {/* Full Image Preview Lightbox */}
+        {previewImage && (
+          <div
+            className="fixed inset-0 z-[10000] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 cursor-pointer"
+            onClick={() => setPreviewImage(null)}
+          >
+            <div className="relative max-w-4xl max-h-[90vh] overflow-hidden rounded-2xl border border-white/20 shadow-2xl">
+              <img
+                src={previewImage}
+                alt="Ảnh chụp camera thực tế"
+                className="w-full h-full object-contain"
+              />
+              <button
+                type="button"
+                onClick={() => setPreviewImage(null)}
+                className="absolute top-3 right-3 bg-black/70 text-white p-2 rounded-full hover:bg-red-600 transition-all"
+              >
+                <span className="material-symbols-outlined text-xl">close</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex justify-between items-center border-b border-outline-variant/20 pb-4 flex-shrink-0">
           <div className="flex items-center gap-3">
@@ -215,18 +240,26 @@ export function InspectionHistoryModal({
                   )}
                 </h4>
 
-                {/* Actual Inspection Image (If Pest Tab) */}
-                {activeTab === "PEST" && (
-                  <div className="rounded-2xl overflow-hidden border border-outline-variant/30 bg-black/40 relative max-h-[220px] flex items-center justify-center">
+                {/* Actual Inspection Image */}
+                {(item.image || activeTab === "PEST") && (
+                  <div
+                    onClick={() => setPreviewImage(item.image || "/api/camera/image")}
+                    className="rounded-2xl overflow-hidden border border-outline-variant/30 bg-black/40 relative max-h-[220px] flex items-center justify-center cursor-pointer group/img hover:border-purple-500/50 transition-all"
+                  >
                     <img
                       src={item.image || "/api/camera/image"}
                       alt="Ảnh kiểm tra thực tế"
-                      className="w-full h-auto max-h-[220px] object-cover"
+                      className="w-full h-auto max-h-[220px] object-cover group-hover/img:scale-105 transition-transform duration-300"
                       onError={(e) => {
-                        // Fallback to /api/camera/image if image fails to load
                         (e.target as HTMLImageElement).src = "/api/camera/image";
                       }}
                     />
+                    <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
+                      <span className="px-3 py-1.5 bg-black/70 text-white text-xs font-bold rounded-xl backdrop-blur-xs flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-sm">zoom_in</span>
+                        Xem ảnh phóng to
+                      </span>
+                    </div>
                     <span className="absolute bottom-2 left-2 px-2 py-1 bg-black/70 text-white text-[10px] font-mono rounded-md backdrop-blur-xs">
                       📷 Camera Snapshot thực tế
                     </span>

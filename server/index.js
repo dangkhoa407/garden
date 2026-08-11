@@ -13,6 +13,11 @@ app.use(cors());
 app.use(express.json({ limit: "15mb" }));
 
 const dataDir = path.join(__dirname, "..", "data");
+const snapshotsDir = path.join(dataDir, "snapshots");
+if (!fs.existsSync(snapshotsDir)) {
+  fs.mkdirSync(snapshotsDir, { recursive: true });
+}
+app.use("/api/snapshots", express.static(snapshotsDir));
 
 // Helper function to read JSON file safely
 function readJson(filename, defaultValue = {}) {
@@ -1663,7 +1668,7 @@ app.get("/api/camera/image", (req, res) => {
   }
 
   if (!stats || Date.now() - stats.mtimeMs > 1500) {
-    captureFastLiveFrame().catch(() => {});
+    captureImage().catch(() => {});
   }
 
   if (fs.existsSync(imagePath)) {
@@ -1682,8 +1687,7 @@ app.get("/api/camera/image", (req, res) => {
   `);
 });
 
-// 2. Endpoint kiểm tra trạng thái camera USB thực tế
-app.get("/api/camera/status", async (req, res) => {
+async function checkRealCameraStatus() {
   let connected = false;
   let device = "/dev/video0";
   let message = "Đang kiểm tra kết nối Camera USB...";
@@ -1694,18 +1698,18 @@ app.get("/api/camera/status", async (req, res) => {
       if (stdout.includes("/dev/video")) {
         connected = true;
         message = "Đã tìm thấy USB Camera trên /dev/video0";
-      } else if (fs.existsSync("/dev/video0")) {
+      } else if (fs.existsSync("/dev/video0") || fs.existsSync("/dev/video1")) {
         connected = true;
         message = "Thiết bị USB Camera /dev/video0 sẵn sàng";
       } else {
         connected = false;
-        message = "Không phát hiện camera USB tại /dev/video0";
+        message = "Chưa kết nối: Không phát hiện camera USB tại /dev/video0";
       }
     } else {
       try {
         const { stdout } = await execAsync(
           'powershell -Command "Get-PnpDevice -Class Camera, Image -Status OK | Select-Object -ExpandProperty FriendlyName"'
-        );
+        ).catch(() => ({ stdout: "" }));
         const camName = stdout ? stdout.trim() : "";
         if (camName.length > 0) {
           connected = true;
@@ -1727,19 +1731,26 @@ app.get("/api/camera/status", async (req, res) => {
     message = `Lỗi nhận diện camera: ${err.message}`;
   }
 
+  return { connected, device, message };
+}
+
+// 2. Endpoint kiểm tra trạng thái camera USB thực tế
+app.get("/api/camera/status", async (req, res) => {
+  const status = await checkRealCameraStatus();
   const imagePath = path.join(process.cwd(), "st01.jpg");
   let lastCaptured = null;
   if (fs.existsSync(imagePath)) {
-    const stats = fs.statSync(imagePath);
-    lastCaptured = new Date(stats.mtime).toLocaleTimeString("vi-VN");
+    try {
+      const stats = fs.statSync(imagePath);
+      lastCaptured = new Date(stats.mtime).toLocaleTimeString("vi-VN");
+    } catch (e) {}
   }
-
   res.json({
-    connected,
-    device,
+    connected: status.connected,
+    device: status.device,
     resolution: "640x480 @ 30fps",
     fps: 30,
-    message,
+    message: status.message,
     lastCaptured,
     hasImage: fs.existsSync(imagePath),
   });
@@ -3144,6 +3155,16 @@ app.post("/api/plant-inspect", async (req, res) => {
       });
     }
 
+    // 0. Kiểm tra kết nối Camera USB trước khi di chuyển và chụp ảnh
+    const cameraStatus = await checkRealCameraStatus();
+    if (!cameraStatus.connected && process.platform === "linux") {
+      pushWebNotification(`❌ Lỗi kết nối phần cứng: ${cameraStatus.message}`, "ALERT");
+      return res.status(400).json({
+        success: false,
+        error: `Camera USB chưa được kết nối! (${cameraStatus.message}) Vui lòng kiểm tra cáp cắm USB Camera.`,
+      });
+    }
+
     pushWebNotification(`🐛 Đang điều khiển Robot di chuyển tới ${trayName} (Điểm ${pointIdx + 1}) để kiểm tra sâu bệnh trên cây ${plantName || ""}...`, "AI_ANALYSIS");
 
     // 1. Send command to Arduino to move camera to tray/point
@@ -3233,9 +3254,21 @@ Thời gian kiểm tra: ${new Date().toLocaleString("vi-VN")}`;
       await sendTelegramPhoto(imagePathToSend, telegramCaption);
     } catch (tErr) {}
 
-    // 6. Save to data/inspection_history.json
+    // 6. Save persistent snapshot file for history log
+    const inspId = `insp-${Date.now()}`;
+    let snapshotUrl = "/api/camera/image?t=" + Date.now();
+    if (imagePathToSend && fs.existsSync(imagePathToSend)) {
+      try {
+        const snapFileName = `${inspId}.jpg`;
+        const snapDest = path.join(snapshotsDir, snapFileName);
+        fs.copyFileSync(imagePathToSend, snapDest);
+        snapshotUrl = `/api/snapshots/${snapFileName}`;
+      } catch (e) {}
+    }
+
+    // 7. Save to data/inspection_history.json
     const historyEntry = {
-      id: `insp-${Date.now()}`,
+      id: inspId,
       plantId: plantId || "",
       type: "PEST",
       timestamp: new Date().toLocaleString("vi-VN"),
@@ -3243,7 +3276,7 @@ Thời gian kiểm tra: ${new Date().toLocaleString("vi-VN")}`;
       detail: formattedResult,
       telegramCaption: telegramCaption,
       status: hasPest ? "Phát hiện sâu hại" : "Sức khỏe tốt",
-      image: "/api/camera/image?t=" + Date.now(),
+      image: snapshotUrl,
     };
 
     const history = readJson("inspection_history.json", []);

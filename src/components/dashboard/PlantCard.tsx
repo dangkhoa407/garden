@@ -42,14 +42,18 @@ export function PlantCard({ plant, onObserve, onWater, onHistory }: PlantCardPro
   const handleObserveClick = async () => {
     setActionLoading("observe");
     try {
-      // 1. Kiểm tra kết nối Arduino thực tế
-      const arduinoRes = await fetch("/api/arduino/status")
-        .then((r) => r.json())
-        .catch(() => ({ connected: false }));
+      // 1. Kiểm tra kết nối Arduino và USB Camera thực tế
+      const [arduinoRes, cameraRes] = await Promise.all([
+        fetch("/api/arduino/status").then((r) => r.json()).catch(() => ({ connected: false })),
+        fetch("/api/camera/status").then((r) => r.json()).catch(() => ({ connected: false })),
+      ]);
 
-      if (arduinoRes && !arduinoRes.connected) {
+      if (!arduinoRes?.connected || !cameraRes?.connected) {
+        const missing = [];
+        if (!arduinoRes?.connected) missing.push("Arduino");
+        if (!cameraRes?.connected) missing.push("USB Camera");
         triggerQuickAction(
-          `❌ Lỗi kết nối phần cứng: Chưa nhận diện mạch Arduino trên cổng Serial/USB! Không thể di chuyển robot tới ${displayLocation}.`
+          `❌ Lỗi kết nối phần cứng (${missing.join(" & ")} chưa cắm/kết nối)! Không thể di chuyển robot và mở quan sát cây ${plant.name}.`
         );
         return;
       }
