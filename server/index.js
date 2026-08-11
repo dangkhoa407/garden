@@ -706,22 +706,134 @@ async function getOrInitArduinoSerialPort() {
       const normalized = line.toUpperCase();
 
       try {
-        if (normalized === "ARDUINO_READY") {
-          nodeConnected = false;
-          announceNodeReady();
-          return;
-        }
-
-        if (normalized === "NODE_CONNECTED") {
+        if (normalized === "ARDUINO_READY" || normalized.includes("HE THONG SAN SANG")) {
           nodeConnected = true;
-          pushWebNotification("Đã kết nối thành công với Arduino!", "SUCCESS");
+          pushWebNotification("🤖 Arduino: Hệ thống sẵn sàng!", "SUCCESS");
           return;
         }
 
-        if (normalized === "CHECK_STARTED") {
-          currentCancellationId++;
-          lastInspectionResults = []; // Clear kết quả cũ khi bắt đầu chu trình mới
-          pushWebNotification("Bắt đầu chu trình kiểm tra 6 điểm cây trồng...", "PROCESS");
+        if (normalized.includes("BAT DAU HOMING")) {
+          pushWebNotification("🤖 Arduino: Đang di chuyển lấy mốc Home (Homing)...", "PROCESS");
+          return;
+        }
+
+        if (normalized.includes("HOMING OK")) {
+          pushWebNotification("✅ Arduino: Homing hoàn tất! Robot sẵn sàng di chuyển.", "SUCCESS");
+          return;
+        }
+
+        if (normalized.includes("PHUN DIEM OK")) {
+          pushWebNotification("💦 Arduino: Đã kích hoạt bơm phun thuốc tại điểm thành công!", "SUCCESS");
+          return;
+        }
+
+        if (normalized.includes("BO QUA")) {
+          pushWebNotification("⚠️ Arduino: Đã phun trong 24h gần nhất. Bỏ qua phun lặp.", "WARNING");
+          return;
+        }
+
+        // CAPTURE event triggered by Arduino sketch_aug6a.ino
+        if (normalized === "CAPTURE" || normalized.includes("CAPTURE")) {
+          captureBusy = true;
+          const cancellationId = currentCancellationId;
+
+          try {
+            pushWebNotification("📸 Nhận tín hiệu CAPTURE từ Arduino! Đang chụp ảnh & phân tích Gemini AI...", "AI_ANALYSIS");
+
+            let imagePathToSend = null;
+            try {
+              imagePathToSend = await captureImage();
+            } catch (capErr) {
+              console.error(`[Capture Error] ${capErr.message}`);
+              pushWebNotification(`Lỗi chụp ảnh từ USB Camera: ${capErr.message}`, "ALERT");
+              await sendTelegramText(`⚠️ LỖI CHỤP ẢNH TỪ CAMERA USB: ${capErr.message}`);
+              return;
+            }
+
+            let formattedResult = "";
+            let action = "NO_SPRAY";
+            const keys = getKeysList();
+
+            if (keys.length === 0) {
+              formattedResult = "Chưa thiết lập Gemini API Key! Vui lòng vào trang 'Cấu hình API' trên Web để thêm chìa khóa Gemini.";
+              pushWebNotification(formattedResult, "WARNING");
+            } else {
+              let imageBase64 = null;
+              if (fs.existsSync(imagePathToSend)) {
+                try {
+                  const imgBuf = fs.readFileSync(imagePathToSend);
+                  imageBase64 = imgBuf.toString("base64");
+                } catch (e) {}
+              }
+
+              const payload = {
+                contents: [
+                  {
+                    parts: [
+                      ...(imageBase64 ? [{ inlineData: { mimeType: "image/jpeg", data: imageBase64 } }] : []),
+                      { text: createPrompt(0) }
+                    ]
+                  }
+                ],
+                generationConfig: {
+                  responseMimeType: "application/json",
+                  responseSchema: GEMINI_RESPONSE_SCHEMA
+                }
+              };
+
+              try {
+                const aiResult = await callGeminiApiWithRotation(payload);
+                if (aiResult && aiResult.text) {
+                  try {
+                    const parsed = parseGeminiResult(aiResult.text);
+                    formattedResult = formatGeminiResult(parsed);
+                  } catch (pErr) {
+                    formattedResult = aiResult.text;
+                  }
+                }
+              } catch (aiErr) {
+                formattedResult = `Lỗi phân tích Gemini AI: ${aiErr.message}`;
+              }
+            }
+
+            const telegramCaption = `📸 ĐIỂM QUÉT CAMERA KẾT NỐI ARDUINO\n\n${formattedResult}`;
+            try {
+              await sendTelegramPhoto(imagePathToSend, telegramCaption);
+            } catch (tErr) {}
+
+            action = needSpray(formattedResult) ? "SPRAY" : "NO_SPRAY";
+
+            // Nếu phát hiện sâu bệnh, gửi lệnh SPRAY xuống Arduino qua Serial
+            if (action === "SPRAY" && activeSerialPort && activeSerialPort.isOpen) {
+              activeSerialPort.write("SPRAY\n");
+              console.log("[Server -> Arduino Serial] SPRAY (Kích hoạt bơm phun thuốc)");
+              pushWebNotification("🚨 AI phát hiện sâu bệnh! Đã gửi lệnh SPRAY tới Arduino bật bơm 1.5s.", "WARNING");
+            } else {
+              console.log("[Server -> Arduino Serial] NO_SPRAY (Sức khỏe cây tốt)");
+              pushWebNotification("🌿 Cây phát triển khỏe mạnh! Không cần phun thuốc.", "SUCCESS");
+            }
+
+            // Save history
+            try {
+              const fullHistory = readJson("inspection_history.json", []);
+              fullHistory.unshift({
+                id: `insp-${Date.now()}`,
+                type: "PEST",
+                timestamp: new Date().toLocaleString("vi-VN"),
+                title: "Quét Camera Serial Arduino",
+                detail: formattedResult,
+                telegramCaption: telegramCaption,
+                status: action === "SPRAY" ? "Phát hiện sâu hại" : "Sức khỏe tốt",
+                image: "/api/camera/image?t=" + Date.now(),
+              });
+              writeJson("inspection_history.json", fullHistory);
+            } catch (hErr) {}
+
+          } catch (pErr) {
+            console.error(`[Capture Event Error] ${pErr.message}`);
+          } finally {
+            captureBusy = false;
+          }
           return;
         }
 
