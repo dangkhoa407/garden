@@ -18,16 +18,33 @@ export default function PlantsPage() {
   const { plants, addPlant, deletePlant } = useGarden();
   const [showAddModal, setShowAddModal] = useState(false);
   const [newPlantName, setNewPlantName] = useState("");
-  const [newPlantLocation, setNewPlantLocation] = useState(LOCATION_OPTIONS[0]);
   const [mounted, setMounted] = useState(false);
+
+  // Filter out locations that are already occupied by existing plants
+  const availableLocations = LOCATION_OPTIONS.filter(
+    (loc) => !plants.some((p) => p.location === loc)
+  );
+
+  const [newPlantLocation, setNewPlantLocation] = useState("");
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
+  // Sync selected default location to first available empty tray
+  useEffect(() => {
+    if (availableLocations.length > 0 && !availableLocations.includes(newPlantLocation)) {
+      setNewPlantLocation(availableLocations[0]);
+    }
+  }, [plants, availableLocations, newPlantLocation]);
+
   const handleAddPlant = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPlantName.trim()) return;
+    if (!newPlantLocation) {
+      alert("Không còn khay trống nào khả dụng!");
+      return;
+    }
 
     const now = new Date();
     const formattedDate = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`;
@@ -46,7 +63,6 @@ export default function PlantsPage() {
     });
 
     setNewPlantName("");
-    setNewPlantLocation(LOCATION_OPTIONS[0]);
     setShowAddModal(false);
   };
 
@@ -132,20 +148,33 @@ export default function PlantsPage() {
                 </div>
 
                 <div>
-                  <label className="block font-label-caps text-label-caps text-on-surface-variant mb-1 font-semibold">
-                    VỊ TRÍ TRỒNG
-                  </label>
-                  <select
-                    value={newPlantLocation}
-                    onChange={(e) => setNewPlantLocation(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-surface-container-low border border-outline-variant/40 rounded-xl text-body-sm focus:outline-none focus:ring-1 focus:ring-primary font-medium"
-                  >
-                    {LOCATION_OPTIONS.map((loc) => (
-                      <option key={loc} value={loc}>
-                        {loc}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block font-label-caps text-label-caps text-on-surface-variant font-semibold">
+                      VỊ TRÍ TRỒNG
+                    </label>
+                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">
+                      Ẩn khay đã thêm
+                    </span>
+                  </div>
+
+                  {availableLocations.length > 0 ? (
+                    <select
+                      value={newPlantLocation}
+                      onChange={(e) => setNewPlantLocation(e.target.value)}
+                      className="w-full px-3 py-2.5 bg-surface-container-low border border-outline-variant/40 rounded-xl text-body-sm focus:outline-none focus:ring-1 focus:ring-primary font-medium"
+                    >
+                      {availableLocations.map((loc) => (
+                        <option key={loc} value={loc}>
+                          {loc} (Trống)
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-700 dark:text-amber-300 text-xs font-bold flex items-center gap-2">
+                      <span className="material-symbols-outlined text-base">warning</span>
+                      Tất cả các khay (Khay 01 - Khay 06) đều đã được trồng cây!
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex justify-end gap-3 pt-xs">
@@ -158,7 +187,8 @@ export default function PlantsPage() {
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2 rounded-xl text-body-sm font-semibold bg-primary text-on-primary hover:bg-primary-container shadow-xs"
+                    disabled={availableLocations.length === 0}
+                    className="px-5 py-2 rounded-xl text-body-sm font-semibold bg-primary text-on-primary hover:bg-primary-container shadow-xs disabled:opacity-50"
                   >
                     Xác nhận thêm
                   </button>
