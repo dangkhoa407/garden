@@ -2660,13 +2660,17 @@ app.get("/api/schedules", (req, res) => {
 app.post("/api/schedules", (req, res) => {
   try {
     const schedules = readJson("schedules.json", []);
-    const { title, actions, actionType, scheduleType, date, repeatDays, time, location } = req.body;
+    const { title, actions, actionType, scheduleType, date, dates, repeatDays, time, times, location } = req.body;
 
     const finalActions = Array.isArray(actions) && actions.length > 0
       ? actions
       : (actionType ? [actionType] : ["INSPECT"]);
 
-    if (!time) {
+    const timeList = Array.isArray(times) && times.length > 0
+      ? times
+      : (time ? [time] : []);
+
+    if (timeList.length === 0) {
       return res.status(400).json({ success: false, error: "Thiếu thời gian cài đặt lịch!" });
     }
 
@@ -2683,28 +2687,44 @@ app.post("/api/schedules", (req, res) => {
     };
 
     const firstAction = finalActions[0];
+    const defaultTitle = title || finalActions.map((a) => actionLabels[a] || a).join(" ➔ ");
 
-    const newItem = {
-      id: `sched-${Date.now()}`,
-      title: title || finalActions.map((a) => actionLabels[a] || a).join(" + "),
-      actions: finalActions,
-      actionType: firstAction,
-      actionLabel: actionLabels[firstAction] || firstAction,
-      icon: actionIcons[firstAction] || "event",
-      scheduleType: scheduleType || "once",
-      date: date || "",
-      repeatDays: Array.isArray(repeatDays) ? repeatDays : [],
-      time,
-      location: location || "Toàn bộ khu vườn",
-      enabled: true,
-      status: "upcoming",
-      lastRun: "",
-      createdAt: new Date().toISOString(),
-    };
+    const isOnce = scheduleType === "once";
+    const dateList = isOnce
+      ? (Array.isArray(dates) && dates.length > 0 ? dates : [date || new Date().toISOString().split("T")[0]])
+      : [""];
 
-    schedules.unshift(newItem);
+    const newItems = [];
+    const baseTimestamp = Date.now();
+    let counter = 0;
+
+    for (const d of dateList) {
+      for (const t of timeList) {
+        counter++;
+        const newItem = {
+          id: `sched-${baseTimestamp}-${counter}`,
+          title: defaultTitle,
+          actions: finalActions,
+          actionType: firstAction,
+          actionLabel: actionLabels[firstAction] || firstAction,
+          icon: actionIcons[firstAction] || "event",
+          scheduleType: scheduleType || "once",
+          date: d,
+          repeatDays: Array.isArray(repeatDays) ? repeatDays : [],
+          time: t,
+          location: location || "Toàn bộ khu vườn",
+          enabled: true,
+          status: "upcoming",
+          lastRun: "",
+          createdAt: new Date().toISOString(),
+        };
+        newItems.push(newItem);
+        schedules.unshift(newItem);
+      }
+    }
+
     writeJson("schedules.json", schedules);
-    res.json({ success: true, item: newItem, schedules });
+    res.json({ success: true, items: newItems, schedules });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

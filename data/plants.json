@@ -1,5 +1,17 @@
 [
   {
+    "name": "test",
+    "days": 1,
+    "status": "Mới gieo trồng",
+    "statusColor": "text-primary bg-primary/10",
+    "progress": 10,
+    "category": "Rau ăn lá",
+    "location": "Khay 02",
+    "createdDate": "11/8/2026",
+    "image": "https://images.unsplash.com/photo-1530836369250-ef72a3f5cda8?q=80&w=400&auto=format&fit=crop",
+    "id": "plant-1786414787818"
+  },
+  {
     "name": "23",
     "days": 1,
     "status": "Mới gieo trồng",

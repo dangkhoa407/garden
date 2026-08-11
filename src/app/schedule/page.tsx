@@ -68,6 +68,20 @@ const DAYS_OF_WEEK = [
   { key: "CN", label: "Chủ Nhật" },
 ];
 
+function timeToMinutes(tStr: string): number {
+  if (!tStr || !tStr.includes(":")) return 0;
+  const [h, m] = tStr.split(":").map(Number);
+  return h * 60 + m;
+}
+
+function getDayOfWeekFromDateStr(dateStr: string): string {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return "";
+  const dayMap = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+  return dayMap[d.getDay()];
+}
+
 export default function SchedulePage() {
   const { controls, plants } = useGarden();
   const [schedules, setSchedules] = useState<ScheduleItem[]>([]);
@@ -84,8 +98,16 @@ export default function SchedulePage() {
 
   const [newTitle, setNewTitle] = useState("");
   const [newScheduleType, setNewScheduleType] = useState<"once" | "repeating">("once");
-  const [newDate, setNewDate] = useState(() => new Date().toISOString().split("T")[0]);
-  const [newTime, setNewTime] = useState("08:00");
+  
+  // Multi-date selection for Once mode
+  const todayStr = new Date().toISOString().split("T")[0];
+  const [dateInput, setDateInput] = useState(todayStr);
+  const [newDates, setNewDates] = useState<string[]>([todayStr]);
+
+  // Multi-time selection for both modes
+  const [timeInput, setTimeInput] = useState("08:00");
+  const [newTimes, setNewTimes] = useState<string[]>(["08:00"]);
+
   const [newRepeatDays, setNewRepeatDays] = useState<string[]>(["T2", "T4", "T6"]);
   const [selectedLocations, setSelectedLocations] = useState<string[]>(["Toàn bộ khu vườn"]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -181,6 +203,38 @@ export default function SchedulePage() {
     }
   };
 
+  // Multi-date handlers
+  const handleAddDate = () => {
+    if (!dateInput) return;
+    if (!newDates.includes(dateInput)) {
+      setNewDates([...newDates, dateInput].sort());
+    }
+  };
+
+  const handleRemoveDate = (dStr: string) => {
+    if (newDates.length === 1) {
+      alert("Cần có ít nhất 1 ngày thực thi!");
+      return;
+    }
+    setNewDates(newDates.filter((d) => d !== dStr));
+  };
+
+  // Multi-time handlers
+  const handleAddTime = () => {
+    if (!timeInput) return;
+    if (!newTimes.includes(timeInput)) {
+      setNewTimes([...newTimes, timeInput].sort());
+    }
+  };
+
+  const handleRemoveTime = (tStr: string) => {
+    if (newTimes.length === 1) {
+      alert("Cần có ít nhất 1 khung giờ thực thi!");
+      return;
+    }
+    setNewTimes(newTimes.filter((t) => t !== tStr));
+  };
+
   // Toggle selection of an action
   const handleActionToggle = (actionType: ActionType) => {
     if (selectedActions.includes(actionType)) {
@@ -217,15 +271,96 @@ export default function SchedulePage() {
     setDraggedIndex(null);
   };
 
+  // 15-MINUTE BUFFER CONFLICT VALIDATOR
+  const getConflictError = (): string | null => {
+    // 1. Check internal conflicts within newTimes
+    const sortedTimes = [...newTimes].sort((a, b) => timeToMinutes(a) - timeToMinutes(b));
+    for (let i = 0; i < sortedTimes.length - 1; i++) {
+      const diff = timeToMinutes(sortedTimes[i + 1]) - timeToMinutes(sortedTimes[i]);
+      if (diff < 15) {
+        return `Hai khung giờ trong lịch (${sortedTimes[i]} và ${sortedTimes[i + 1]}) quá gần nhau (cách ${diff} phút < 15 phút).`;
+      }
+    }
+
+    // 2. Check conflicts against active enabled schedules
+    const enabledSchedules = schedules.filter((s) => s.enabled);
+
+    for (const nTime of newTimes) {
+      const nMin = timeToMinutes(nTime);
+
+      for (const exist of enabledSchedules) {
+        const existMin = timeToMinutes(exist.time);
+        const diff = Math.abs(nMin - existMin);
+
+        if (diff >= 15) continue; // Safe gap
+
+        // Check date/day overlap
+        let overlap = false;
+        if (newScheduleType === "once") {
+          for (const dStr of newDates) {
+            if (exist.scheduleType === "once") {
+              if (exist.date === dStr) {
+                overlap = true;
+                break;
+              }
+            } else if (exist.scheduleType === "repeating") {
+              const dow = getDayOfWeekFromDateStr(dStr);
+              if (Array.isArray(exist.repeatDays) && exist.repeatDays.includes(dow)) {
+                overlap = true;
+                break;
+              }
+            }
+          }
+        } else {
+          // newScheduleType === "repeating"
+          for (const rDay of newRepeatDays) {
+            if (exist.scheduleType === "repeating") {
+              if (Array.isArray(exist.repeatDays) && exist.repeatDays.includes(rDay)) {
+                overlap = true;
+                break;
+              }
+            } else if (exist.scheduleType === "once") {
+              const existDow = getDayOfWeekFromDateStr(exist.date || "");
+              if (existDow === rDay) {
+                overlap = true;
+                break;
+              }
+            }
+          }
+        }
+
+        if (overlap) {
+          return `Khung giờ ${nTime} bị xung đột với lịch "${exist.title}" (${exist.time}) [cần khoảng cách tối thiểu 15 phút, hiện tại: ${diff} phút]!`;
+        }
+      }
+    }
+
+    return null;
+  };
+
+  const conflictError = getConflictError();
+
   const handleCreateSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTime) return;
+
     if (selectedActions.length === 0) {
       alert("Vui lòng chọn ít nhất 1 chức năng!");
       return;
     }
+    if (newTimes.length === 0) {
+      alert("Vui lòng thêm ít nhất 1 giờ chạy!");
+      return;
+    }
+    if (newScheduleType === "once" && newDates.length === 0) {
+      alert("Vui lòng chọn ít nhất 1 ngày thực thi!");
+      return;
+    }
     if (newScheduleType === "repeating" && newRepeatDays.length === 0) {
-      alert("Vui lòng chọn ít nhất 1 ngày trong tuần cho lịch lặp lại!");
+      alert("Vui lòng chọn ít nhất 1 ngày trong tuần!");
+      return;
+    }
+    if (conflictError) {
+      alert(`Không thể lưu lịch trình do xung đột 15 phút:\n${conflictError}`);
       return;
     }
 
@@ -245,9 +380,9 @@ export default function SchedulePage() {
           actions: selectedActions,
           actionType: selectedActions[0],
           scheduleType: newScheduleType,
-          date: newScheduleType === "once" ? newDate : "",
+          dates: newScheduleType === "once" ? newDates : [],
           repeatDays: newScheduleType === "repeating" ? newRepeatDays : [],
-          time: newTime,
+          times: newTimes,
           location: locationStr || "Toàn bộ khu vườn",
         }),
       });
@@ -261,6 +396,8 @@ export default function SchedulePage() {
         setNewTitle("");
         setSelectedActions(["INSPECT"]);
         setNewScheduleType("once");
+        setNewDates([todayStr]);
+        setNewTimes(["08:00"]);
         setSelectedLocations(["Toàn bộ khu vườn"]);
       }
     } catch (e) {
@@ -292,7 +429,7 @@ export default function SchedulePage() {
             Lịch Trình Quản Lý
           </h2>
           <p className="font-body-lg text-body-lg text-on-surface-variant">
-            Tự động hóa chăm sóc vườn theo khung giờ • Chọn nhiều chức năng & nhiều khu vực
+            Tự động hóa chăm sóc vườn • Hỗ trợ đặt nhiều ngày, nhiều khung giờ & chống xung đột 15 phút
           </p>
         </div>
 
@@ -578,8 +715,21 @@ export default function SchedulePage() {
                 </button>
               </div>
 
+              {/* CONFLICT ALERT BANNER */}
+              {conflictError && (
+                <div className="p-3 bg-red-500/10 border border-red-500/40 rounded-2xl text-red-600 dark:text-red-400 text-xs font-bold flex items-start gap-2 animate-pulse">
+                  <span className="material-symbols-outlined text-base flex-shrink-0 mt-0.5">
+                    warning
+                  </span>
+                  <div>
+                    <div className="font-extrabold uppercase">Xung đột lịch trình (Dưới 15 phút):</div>
+                    <div className="font-medium text-[11px] mt-0.5">{conflictError}</div>
+                  </div>
+                </div>
+              )}
+
               <form onSubmit={handleCreateSchedule} className="space-y-4">
-                {/* 1. CHỌN NHIỀU CHỨC NĂNG & KÉO THẢ ĐỔI THỨ TỰ */}
+                {/* 1. CHỌN CÁC CHỨC NĂNG & KÉO THẢ ĐỔI THỨ TỰ */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <label className="block text-xs font-bold uppercase tracking-wider text-on-surface">
@@ -702,7 +852,7 @@ export default function SchedulePage() {
                       }`}
                     >
                       <span className="material-symbols-outlined text-base">event</span>
-                      Chạy 1 Lần
+                      Chạy 1 Lần (Nhiều ngày)
                     </button>
 
                     <button
@@ -720,19 +870,53 @@ export default function SchedulePage() {
                   </div>
                 </div>
 
-                {/* Conditional Field: Date vs Days of Week */}
+                {/* Conditional Field: Date(s) vs Days of Week */}
                 {newScheduleType === "once" ? (
                   <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-1">
-                      NGÀY THỰC THI (YYYY-MM-DD)
-                    </label>
-                    <input
-                      type="date"
-                      required
-                      value={newDate}
-                      onChange={(e) => setNewDate(e.target.value)}
-                      className="w-full px-3.5 py-2.5 bg-surface-container-low border border-outline-variant/40 rounded-xl text-xs font-mono font-bold focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant">
+                        NGÀY THỰC THI (THÊM ĐƯỢC NHIỀU NGÀY)
+                      </label>
+                      <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded">
+                        Đã chọn {newDates.length} ngày
+                      </span>
+                    </div>
+
+                    <div className="flex gap-2 mb-2">
+                      <input
+                        type="date"
+                        value={dateInput}
+                        onChange={(e) => setDateInput(e.target.value)}
+                        className="flex-1 px-3 py-2 bg-surface-container-low border border-outline-variant/40 rounded-xl text-xs font-mono font-bold focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddDate}
+                        className="px-3 py-2 bg-primary/10 text-primary hover:bg-primary/20 rounded-xl text-xs font-bold transition-all flex items-center gap-1"
+                      >
+                        <span className="material-symbols-outlined text-sm">add</span>
+                        Thêm ngày
+                      </button>
+                    </div>
+
+                    {/* Selected Dates Chips */}
+                    <div className="flex flex-wrap gap-1.5 p-2 bg-surface-container-low rounded-xl border border-outline-variant/20 max-h-[100px] overflow-y-auto">
+                      {newDates.map((dStr) => (
+                        <span
+                          key={dStr}
+                          className="px-2.5 py-1 bg-blue-500/10 text-blue-700 dark:text-blue-300 text-xs font-mono font-bold rounded-lg border border-blue-500/20 flex items-center gap-1.5"
+                        >
+                          📅 {dStr}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveDate(dStr)}
+                            className="hover:text-red-500 transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-xs">close</span>
+                          </button>
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 ) : (
                   <div>
@@ -761,74 +945,106 @@ export default function SchedulePage() {
                   </div>
                 )}
 
-                {/* 4. Giờ chạy & Khu vực (Chọn nhiều khu vực / cây trồng) */}
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-1">
-                      GIỜ CHẠY (HH:MM)
+                {/* 4. CHỌN NHIỀU KHUNG GIỜ CHẠY (HH:MM) */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant">
+                      GIỜ CHẠY TRONG NGÀY (THÊM ĐƯỢC NHIỀU GIỜ)
                     </label>
-                    <input
-                      type="time"
-                      required
-                      value={newTime}
-                      onChange={(e) => setNewTime(e.target.value)}
-                      className="w-full px-3.5 py-2.5 bg-surface-container-low border border-outline-variant/40 rounded-xl text-xs font-mono font-bold text-center focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
+                    <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded">
+                      Đã chọn {newTimes.length} khung giờ
+                    </span>
                   </div>
 
-                  {/* CHỌN NHIỀU KHU VỰC / CÂY TRỒNG */}
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant">
-                        KHU VỰC / CÂY TRỒNG (/PLANTS):
-                      </label>
-                      <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md">
-                        Chọn được nhiều cây
-                      </span>
-                    </div>
+                  <div className="flex gap-2 mb-2">
+                    <input
+                      type="time"
+                      value={timeInput}
+                      onChange={(e) => setTimeInput(e.target.value)}
+                      className="flex-1 px-3 py-2 bg-surface-container-low border border-outline-variant/40 rounded-xl text-xs font-mono font-bold focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddTime}
+                      className="px-3 py-2 bg-primary/10 text-primary hover:bg-primary/20 rounded-xl text-xs font-bold transition-all flex items-center gap-1"
+                    >
+                      <span className="material-symbols-outlined text-sm">schedule</span>
+                      Thêm giờ
+                    </button>
+                  </div>
 
-                    <div className="flex flex-wrap gap-2 p-3 bg-surface-container-low border border-outline-variant/30 rounded-2xl max-h-[140px] overflow-y-auto">
-                      {/* Option: Toàn bộ khu vườn */}
-                      <button
-                        type="button"
-                        onClick={() => handleLocationToggle("Toàn bộ khu vườn")}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                          selectedLocations.includes("Toàn bộ khu vườn")
-                            ? "bg-primary text-white shadow-xs"
-                            : "bg-surface border border-outline-variant/30 text-on-surface-variant hover:border-primary/40"
-                        }`}
+                  {/* Selected Times Chips */}
+                  <div className="flex flex-wrap gap-1.5 p-2 bg-surface-container-low rounded-xl border border-outline-variant/20 max-h-[100px] overflow-y-auto">
+                    {newTimes.map((tStr) => (
+                      <span
+                        key={tStr}
+                        className="px-2.5 py-1 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-xs font-mono font-bold rounded-lg border border-emerald-500/20 flex items-center gap-1.5"
                       >
-                        <span className="material-symbols-outlined text-sm">
-                          {selectedLocations.includes("Toàn bộ khu vườn") ? "check_circle" : "park"}
-                        </span>
-                        🌿 Toàn bộ khu vườn
-                      </button>
+                        ⏰ {tStr} ({Number(tStr.split(":")[0]) >= 12 ? "Chiều" : "Sáng"})
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveTime(tStr)}
+                          className="hover:text-red-500 transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-xs">close</span>
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
 
-                      {/* Plants from /plants */}
-                      {plants &&
-                        plants.map((p) => {
-                          const locVal = `${p.name} (${p.location})`;
-                          const isSelected = selectedLocations.includes(locVal);
+                {/* 5. KHU VỰC / CÂY TRỒNG */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant">
+                      KHU VỰC / CÂY TRỒNG (/PLANTS):
+                    </label>
+                    <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md">
+                      Chọn được nhiều cây
+                    </span>
+                  </div>
 
-                          return (
-                            <button
-                              key={p.id}
-                              type="button"
-                              onClick={() => handleLocationToggle(locVal)}
-                              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                                isSelected
-                                  ? "bg-emerald-600 text-white shadow-xs"
-                                  : "bg-surface border border-outline-variant/30 text-on-surface-variant hover:border-emerald-500/40"
-                              }`}
-                            >
-                              <span className="material-symbols-outlined text-sm">
-                                {isSelected ? "check_circle" : "eco"}
-                              </span>
-                              🌱 {p.name} - {p.location}
-                            </button>
-                          );
-                        })}
-                    </div>
+                  <div className="flex flex-wrap gap-2 p-3 bg-surface-container-low border border-outline-variant/30 rounded-2xl max-h-[140px] overflow-y-auto">
+                    {/* Option: Toàn bộ khu vườn */}
+                    <button
+                      type="button"
+                      onClick={() => handleLocationToggle("Toàn bộ khu vườn")}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                        selectedLocations.includes("Toàn bộ khu vườn")
+                          ? "bg-primary text-white shadow-xs"
+                          : "bg-surface border border-outline-variant/30 text-on-surface-variant hover:border-primary/40"
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-sm">
+                        {selectedLocations.includes("Toàn bộ khu vườn") ? "check_circle" : "park"}
+                      </span>
+                      🌿 Toàn bộ khu vườn
+                    </button>
+
+                    {/* Plants from /plants */}
+                    {plants &&
+                      plants.map((p) => {
+                        const locVal = `${p.name} (${p.location})`;
+                        const isSelected = selectedLocations.includes(locVal);
+
+                        return (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => handleLocationToggle(locVal)}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                              isSelected
+                                ? "bg-emerald-600 text-white shadow-xs"
+                                : "bg-surface border border-outline-variant/30 text-on-surface-variant hover:border-emerald-500/40"
+                            }`}
+                          >
+                            <span className="material-symbols-outlined text-sm">
+                              {isSelected ? "check_circle" : "eco"}
+                            </span>
+                            🌱 {p.name} - {p.location}
+                          </button>
+                        );
+                      })}
                   </div>
                 </div>
 
@@ -843,7 +1059,7 @@ export default function SchedulePage() {
                   </button>
                   <button
                     type="submit"
-                    disabled={isSubmitting || selectedActions.length === 0}
+                    disabled={isSubmitting || selectedActions.length === 0 || !!conflictError}
                     className="px-6 py-2.5 rounded-xl text-xs font-bold bg-primary text-white hover:bg-primary/90 shadow-md transition-all active:scale-95 disabled:opacity-50"
                   >
                     {isSubmitting ? "Đang lưu..." : "Tạo Lịch Trình Tự Động"}
