@@ -85,29 +85,45 @@ export function PlantCard({ plant, onObserve, onWater, onHistory }: PlantCardPro
     }
   };
 
+  // Chụp frame từ video element đang live trên trang (WebRTC stream đã mở sẵn)
+  const captureFrameFromLiveVideo = (): string | null => {
+    try {
+      // Tìm video element đang phát (từ CameraView component)
+      const videoEl = document.querySelector("video") as HTMLVideoElement | null;
+      if (!videoEl || videoEl.readyState < 2 || videoEl.videoWidth === 0) {
+        return null;
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = videoEl.videoWidth;
+      canvas.height = videoEl.videoHeight;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return null;
+      ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL("image/jpeg", 0.92);
+    } catch {
+      return null;
+    }
+  };
+
   const handleInspectClick = async () => {
     setActionLoading("inspect");
     try {
-      // 1. Kiểm tra kết nối Arduino và USB Camera
-      const [arduinoRes, cameraRes] = await Promise.all([
-        fetch("/api/arduino/status").then((r) => r.json()).catch(() => ({ connected: false })),
-        fetch("/api/camera/status").then((r) => r.json()).catch(() => ({ connected: false })),
-      ]);
+      // 1. Chụp ảnh từ video stream đang live (browser đang giữ camera)
+      triggerQuickAction(`📷 Đang chụp ảnh từ webcam để phân tích sâu bệnh...`);
+      const snapshotBase64 = captureFrameFromLiveVideo();
 
-      if (!arduinoRes?.connected || !cameraRes?.connected) {
-        const missing = [];
-        if (!arduinoRes?.connected) missing.push("Arduino");
-        if (!cameraRes?.connected) missing.push("USB Camera");
+      if (!snapshotBase64) {
         triggerQuickAction(
-          `❌ Lỗi kết nối phần cứng (${missing.join(" & ")} chưa cắm/kết nối)! Không thể quét sâu bệnh cho ${plant.name}.`
+          `❌ Không thể chụp ảnh từ camera! Vui lòng đảm bảo camera đang hiển thị video trên dashboard.`
         );
         return;
       }
 
       triggerQuickAction(
-        `🐛 Đang điều khiển Robot di chuyển tới ${displayLocation} để kiểm tra sâu bệnh trên cây ${plant.name}...`
+        `🐛 Đã chụp ảnh! Đang gửi lên server phân tích AI tại ${displayLocation}...`
       );
 
+      // 2. Gửi ảnh + thông tin inspect lên server
       const res = await fetch("/api/plant-inspect", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -115,22 +131,23 @@ export function PlantCard({ plant, onObserve, onWater, onHistory }: PlantCardPro
           plantId: plant.id,
           plantName: plant.name,
           location: displayLocation,
+          snapshotBase64,
         }),
       });
 
       if (res.ok) {
         triggerQuickAction(
-          `✅ Đã di chuyển tới ${displayLocation} và quét xong sâu bệnh cho ${plant.name}! Báo cáo đã lưu vào Lịch sử & gửi Telegram.`
+          `✅ Đã quét sâu bệnh xong cho ${plant.name}! Báo cáo đã lưu vào Lịch sử & gửi Telegram.`
         );
         setShowHistoryModal(true);
       } else {
         const json = await res.json().catch(() => ({}));
         triggerQuickAction(
-          `❌ Lỗi kiểm tra sâu cho ${plant.name}: ${json.error || "Không có phản hồi từ mạch phần cứng"}`
+          `❌ Lỗi kiểm tra sâu cho ${plant.name}: ${json.error || "Server không phản hồi"}`
         );
       }
     } catch (e) {
-      triggerQuickAction(`❌ Lỗi kết nối phần cứng khi kiểm tra sâu cho ${plant.name}`);
+      triggerQuickAction(`❌ Lỗi khi kiểm tra sâu cho ${plant.name}`);
     } finally {
       setActionLoading(null);
     }

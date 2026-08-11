@@ -240,6 +240,25 @@ export default function DeviceSettingsPage() {
   const handleTestCamera = async () => {
     setTestingCamera(true);
     try {
+      // Đẩy frame tươi mới từ video đang phát sang server nếu đang bật WebRTC stream
+      if (diagVideoRef.current && diagVideoRef.current.readyState >= 2 && diagVideoRef.current.videoWidth > 0) {
+        try {
+          const canvas = document.createElement("canvas");
+          canvas.width = diagVideoRef.current.videoWidth;
+          canvas.height = diagVideoRef.current.videoHeight;
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            ctx.drawImage(diagVideoRef.current, 0, 0, canvas.width, canvas.height);
+            const imageBase64 = canvas.toDataURL("image/jpeg", 0.9);
+            await fetch("/api/camera/upload-snapshot", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ imageBase64 }),
+            }).catch(() => {});
+          }
+        } catch (e) {}
+      }
+
       const data = await safeFetchJson("/api/camera/test", { method: "POST" });
       if (data) {
         if (data.success) {

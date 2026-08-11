@@ -26,9 +26,9 @@ int steps14 = 14 * stepsPerCm;
 int steps02 = (int)(0.3 * stepsPerCm);   // 0.3 cm
 
 // ==== Thời gian ====
-#define WAIT_SPRAY_MS      35000UL
+#define WAIT_SPRAY_MS      5000UL
 #define SPRAY_TIME_MS     1500UL
-#define REST_AFTER_MS     15000UL
+#define REST_AFTER_MS        0UL
 #define LOOP_DELAY_MS     90000UL
 #define HOMING_TIMEOUT_MS 6000UL
 #define SPRAY_INTERVAL_MS 86400000UL   // ✅ CHỐNG PHUN LẶP 24H
@@ -106,11 +106,10 @@ bool homeAll() {
 
 // ================== CAMERA ==================
 void captureFromPC() {
-  delay(3000);
   digitalWrite(RELAY_LED, HIGH);
-  delay(2000);
+  delay(200);
   Serial.println("CAPTURE");
-  delay(4000);
+  delay(200);
   digitalWrite(RELAY_LED, LOW);
 }
 
@@ -135,7 +134,7 @@ void sprayCycle() {
   runMotor(STEP2_PIN, DIR2_PIN, steps14, false);
 }
 
-// ================== PHUN ĐIỂM (CÓ CHỐNG LẶP) ==================
+// ================== PHUN ĐIỂM (CÓ CHỐNG LẶP & KHÔNG DELAY) ==================
 void waitSprayOrSkip(int idx) {
   unsigned long start = millis();
   String cmd = "";
@@ -145,8 +144,9 @@ void waitSprayOrSkip(int idx) {
       char c = Serial.read();
       if (c == '\n') {
         cmd.trim();
-        if (cmd == "SPRAY") {
+        cmd.toUpperCase();
 
+        if (cmd == "SPRAY" || cmd.endsWith(":SPRAY")) {
           // ✅ KIỂM TRA CHỐNG PHUN LẶP 24H
           if (!sprayed[idx] || millis() - lastSprayTime[idx] > SPRAY_INTERVAL_MS) {
             pumpON();
@@ -158,12 +158,17 @@ void waitSprayOrSkip(int idx) {
           } else {
             Serial.println("DA PHUN <24H - BO QUA");
           }
-
-          delay(REST_AFTER_MS);
+          return;
+        } 
+        else if (cmd == "NO_SPRAY" || cmd.endsWith(":NO_SPRAY") || cmd.indexOf("NO_SPRAY") != -1 || cmd.indexOf("ERROR") != -1) {
+          // KHÔNG PHUN -> THOÁT NGAY ĐỂ SANG ĐIỂM TIẾP THEO 0ms DELAY
+          Serial.println("NO_SPRAY OK - CHUYEN DIEM NGAY");
           return;
         }
         cmd = "";
-      } else cmd += c;
+      } else {
+        cmd += c;
+      }
     }
   }
 }

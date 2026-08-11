@@ -374,17 +374,13 @@ function formatGeminiResult(data) {
   ].join("\n");
 }
 
+// Quyet dinh phun - theo dung v2.mjs (chi SPRAY khi co SAU, khong SPRAY khi chi BENH)
 function needSpray(resultText) {
   const text = String(resultText).normalize("NFC").toUpperCase();
   return (
-    text.includes("TÌNH TRẠNG: SÂU") ||
-    text.includes("TÌNH TRẠNG: LÁ BỊ SÂU ĂN") ||
-    text.includes("TÌNH TRẠNG: BỆNH") ||
-    text.includes("TÌNH TRẠNG: SÂU VÀ BỆNH") ||
-    text.includes("CẦN PHUN") ||
-    text.includes("SÂU HẠI") ||
-    text.includes("NẤM MỐC") ||
-    text.includes("BỌ TRĨ")
+    text.includes("TINH TRANG: SAU VA BENH") ||
+    text.includes("TINH TRANG: LA BI SAU AN") ||
+    text.includes("TINH TRANG: SAU")
   );
 }
 
@@ -512,75 +508,210 @@ function addSystemLog(command, label, status = "RECEIVED") {
   return logEntry;
 }
 
-async function captureImage() {
-  const imagePath = path.join(process.cwd(), "st01.jpg");
-  console.log("Đang mở camera chụp ảnh...");
-  
+// =========================================================
+// CAMERA CAPTURE PIPELINE (THEO PATTERN V2.MJS - HO TRO CA WINDOWS VA LINUX)
+// =========================================================
+
+// Lay ffmpeg binary: dung system ffmpeg neu co, fallback ffmpeg-static
+function getFfmpegBinary() {
   try {
-    await configureCamera();
+    const ffmpegStatic = require("ffmpeg-static");
+    if (ffmpegStatic && fs.existsSync(ffmpegStatic)) {
+      return ffmpegStatic;
+    }
   } catch (e) {}
+  return "ffmpeg"; // system ffmpeg (Linux/Raspberry Pi da cai san)
+}
 
-  const directory = await fs.promises.mkdtemp(path.join(require("os").tmpdir(), "vuon-rau-camera-")).catch(() => null);
+let cachedWindowsCameraDevice = null;
 
+// Lay ten camera Windows qua DirectShow listing (co cache de phan hoi tuc thi)
+async function getWindowsCameraDevice() {
+  if (cachedWindowsCameraDevice) return cachedWindowsCameraDevice;
+  try {
+    const ffmpegBin = getFfmpegBinary();
+    const { stderr } = await execFileAsync(
+      ffmpegBin,
+      ["-list_devices", "true", "-f", "dshow", "-i", "dummy"],
+      { timeout: 8000 }
+    ).catch((e) => ({ stderr: e.stderr || "" }));
+
+    // Tim dong dau tien co "(video)" - la camera thuc
+    const lines = String(stderr).split("\n");
+    for (const line of lines) {
+      if (line.includes("(video)") && !line.includes("none")) {
+        const match = line.match(/"([^"]+)"/);
+        if (match) {
+          cachedWindowsCameraDevice = match[1];
+          console.log(`[Camera Engine] Phat hien camera Windows: "${match[1]}"`);
+          return match[1];
+        }
+      }
+    }
+  } catch (e) {
+    console.warn(`[Camera Engine] Khong lay duoc danh sach camera Windows: ${e.message}`);
+  }
+  return null;
+}
+
+// Chup frames theo platform: Windows dung dshow, Linux dung v4l2
+async function captureFramesCrossPlatform(directory) {
+  const ffmpegBin = getFfmpegBinary();
+  const framePattern = path.join(directory, "frame-%03d.jpg");
+  const totalFrames = WARMUP_FRAMES + CHECK_FRAMES;
+
+  if (process.platform === "win32") {
+    // Windows: dung DirectShow (timeout 1.5s de tranh treo phan cung)
+    const cameraDevice = await getWindowsCameraDevice();
+    if (!cameraDevice) {
+      throw new Error("Khong phat hien camera nao tren Windows qua DirectShow. Vui long cam USB camera.");
+    }
+
+    console.log(`[Camera Engine] Windows: Chup ${totalFrames} frames tu "${cameraDevice}" qua DirectShow...`);
+    await execFileAsync(
+      ffmpegBin,
+      [
+        "-hide_banner", "-loglevel", "error", "-y",
+        "-f", "dshow",
+        "-framerate", String(CAMERA_FPS),
+        "-video_size", `${CAMERA_WIDTH}x${CAMERA_HEIGHT}`,
+        "-i", `video=${cameraDevice}`,
+        "-frames:v", String(totalFrames),
+        "-q:v", "2",
+        framePattern
+      ],
+      { timeout: 1500, maxBuffer: 2 * 1024 * 1024 }
+    );
+  } else {
+    // Linux / Raspberry Pi: dung V4L2 (nhu v2.mjs)
+    console.log(`[Camera Engine] Linux: Chup ${totalFrames} frames tu ${CAMERA_DEVICE} qua V4L2...`);
+    await execFileAsync(
+      ffmpegBin,
+      [
+        "-hide_banner", "-loglevel", "error", "-y",
+        "-f", "v4l2",
+        "-framerate", String(CAMERA_FPS),
+        "-video_size", `${CAMERA_WIDTH}x${CAMERA_HEIGHT}`,
+        "-i", CAMERA_DEVICE,
+        "-frames:v", String(totalFrames),
+        "-q:v", "2",
+        framePattern
+      ],
+      { timeout: 3000, maxBuffer: 2 * 1024 * 1024 }
+    );
+  }
+}
+
+async function captureImage(minTimestamp = 0) {
+  const imagePath = path.join(process.cwd(), "st01.jpg");
+  const targetMinTime = minTimestamp > 0 ? minTimestamp : Date.now() - 2000;
+
+  // 1. Kiểm tra & chờ tối đa 800ms xem trình duyệt WebRTC có đẩy khung hình MỚI TƯƠI vừa chụp hay không
+  for (let attempt = 0; attempt < 8; attempt++) {
+    if (fs.existsSync(imagePath)) {
+      try {
+        const stats = fs.statSync(imagePath);
+        if (stats.mtimeMs >= targetMinTime) {
+          console.log(`[Camera Engine] Sử dụng ảnh webcam MỚI TƯƠI (${(Date.now() - stats.mtimeMs).toFixed(0)}ms vừa chụp từ live stream)`);
+          addSystemLog("CAMERA", `[Camera Engine] Đã lấy ảnh MỚI TƯƠI từ live stream (${(Date.now() - stats.mtimeMs).toFixed(0)}ms)`, "SUCCESS");
+          return imagePath;
+        }
+      } catch (e) {}
+    }
+    await new Promise((r) => setTimeout(r, 100));
+  }
+
+  // 2. Nếu chưa có ảnh mới từ trình duyệt: Chụp trực tiếp qua FFmpeg (timeout siêu ngắn 1.5s)
+  console.log("Dang mo camera CHỤP ẢNH MỚI qua FFmpeg...");
+
+  // Chi goi configureCamera tren Linux (v4l2-ctl khong co tren Windows)
+  if (process.platform !== "win32") {
+    try {
+      await configureCamera();
+    } catch (e) {}
+  }
+
+  const directory = await fs.promises.mkdtemp(
+    path.join(require("os").tmpdir(), "vuon-rau-camera-")
+  ).catch(() => null);
+
+  let ffmpegErr = null;
   try {
     if (directory) {
-      await captureFrames(directory);
+      await captureFramesCrossPlatform(directory);
+
       const frameFiles = (await fs.promises.readdir(directory))
         .filter((name) => name.toLowerCase().endsWith(".jpg"))
         .sort()
         .slice(WARMUP_FRAMES, WARMUP_FRAMES + CHECK_FRAMES);
 
-      if (frameFiles.length > 0) {
-        let bestPath = null;
-        let bestInfo = null;
-        let bestScore = Infinity;
+      if (frameFiles.length === 0) {
+        throw new Error("Camera khong tao du khung hinh.");
+      }
 
-        for (const fileName of frameFiles) {
-          const framePath = path.join(directory, fileName);
-          const info = await analyzeFrameLight(framePath);
-          const score = Math.abs(info.meanBrightness - TARGET_BRIGHTNESS) + info.overexposedRatio * 300 + info.darkRatio * 60;
-          if (score < bestScore) {
-            bestScore = score;
-            bestPath = framePath;
-            bestInfo = info;
-          }
-        }
+      let bestPath = null;
+      let bestInfo = null;
+      let bestScore = Infinity;
 
-        if (bestPath && bestInfo) {
-          const brightness = bestInfo.meanBrightness;
-          const overexposedRatio = bestInfo.overexposedRatio;
-          let alpha = 1;
-          let beta = 0;
+      for (const fileName of frameFiles) {
+        const framePath = path.join(directory, fileName);
+        const info = await analyzeFrameLight(framePath);
+        const score =
+          Math.abs(info.meanBrightness - TARGET_BRIGHTNESS) +
+          info.overexposedRatio * 300 +
+          info.darkRatio * 60;
 
-          if (overexposedRatio > 0.25 || brightness > 200) { alpha = 0.58; beta = -30; }
-          else if (overexposedRatio > 0.15 || brightness > 175) { alpha = 0.72; beta = -18; }
-          else if (overexposedRatio > 0.07 || brightness > 150) { alpha = 0.84; beta = -8; }
-          else if (overexposedRatio > 0.03 || brightness > 130) { alpha = 0.94; beta = -2; }
-          else if (brightness < 35) { alpha = 1.30; beta = 30; }
-          else if (brightness < 65) { alpha = 1.15; beta = 15; }
-          else if (brightness < 90) { alpha = 1.07; beta = 8; }
-          else if (brightness < 115) { alpha = 1.03; beta = 4; }
-
-          const sharp = require("sharp");
-          await sharp(bestPath).removeAlpha().linear(alpha, beta).jpeg({ quality: JPEG_QUALITY }).toFile(imagePath);
-          console.log(`[Camera Engine] Đã chụp và lưu ảnh thành công: ${imagePath}`);
-          addSystemLog("CAMERA", `📷 Camera USB: Đã chụp và lưu ảnh thành công (${path.basename(imagePath)})`, "SUCCESS");
-          return imagePath;
+        if (score < bestScore) {
+          bestScore = score;
+          bestPath = framePath;
+          bestInfo = info;
         }
       }
+
+      if (!bestPath || !bestInfo) {
+        throw new Error("Khong chon duoc anh tot tu camera.");
+      }
+
+      const brightness = bestInfo.meanBrightness;
+      const overexposedRatio = bestInfo.overexposedRatio;
+
+      let alpha = 1;
+      let beta = 0;
+
+      if (overexposedRatio > 0.25 || brightness > 200) { alpha = 0.58; beta = -30; }
+      else if (overexposedRatio > 0.15 || brightness > 175) { alpha = 0.72; beta = -18; }
+      else if (overexposedRatio > 0.07 || brightness > 150) { alpha = 0.84; beta = -8; }
+      else if (overexposedRatio > 0.03 || brightness > 130) { alpha = 0.94; beta = -2; }
+      else if (brightness < 35) { alpha = 1.30; beta = 30; }
+      else if (brightness < 65) { alpha = 1.15; beta = 15; }
+      else if (brightness < 90) { alpha = 1.07; beta = 8; }
+      else if (brightness < 115) { alpha = 1.03; beta = 4; }
+
+      const sharp = require("sharp");
+      await sharp(bestPath).removeAlpha().linear(alpha, beta).jpeg({ quality: JPEG_QUALITY }).toFile(imagePath);
+
+      console.log(`[Camera Engine] Da chup va luu anh thanh cong: ${imagePath}`);
+      addSystemLog("CAMERA", `[Camera USB] Da chup va luu anh thanh cong (${path.basename(imagePath)})`, "SUCCESS");
+      return imagePath;
     }
   } catch (capErr) {
-    console.warn(`[Camera Engine Warn] Không thể chụp trực tiếp qua FFmpeg (${capErr.message}). Chuyển sang tạo snapshot fallback.`);
+    ffmpegErr = capErr;
+    const detail = capErr.stderr?.trim() || capErr.message;
+    console.warn(`[Camera Engine Warn] Khong the chup qua FFmpeg (${detail}).`);
   } finally {
     if (directory) {
       await fs.promises.rm(directory, { recursive: true, force: true }).catch(() => {});
     }
   }
 
-  // Fallback: If FFmpeg ENOENT or capture failed, generate valid JPEG image via sharp
-  await generateFallbackSnapshot(imagePath);
-  return imagePath;
+  // Dự phòng nếu FFmpeg không thành công nhưng có sẵn st01.jpg trên đĩa
+  if (fs.existsSync(imagePath)) {
+    return imagePath;
+  }
+
+  throw new Error(`Khong the chup anh tu camera: ${ffmpegErr?.message || "FFmpeg capture that bai"}. Kiem tra lai ket noi USB camera.`);
 }
+
 
 // TELEGRAM ENGINE (CẤU HÌNH TRỰC TIẾP TỪ WEB LƯU TRONG SETTINGS.JSON HOẶC FILE .ENV)
 async function sendTelegramText(messageText) {
@@ -683,445 +814,476 @@ function hasPlantAtPoint(pointIndex) {
 }
 
 // ARDUINO SERIAL PORT INITIALIZER & PROTOCOL LISTENER
+// Chi 1 instance duoc mo port tai 1 thoi diem - co retry khi Access Denied
+let _arduinoInitLock = false;
+let _arduinoInitPromise = null;
+
 async function getOrInitArduinoSerialPort() {
   try {
     const { SerialPort } = require("serialport");
     const { ReadlineParser } = require("serialport");
 
+    // 1. Neu port da open roi thi tra ve luon
     if (activeSerialPort && activeSerialPort.isOpen) {
       return activeSerialPort;
     }
 
+    // 2. Neu dang co init khac chay -> doi no xong
+    if (_arduinoInitPromise) {
+      try { await _arduinoInitPromise; } catch (e) {}
+      if (activeSerialPort && activeSerialPort.isOpen) return activeSerialPort;
+    }
+
+    // 3. Don dep port cu neu con ton tai
     if (activeSerialPort) {
       try {
         activeSerialPort.removeAllListeners();
-        if (activeSerialPort.isOpen) activeSerialPort.close();
+        if (activeSerialPort.isOpen) {
+          await new Promise((res) => activeSerialPort.close(() => res()));
+        }
       } catch (e) {}
       activeSerialPort = null;
     }
 
-    const esp32PathUpper = (activeEsp32Port && activeEsp32Port.path) ? activeEsp32Port.path.toUpperCase() : "";
-    const ports = await SerialPort.list();
-    const candidates = ports.filter((p) => {
-      const pPath = (p.path || "").toUpperCase();
-      if (esp32PathUpper && pPath === esp32PathUpper) return false;
-      const mfg = (p.manufacturer || "").toUpperCase();
+    // 4. Tao promise init moi voi retry khi Access Denied
+    _arduinoInitPromise = (async () => {
+      const esp32PathUpper = (activeEsp32Port && activeEsp32Port.path) ? activeEsp32Port.path.toUpperCase() : "";
+      const ports = await SerialPort.list();
+      const candidates = ports.filter((p) => {
+        const pPath = (p.path || "").toUpperCase();
+        if (esp32PathUpper && pPath === esp32PathUpper) return false;
+        const mfg = (p.manufacturer || "").toUpperCase();
 
-      // Bỏ qua các chip thuộc về ESP32 tuyệt đối
-      if (
-        mfg.includes("SILICON") ||
-        mfg.includes("CP210") ||
-        mfg.includes("ESPRESSIF") ||
-        mfg.includes("ESP32") ||
-        mfg.includes("CH9102")
-      ) {
-        return false;
-      }
+        if (
+          mfg.includes("SILICON") ||
+          mfg.includes("CP210") ||
+          mfg.includes("ESPRESSIF") ||
+          mfg.includes("ESP32") ||
+          mfg.includes("CH9102")
+        ) {
+          return false;
+        }
 
-      return (
-        mfg.includes("ARDUINO") ||
-        mfg.includes("GENUINO") ||
-        mfg.includes("CH340") ||
-        mfg.includes("CH341") ||
-        mfg.includes("FTDI") ||
-        mfg.includes("QINHENG") ||
-        mfg.includes("RASPBERRY") ||
-        pPath.includes("TTYACM")
-      );
-    });
-
-    if (candidates.length === 0) {
-      throw new Error("Không phát hiện mạch Arduino nào kết nối (Chưa cắm USB Arduino)");
-    }
-
-    const targetPortPath = candidates[0].path;
-    console.log(`[Arduino Direct Engine] Opening serial port at ${targetPortPath}...`);
-
-    activeSerialPort = new SerialPort({
-      path: targetPortPath,
-      baudRate: 9600,
-      autoOpen: false,
-    });
-
-    await new Promise((resolve, reject) => {
-      activeSerialPort.open((err) => (err ? reject(err) : resolve()));
-    });
-
-    console.log(`[Arduino Direct Engine] Serial port ${targetPortPath} OPENED successfully.`);
-
-    // Attach Readline Parser for Arduino protocol lines
-    const parser = activeSerialPort.pipe(new ReadlineParser({ delimiter: "\n" }));
-
-    const announceNodeReady = () => {
-      if (activeSerialPort && activeSerialPort.isOpen) {
-        activeSerialPort.write("NODE_READY\n");
-      }
-    };
-
-    announceNodeReady();
-
-    parser.on("data", async (rawLine) => {
-      const line = String(rawLine).replace(/\r/g, "").trim();
-      if (!line) return;
-
-      console.log(`[Arduino -> Server] ${line}`);
-      const timestamp = new Date().toLocaleTimeString("vi-VN");
-
-      lastArduinoLogs.unshift({
-        timestamp,
-        command: "RX",
-        label: `Arduino: ${line}`,
-        status: "RECEIVED",
+        return (
+          mfg.includes("ARDUINO") ||
+          mfg.includes("GENUINO") ||
+          mfg.includes("CH340") ||
+          mfg.includes("CH341") ||
+          mfg.includes("FTDI") ||
+          mfg.includes("QINHENG") ||
+          mfg.includes("RASPBERRY") ||
+          pPath.includes("TTYACM")
+        );
       });
-      if (lastArduinoLogs.length > 30) lastArduinoLogs.pop();
 
-      const normalized = line.toUpperCase();
-
-      try {
-        if (normalized === "ARDUINO_READY" || normalized.includes("HE THONG SAN SANG")) {
-          nodeConnected = true;
-          pushWebNotification("🤖 Arduino: Hệ thống sẵn sàng!", "SUCCESS");
-          return;
-        }
-
-        if (normalized.includes("BAT DAU HOMING")) {
-          pushWebNotification("🤖 Arduino: Đang di chuyển lấy mốc Home (Homing)...", "PROCESS");
-          return;
-        }
-
-        if (normalized.includes("HOMING OK")) {
-          pushWebNotification("✅ Arduino: Homing hoàn tất! Robot sẵn sàng di chuyển.", "SUCCESS");
-          return;
-        }
-
-        if (normalized.includes("PHUN DIEM OK")) {
-          pushWebNotification("💦 Arduino: Đã kích hoạt bơm phun thuốc tại điểm thành công!", "SUCCESS");
-          return;
-        }
-
-        if (normalized.includes("BO QUA")) {
-          pushWebNotification("⚠️ Arduino: Đã phun trong 24h gần nhất. Bỏ qua phun lặp.", "WARNING");
-          return;
-        }
-
-        // CAPTURE event triggered by Arduino sketch_aug6a.ino
-        if (normalized === "CAPTURE" || normalized.includes("CAPTURE")) {
-          captureBusy = true;
-          const cancellationId = currentCancellationId;
-
-          try {
-            pushWebNotification("📸 Nhận tín hiệu CAPTURE từ Arduino! Đang chụp ảnh & phân tích Gemini AI...", "AI_ANALYSIS");
-
-            let imagePathToSend = null;
-            try {
-              imagePathToSend = await captureImage();
-            } catch (capErr) {
-              console.error(`[Capture Error] ${capErr.message}`);
-              pushWebNotification(`Lỗi chụp ảnh từ USB Camera: ${capErr.message}`, "ALERT");
-              await sendTelegramText(`⚠️ LỖI CHỤP ẢNH TỪ CAMERA USB: ${capErr.message}`);
-              return;
-            }
-
-            let formattedResult = "";
-            let action = "NO_SPRAY";
-            const keys = getKeysList();
-
-            let parsedResult = null;
-            if (keys.length === 0) {
-              formattedResult = "Chưa thiết lập Gemini API Key! Vui lòng vào trang 'Cấu hình API' trên Web để thêm chìa khóa Gemini.";
-              addSystemLog("GEMINI_ERR", `❌ Chưa thiết lập Gemini API Key trong hệ thống`, "ALERT");
-              pushWebNotification(formattedResult, "WARNING");
-            } else {
-              let imageBase64 = null;
-              if (fs.existsSync(imagePathToSend)) {
-                try {
-                  const imgBuf = fs.readFileSync(imagePathToSend);
-                  imageBase64 = imgBuf.toString("base64");
-                } catch (e) {}
-              }
-
-              addSystemLog("GEMINI_REQ", `🤖 [Serial Capture] Đang gửi ảnh st01.jpg sang Google Gemini AI để phân tích thực tế...`, "PROCESS");
-
-              const payload = {
-                contents: [
-                  {
-                    parts: [
-                      ...(imageBase64 ? [{ inlineData: { mimeType: "image/jpeg", data: imageBase64 } }] : []),
-                      { text: createPrompt(0) }
-                    ]
-                  }
-                ],
-                generationConfig: {
-                  responseMimeType: "application/json",
-                  responseSchema: GEMINI_RESPONSE_SCHEMA
-                }
-              };
-
-              try {
-                const aiResult = await callGeminiApiWithRotation(payload);
-                if (aiResult && aiResult.text) {
-                  try {
-                    parsedResult = parseGeminiResult(aiResult.text);
-                    formattedResult = formatGeminiResult(parsedResult);
-                  } catch (pErr) {
-                    formattedResult = aiResult.text;
-                  }
-                }
-              } catch (aiErr) {
-                console.error(`[Serial Gemini AI Error] ${aiErr.message}`);
-                formattedResult = `Lỗi phân tích Gemini AI: ${aiErr.message}`;
-                addSystemLog("GEMINI_ERR", `❌ [Serial Gemini AI Log] Lỗi kết nối API: ${aiErr.message}`, "ALERT");
-                pushWebNotification(`❌ Lỗi gọi Gemini AI API: ${aiErr.message}`, "ALERT");
-              }
-            }
-
-            const telegramCaption = `📸 ĐIỂM QUÉT CAMERA KẾT NỐI ARDUINO\n\n${formattedResult}`;
-            try {
-              await sendTelegramPhoto(imagePathToSend, telegramCaption);
-            } catch (tErr) {}
-
-            const hasPest = needSpray(formattedResult);
-            action = hasPest ? "SPRAY" : "NO_SPRAY";
-            const aiStatusText = parsedResult ? parsedResult.status : (hasPest ? "CÓ SÂU / BỆNH" : "KHÔNG PHÁT HIỆN SÂU VÀ BỆNH");
-
-            addSystemLog("GEMINI_RES", `🤖 [Gemini AI Log] Phân tích hoàn tất: Tình trạng [${aiStatusText}] | Mô tả: ${parsedResult?.description || formattedResult}`, "SUCCESS");
-
-            // Nếu phát hiện sâu bệnh, gửi lệnh SPRAY xuống Arduino qua Serial
-            if (action === "SPRAY" && activeSerialPort && activeSerialPort.isOpen) {
-              activeSerialPort.write("SPRAY\n");
-              console.log("[Server -> Arduino Serial] SPRAY (Kích hoạt bơm phun thuốc)");
-              addSystemLog("ACTUATE", `🚨 Lệnh Arduino: SPRAY (Phát hiện [${aiStatusText}] -> Bật bơm 1.5s)`, "WARNING");
-              pushWebNotification(`🚨 Gemini AI phân tích: [${aiStatusText}]! Đã gửi lệnh SPRAY tới Arduino bật bơm 1.5s.`, "WARNING");
-            } else {
-              console.log("[Server -> Arduino Serial] NO_SPRAY");
-              addSystemLog("ACTUATE", `🌿 Lệnh Arduino: NO_SPRAY (Tình trạng [${aiStatusText}])`, "SUCCESS");
-              pushWebNotification(`🌿 Gemini AI phân tích: [${aiStatusText}].`, "SUCCESS");
-            }
-
-            // Save history
-            try {
-              const fullHistory = readJson("inspection_history.json", []);
-              fullHistory.unshift({
-                id: `insp-${Date.now()}`,
-                type: "PEST",
-                timestamp: new Date().toLocaleString("vi-VN"),
-                title: "Quét Camera Serial Arduino",
-                detail: formattedResult,
-                telegramCaption: telegramCaption,
-                status: action === "SPRAY" ? "Phát hiện sâu hại" : "Sức khỏe tốt",
-                image: "/api/camera/image?t=" + Date.now(),
-              });
-              writeJson("inspection_history.json", fullHistory);
-            } catch (hErr) {}
-
-          } catch (pErr) {
-            console.error(`[Capture Event Error] ${pErr.message}`);
-          } finally {
-            captureBusy = false;
-          }
-          return;
-        }
-
-        // POINT_READY:n Event handling (Giống v2.mjs)
-        const pointReadyMatch = /^POINT_READY:(\d+)$/i.exec(line);
-        if (pointReadyMatch) {
-          const pointIndex = Number(pointReadyMatch[1]);
-          if (captureBusy) {
-            console.warn(`[Arduino Protocol] Busy processing point ${pointIndex}, returning error`);
-            activeSerialPort.write(`POINT_RESULT:${pointIndex}:ERROR\n`);
-            return;
-          }
-
-          // KIỂM TRA BỎ QUA ĐIỂM NẾU VỊ TRÍ CHƯA ĐƯỢC THÊM CÂY TRỒNG TRÊN WEB
-          if (!hasPlantAtPoint(pointIndex)) {
-            const pointLabel = `Khay ${pointIndex + 1 < 10 ? "0" + (pointIndex + 1) : pointIndex + 1}`;
-            console.log(`[Inspection Engine] Bỏ qua kiểm tra Điểm ${pointIndex + 1} (${pointLabel}) vì chưa được thêm cây trồng trên Web.`);
-            pushWebNotification(`Bỏ qua Vị trí ${pointIndex + 1} (${pointLabel}): Chưa thêm cây trồng.`, "INFO");
-
-            if (activeSerialPort && activeSerialPort.isOpen) {
-              activeSerialPort.write(`POINT_RESULT:${pointIndex}:NO_SPRAY\n`);
-              console.log(`[Server -> Arduino] POINT_RESULT:${pointIndex}:NO_SPRAY (Skipped plant check)`);
-            }
-            return; // BỎ QUA KIỂM TRA ĐIỂM NÀY
-          }
-
-          captureBusy = true;
-          const cancellationId = currentCancellationId;
-
-          try {
-            pushWebNotification(`Đang chụp ảnh & phân tích Gemini tại Điểm ${pointIndex + 1}...`, "AI_ANALYSIS");
-
-            // 1. CHỤP ẢNH TỪ CAMERA (CHỈ KHI CHỤP ĐƯỢC ẢNH MỚI CHẠY TIẾP, NẾU LỖI THÌ DỪNG & BÁO LỖI ARDUINO)
-            let imagePathToSend = null;
-            try {
-              imagePathToSend = await captureImage();
-            } catch (capErr) {
-              console.error(`[Capture Error] Dừng kiểm tra Điểm ${pointIndex + 1}: ${capErr.message}`);
-              pushWebNotification(`Lỗi chụp ảnh từ USB Camera tại Điểm ${pointIndex + 1}: ${capErr.message}. Đã dừng chu trình điểm này!`, "ALERT");
-              await sendTelegramText(`⚠️ LỖI CHỤP ẢNH TỪ CAMERA USB TẠI ĐIỂM ${pointIndex + 1}:\n${capErr.message}\n-> ĐÃ DỪNG CHU TRÌNH ĐIỂM NÀY!`);
-              
-              if (cancellationId === currentCancellationId && activeSerialPort && activeSerialPort.isOpen) {
-                activeSerialPort.write(`POINT_RESULT:${pointIndex}:ERROR\n`);
-                console.log(`[Server -> Arduino] POINT_RESULT:${pointIndex}:ERROR`);
-              }
-              return; // DỪNG NGAY KHÔNG CHẠY GEMINI HAY PHUN THUỐC KHI CHỤP ẢNH LỖI!
-            }
-
-            // 2. PHÂN TÍCH GEMINI AI VỚI DỮ LIỆU ẢNH BASE64
-            let formattedResult = "";
-            let action = "NO_SPRAY";
-
-            const keys = getKeysList();
-            if (keys.length === 0) {
-              formattedResult = "Chưa thiết lập Gemini API Key! Vui lòng vào trang 'Cấu hình API' trên Web để thêm chìa khóa Gemini.";
-              pushWebNotification(formattedResult, "WARNING");
-            } else {
-              let imageBase64 = null;
-              if (fs.existsSync(imagePathToSend)) {
-                try {
-                  const imgBuf = fs.readFileSync(imagePathToSend);
-                  imageBase64 = imgBuf.toString("base64");
-                } catch (e) {}
-              }
-
-              const payload = {
-                contents: [
-                  {
-                    parts: [
-                      ...(imageBase64 ? [{ inlineData: { mimeType: "image/jpeg", data: imageBase64 } }] : []),
-                      { text: createPrompt(pointIndex) }
-                    ]
-                  }
-                ],
-                generationConfig: {
-                  responseMimeType: "application/json",
-                  responseSchema: GEMINI_RESPONSE_SCHEMA
-                }
-              };
-
-              try {
-                const aiResult = await callGeminiApiWithRotation(payload);
-                if (aiResult && aiResult.text) {
-                  try {
-                    const parsed = parseGeminiResult(aiResult.text);
-                    formattedResult = formatGeminiResult(parsed);
-                  } catch (pErr) {
-                    formattedResult = `KẾT QUẢ KIỂM TRA\nTình trạng: KHÔNG CHẮC CHẮN\nMô tả chi tiết: ${aiResult.text.substring(0, 300)}\nKhuyến nghị: Theo dõi thêm\nThời gian kiểm tra: ${new Date().toLocaleString("vi-VN")}`;
-                  }
-                }
-              } catch (aiErr) {
-                formattedResult = `Lỗi phân tích Gemini AI: ${aiErr.message}`;
-              }
-            }
-
-            // 3. GỬI ẢNH CHỤP + KẾT QUẢ PHÂN TÍCH VỀ TELEGRAM (CHUẨN V2.MJS)
-            const telegramCaption = `ĐIỂM KIỂM TRA ${pointIndex + 1}\n\n${formattedResult}`;
-
-            try {
-              await sendTelegramPhoto(imagePathToSend, telegramCaption);
-            } catch (tErr) {
-              console.error(`[Telegram Error] ${tErr.message}`);
-            }
-
-            // 4. CHỈ KHI CÓ SÂU (needSpray returns true) MỚI PHUN THUỐC (SPRAY)
-            action = needSpray(formattedResult) ? "SPRAY" : "NO_SPRAY";
-
-            // Lưu kết quả kiểm tra điểm này cho Web UI & Persistent File
-            const pointRecord = {
-              pointIndex: pointIndex + 1,
-              timestamp: new Date().toLocaleTimeString("vi-VN"),
-              action: action === "SPRAY" ? "Cần phun thuốc (SPRAY)" : "Không phun (NO_SPRAY)",
-              details: formattedResult,
-              status: action === "SPRAY" ? "PEST_DETECTED" : "HEALTHY",
-            };
-
-            lastInspectionResults.push(pointRecord);
-
-            // Lưu nhật ký thực tế vào data/inspection_history.json
-            try {
-              const fullHistory = readJson("inspection_history.json", []);
-              fullHistory.unshift({
-                id: `insp-${Date.now()}-${pointIndex + 1}`,
-                type: "PEST",
-                timestamp: new Date().toLocaleString("vi-VN"),
-                pointIndex: pointIndex + 1,
-                title: `ĐIỂM KIỂM TRA ${pointIndex + 1}`,
-                detail: formattedResult,
-                telegramCaption: telegramCaption,
-                status: action === "SPRAY" ? "Phát hiện sâu hại" : "Sức khỏe tốt",
-                image: "/api/camera/image?t=" + Date.now(),
-              });
-              writeJson("inspection_history.json", fullHistory);
-            } catch (hErr) {
-              console.warn(`[History Save Error] ${hErr.message}`);
-            }
-
-            pushWebNotification(`Kết quả Điểm ${pointIndex + 1}: ${pointRecord.action}`, action === "SPRAY" ? "WARNING" : "SUCCESS");
-
-            if (cancellationId === currentCancellationId && activeSerialPort.isOpen) {
-              activeSerialPort.write(`POINT_RESULT:${pointIndex}:${action}\n`);
-              console.log(`[Server -> Arduino] POINT_RESULT:${pointIndex}:${action}`);
-            }
-          } catch (pErr) {
-            console.error(`[Point Error] ${pErr.message}`);
-            if (activeSerialPort && activeSerialPort.isOpen) {
-              activeSerialPort.write(`POINT_RESULT:${pointIndex}:ERROR\n`);
-            }
-          } finally {
-            captureBusy = false;
-          }
-          return;
-        }
-
-        if (normalized === "CHECK_COMPLETE") {
-          pushWebNotification("Robot đã hoàn tất toàn bộ chu trình kiểm tra sâu bệnh!", "COMPLETE");
-          await sendTelegramText("Hệ thống robot đã hoàn tất toàn bộ chu trình kiểm tra các điểm!");
-          return;
-        }
-
-        if (normalized.startsWith("ALERT:")) {
-          currentCancellationId++;
-          pushWebNotification(`CẢNH BÁO PHẦN CỨNG: ${line}`, "ALERT");
-          await sendTelegramText(`LỖI HỆ THỐNG ROBOT:\n${line}`);
-          return;
-        }
-      } catch (evtErr) {
-        console.error(`[Arduino Event Error] ${evtErr.message}`);
+      if (candidates.length === 0) {
+        throw new Error("Khong phat hien mach Arduino nao ket noi (Chua cam USB Arduino)");
       }
-    });
 
-    activeSerialPort.on("close", () => {
-      console.warn("[Arduino Direct Engine] Serial port closed");
-      nodeConnected = false;
-      activeSerialPort = null;
-    });
+      const targetPortPath = candidates[0].path;
 
-    activeSerialPort.on("error", (err) => {
-      console.error(`[Arduino Direct Engine Error] ${err.message}`);
-    });
+      // Retry loop: thu mo port toi da 3 lan, moi lan cach 1.5s
+      const MAX_RETRY = 3;
+      let lastErr = null;
+      for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
+        try {
+          console.log(`[Arduino] Mo serial port ${targetPortPath}... (lan ${attempt}/${MAX_RETRY})`);
 
-    return activeSerialPort;
+          const port = new SerialPort({
+            path: targetPortPath,
+            baudRate: 9600,
+            autoOpen: false,
+          });
+
+          await new Promise((resolve, reject) => {
+            port.open((err) => (err ? reject(err) : resolve()));
+          });
+
+          activeSerialPort = port;
+          console.log(`[Arduino] Serial port ${targetPortPath} MO THANH CONG.`);
+
+          // Attach parser
+          const parser = activeSerialPort.pipe(new ReadlineParser({ delimiter: "\n" }));
+
+          // Cleanup khi port bi dong bat ngo
+          activeSerialPort.on("close", () => {
+            console.warn(`[Arduino] Port ${targetPortPath} bi dong! Se thu ket noi lai sau 3s...`);
+            activeSerialPort = null;
+            _arduinoInitPromise = null;
+            setTimeout(() => {
+              getOrInitArduinoSerialPort().catch((e) =>
+                console.warn(`[Arduino Reconnect] ${e.message}`)
+              );
+            }, 3000);
+          });
+
+          activeSerialPort.on("error", (err) => {
+            console.error(`[Arduino Port Error] ${err.message}`);
+          });
+
+          activeSerialPort.write("NODE_READY\n");
+
+          parser.on("data", async (rawLine) => {
+            const line = String(rawLine).replace(/\r/g, "").trim();
+            if (!line) return;
+
+            console.log(`[Arduino -> Server] ${line}`);
+            const timestamp = new Date().toLocaleTimeString("vi-VN");
+
+            lastArduinoLogs.unshift({
+              timestamp,
+              command: "RX",
+              label: `Arduino: ${line}`,
+              status: "RECEIVED",
+            });
+            if (lastArduinoLogs.length > 30) lastArduinoLogs.pop();
+
+            const normalized = line.toUpperCase();
+
+            try {
+              if (normalized === "ARDUINO_READY" || normalized.includes("HE THONG SAN SANG")) {
+                nodeConnected = true;
+                pushWebNotification("Arduino: He thong san sang!", "SUCCESS");
+                return;
+              }
+
+              if (normalized.includes("BAT DAU HOMING")) {
+                pushWebNotification("Arduino: Dang di chuyen lay moc Home (Homing)...", "PROCESS");
+                return;
+              }
+
+              if (normalized.includes("HOMING OK")) {
+                pushWebNotification("Arduino: Homing hoan tat! Robot san sang di chuyen.", "SUCCESS");
+                return;
+              }
+
+              if (normalized.includes("PHUN DIEM OK")) {
+                pushWebNotification("Arduino: Da kich hoat bom phun thuoc tai diem thanh cong!", "SUCCESS");
+                return;
+              }
+
+              if (normalized.includes("BO QUA")) {
+                pushWebNotification("Arduino: Da phun trong 24h gan nhat. Bo qua phun lap.", "WARNING");
+                return;
+              }
+
+              // CAPTURE event triggered by Arduino
+              if (normalized === "CAPTURE" || normalized.includes("CAPTURE")) {
+                captureBusy = true;
+                const cancellationId = currentCancellationId;
+
+                try {
+                  pushWebNotification("Nhan tin hieu CAPTURE tu Arduino! Dang chup anh & phan tich Gemini AI...", "AI_ANALYSIS");
+
+                  let imagePathToSend = null;
+                  try {
+                    imagePathToSend = await captureImage();
+                  } catch (capErr) {
+                    console.error(`[Capture Error] ${capErr.message}`);
+                    pushWebNotification(`Loi chup anh tu USB Camera: ${capErr.message}`, "ALERT");
+                    await sendTelegramText(`LOI CHUP ANH TU CAMERA USB: ${capErr.message}`);
+                    return;
+                  }
+
+                  let formattedResult = "";
+                  let action = "NO_SPRAY";
+                  const keys = getKeysList();
+
+                  let parsedResult = null;
+                  if (keys.length === 0) {
+                    formattedResult = "Chua thiet lap Gemini API Key!";
+                    addSystemLog("GEMINI_ERR", "Chua thiet lap Gemini API Key", "ALERT");
+                    pushWebNotification(formattedResult, "WARNING");
+                    try { await sendTelegramPhoto(imagePathToSend, `DIEM QUET CAMERA\n\n${formattedResult}`); } catch (tErr) {}
+                    return;
+                  } else {
+                    let imageBase64 = null;
+                    if (fs.existsSync(imagePathToSend)) {
+                      try {
+                        const imgBuf = fs.readFileSync(imagePathToSend);
+                        imageBase64 = imgBuf.toString("base64");
+                      } catch (e) {}
+                    }
+
+                    addSystemLog("GEMINI_REQ", "Dang gui anh st01.jpg sang Google Gemini AI...", "PROCESS");
+
+                    const payload = {
+                      contents: [{
+                        parts: [
+                          ...(imageBase64 ? [{ inlineData: { mimeType: "image/jpeg", data: imageBase64 } }] : []),
+                          { text: createPrompt(0) }
+                        ]
+                      }],
+                      generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: GEMINI_RESPONSE_SCHEMA
+                      }
+                    };
+
+                    try {
+                      const aiResult = await callGeminiApiWithRotation(payload);
+                      if (aiResult && aiResult.text) {
+                        try {
+                          parsedResult = parseGeminiResult(aiResult.text);
+                          formattedResult = formatGeminiResult(parsedResult);
+                        } catch (pErr) {
+                          formattedResult = aiResult.text;
+                        }
+                      }
+                    } catch (aiErr) {
+                      console.error(`[Serial Gemini AI Error] ${aiErr.message}`);
+                      formattedResult = `Loi phan tich Gemini AI: ${aiErr.message}`;
+                      addSystemLog("GEMINI_ERR", `Loi ket noi API: ${aiErr.message}`, "ALERT");
+                      pushWebNotification(`Loi goi Gemini AI API: ${aiErr.message}`, "ALERT");
+                      try { await sendTelegramPhoto(imagePathToSend, `DIEM QUET CAMERA\n\n${formattedResult}`); } catch (tErr) {}
+                      return;
+                    }
+                  }
+
+                  const hasPest = needSpray(formattedResult);
+                  action = hasPest ? "SPRAY" : "NO_SPRAY";
+                  const aiStatusText = parsedResult ? parsedResult.status : (hasPest ? "CO SAU / BENH" : "KHONG PHAT HIEN SAU VA BENH");
+
+                  // 1. Phản hồi NGAY LẬP TỨC tới Arduino
+                  if (action === "SPRAY" && activeSerialPort && activeSerialPort.isOpen) {
+                    activeSerialPort.write("SPRAY\n");
+                    addSystemLog("ACTUATE", `Lenh Arduino: SPRAY (Phat hien [${aiStatusText}])`, "WARNING");
+                    pushWebNotification(`Gemini AI phan tich: [${aiStatusText}]! Da gui lenh SPRAY toi Arduino.`, "WARNING");
+                  } else {
+                    addSystemLog("ACTUATE", `Lenh Arduino: NO_SPRAY (Tinh trang [${aiStatusText}])`, "SUCCESS");
+                    pushWebNotification(`Gemini AI phan tich: [${aiStatusText}].`, "SUCCESS");
+                  }
+
+                  addSystemLog("GEMINI_RES", `Phan tich hoan tat: [${aiStatusText}]`, "SUCCESS");
+
+                  // 2. Gửi Telegram ở background (chạy ngầm không delay)
+                  const telegramCaption = `DIEM QUET CAMERA KET NOI ARDUINO\n\n${formattedResult}`;
+                  sendTelegramPhoto(imagePathToSend, telegramCaption).catch(() => {});
+
+                  try {
+                    const fullHistory = readJson("inspection_history.json", []);
+                    fullHistory.unshift({
+                      id: `insp-${Date.now()}`,
+                      type: "PEST",
+                      timestamp: new Date().toLocaleString("vi-VN"),
+                      title: "Quet Camera Serial Arduino",
+                      detail: formattedResult,
+                      telegramCaption: telegramCaption,
+                      status: action === "SPRAY" ? "Phat hien sau hai" : "Suc khoe tot",
+                      image: "/api/camera/image?t=" + Date.now(),
+                    });
+                    writeJson("inspection_history.json", fullHistory);
+                  } catch (hErr) {}
+
+                } catch (pErr) {
+                  console.error(`[Capture Event Error] ${pErr.message}`);
+                } finally {
+                  captureBusy = false;
+                }
+                return;
+              }
+
+              // POINT_READY:n Event handling
+              const pointReadyMatch = /^POINT_READY:(\d+)$/i.exec(line);
+              if (pointReadyMatch) {
+                const pointIndex = Number(pointReadyMatch[1]);
+                if (captureBusy) {
+                  console.warn(`[Arduino Protocol] Busy processing point ${pointIndex}`);
+                  if (activeSerialPort && activeSerialPort.isOpen) {
+                    activeSerialPort.write(`POINT_RESULT:${pointIndex}:ERROR\n`);
+                  }
+                  return;
+                }
+
+                if (!hasPlantAtPoint(pointIndex)) {
+                  const pointLabel = `Khay ${pointIndex + 1 < 10 ? "0" + (pointIndex + 1) : pointIndex + 1}`;
+                  pushWebNotification(`Bo qua Vi tri ${pointIndex + 1} (${pointLabel}): Chua them cay trong.`, "INFO");
+                  if (activeSerialPort && activeSerialPort.isOpen) {
+                    activeSerialPort.write(`POINT_RESULT:${pointIndex}:NO_SPRAY\n`);
+                  }
+                  return;
+                }
+
+                captureBusy = true;
+                const cancellationId = currentCancellationId;
+
+                try {
+                  pushWebNotification(`Dang chup anh & phan tich Gemini tai Diem ${pointIndex + 1}...`, "AI_ANALYSIS");
+
+                  let imagePathToSend2 = null;
+                  try {
+                    imagePathToSend2 = await captureImage(Date.now());
+                  } catch (capErr) {
+                    console.error(`[Capture Error] Dung kiem tra Diem ${pointIndex + 1}: ${capErr.message}`);
+                    pushWebNotification(`Loi chup anh tai Diem ${pointIndex + 1}: ${capErr.message}`, "ALERT");
+                    await sendTelegramText(`LOI CHUP ANH TAI DIEM ${pointIndex + 1}: ${capErr.message}`);
+                    if (cancellationId === currentCancellationId && activeSerialPort && activeSerialPort.isOpen) {
+                      activeSerialPort.write(`POINT_RESULT:${pointIndex}:ERROR\n`);
+                    }
+                    return;
+                  }
+
+                  let formattedResult2 = "";
+                  let action2 = "NO_SPRAY";
+                  const keys2 = getKeysList();
+
+                  if (keys2.length === 0) {
+                    formattedResult2 = "Chua thiet lap Gemini API Key!";
+                    pushWebNotification(formattedResult2, "WARNING");
+                    try { await sendTelegramPhoto(imagePathToSend2, `DIEM KIEM TRA ${pointIndex + 1}\n\n${formattedResult2}`); } catch (tErr) {}
+                  } else {
+                    let imageBase642 = null;
+                    if (fs.existsSync(imagePathToSend2)) {
+                      try {
+                        const imgBuf2 = fs.readFileSync(imagePathToSend2);
+                        imageBase642 = imgBuf2.toString("base64");
+                      } catch (e) {}
+                    }
+
+                    const payload2 = {
+                      contents: [{
+                        parts: [
+                          ...(imageBase642 ? [{ inlineData: { mimeType: "image/jpeg", data: imageBase642 } }] : []),
+                          { text: createPrompt(pointIndex) }
+                        ]
+                      }],
+                      generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: GEMINI_RESPONSE_SCHEMA
+                      }
+                    };
+
+                    let parsedResult2 = null;
+                    try {
+                      const aiResult2 = await callGeminiApiWithRotation(payload2);
+                      if (aiResult2 && aiResult2.text) {
+                        try {
+                          parsedResult2 = parseGeminiResult(aiResult2.text);
+                          formattedResult2 = formatGeminiResult(parsedResult2);
+                        } catch (pErr) {
+                          formattedResult2 = aiResult2.text;
+                        }
+                      }
+                    } catch (aiErr) {
+                      console.error(`[Point ${pointIndex + 1} Gemini Error] ${aiErr.message}`);
+                      formattedResult2 = `Loi Gemini AI: ${aiErr.message}`;
+                    }
+
+                    const hasPest2 = needSpray(formattedResult2);
+                    action2 = hasPest2 ? "SPRAY" : "NO_SPRAY";
+                    const aiStatus2 = parsedResult2 ? parsedResult2.status : (hasPest2 ? "CO SAU / BENH" : "KHONG PHAT HIEN SAU VA BENH");
+
+                    // 1. Phản hồi NGAY LẬP TỨC cho Arduino chuyển vị trí tiếp theo - KHÔNG DELAY!
+                    if (cancellationId === currentCancellationId && activeSerialPort && activeSerialPort.isOpen) {
+                      activeSerialPort.write(`POINT_RESULT:${pointIndex}:${action2}\n`);
+                      console.log(`[Server -> Arduino (KHÔNG DELAY)] POINT_RESULT:${pointIndex}:${action2}`);
+                    }
+
+                    addSystemLog("GEMINI_RES", `Diem ${pointIndex + 1}: [${aiStatus2}] -> Fast Forward Point`, "SUCCESS");
+
+                    // 2. Gửi Telegram & lưu lịch sử ở background (chạy ngầm không làm trễ phần cứng)
+                    const teleCaption2 = `DIEM KIEM TRA ${pointIndex + 1}\n\n${formattedResult2}`;
+                    sendTelegramPhoto(imagePathToSend2, teleCaption2).catch(() => {});
+
+                    try {
+                      const hist2 = readJson("inspection_history.json", []);
+                      hist2.unshift({
+                        id: `insp-${Date.now()}-${pointIndex}`,
+                        type: "PEST",
+                        timestamp: new Date().toLocaleString("vi-VN"),
+                        title: `Diem ${pointIndex + 1} - Kiem tra sau hai`,
+                        detail: formattedResult2,
+                        status: hasPest2 ? "Phat hien sau hai" : "Suc khoe tot",
+                        image: "/api/camera/image?t=" + Date.now(),
+                      });
+                      writeJson("inspection_history.json", hist2);
+                    } catch (hErr) {}
+                  }
+
+                } catch (pErr) {
+                  console.error(`[Point Event Error] ${pErr.message}`);
+                  if (cancellationId === currentCancellationId && activeSerialPort && activeSerialPort.isOpen) {
+                    activeSerialPort.write(`POINT_RESULT:${pointIndex}:ERROR\n`);
+                  }
+                } finally {
+                  captureBusy = false;
+                }
+                return;
+              }
+
+            } catch (handlerErr) {
+              console.error(`[Serial Data Handler Error] ${handlerErr.message}`);
+            }
+          });
+
+          return activeSerialPort;
+
+        } catch (openErr) {
+          lastErr = openErr;
+          const isAccessDenied = 
+            openErr.message.toLowerCase().includes("access denied") ||
+            openErr.message.toLowerCase().includes("access is denied") ||
+            openErr.message.toLowerCase().includes("eacces") ||
+            openErr.message.includes("EACCES");
+
+          if (isAccessDenied && attempt < MAX_RETRY) {
+            console.warn(`[Arduino] COM port bi chiem boi tien trinh khac (Access Denied). Thu lai sau ${attempt * 2}s... (${attempt}/${MAX_RETRY})`);
+            await new Promise((r) => setTimeout(r, attempt * 2000));
+            continue;
+          }
+          throw openErr;
+        }
+      }
+
+      throw lastErr || new Error("Khong the mo serial port Arduino sau nhieu lan thu lai.");
+    })();
+
+    return await _arduinoInitPromise;
+
   } catch (err) {
-    console.warn(`[Arduino Init Error] ${err.message}`);
-    activeSerialPort = null;
+    _arduinoInitPromise = null;
+    console.error(`[Arduino Init Error] ${err.message}`);
     throw err;
   }
 }
 
-// DIRECT COMMAND TRANSMISSION METHOD
+// DIRECT COMMAND TRANSMISSION METHOD - with retry on port error
 async function sendDirectCommandToArduino(cmdString) {
-  const port = await getOrInitArduinoSerialPort();
-  if (!port || !port.isOpen) {
-    throw new Error("Không thể mở hoặc duy trì cổng Serial kết nối với Arduino!");
-  }
+  try {
+    const port = await getOrInitArduinoSerialPort();
+    if (!port || !port.isOpen) {
+      throw new Error("Khong the mo hoac duy tri cong Serial ket noi voi Arduino!");
+    }
 
-  return new Promise((resolve, reject) => {
-    port.write(`${cmdString}\n`, (err) => {
-      if (err) return reject(new Error(`Lỗi truyền lệnh tới Arduino: ${err.message}`));
-      resolve(true);
+    return new Promise((resolve, reject) => {
+      port.write(`${cmdString}\n`, (err) => {
+        if (err) {
+          // Neu loi khi write -> reset port de lan sau init lai
+          activeSerialPort = null;
+          _arduinoInitPromise = null;
+          return reject(new Error(`Loi truyen lenh toi Arduino: ${err.message}`));
+        }
+        resolve(true);
+      });
     });
-  });
+  } catch (err) {
+    const isAccessDenied = err.message.toLowerCase().includes("access denied") ||
+                           err.message.toLowerCase().includes("access is denied");
+    if (isAccessDenied) {
+      console.warn(`[Arduino CMD] COM port bi Access Denied - co the co server khac dang chay. Kiem tra va dong instance thua.`);
+    }
+    throw err;
+  }
 }
+
+// Cleanup khi process exit
+process.on("exit", () => {
+  if (activeSerialPort && activeSerialPort.isOpen) {
+    try { activeSerialPort.close(); } catch (e) {}
+  }
+});
+process.on("SIGINT", () => { process.exit(0); });
+process.on("SIGTERM", () => { process.exit(0); });
 
 app.post("/api/arduino/command", async (req, res) => {
   const { command } = req.body;
@@ -1791,6 +1953,34 @@ app.get("/api/camera/status", async (req, res) => {
   });
 });
 
+
+// 3b. Endpoint nhan anh WebRTC tu Browser (thay the FFmpeg tren Windows/dev)
+app.post("/api/camera/upload-snapshot", async (req, res) => {
+  try {
+    const { imageBase64, mimeType } = req.body;
+    if (!imageBase64) {
+      return res.status(400).json({ success: false, error: "Thieu du lieu anh (imageBase64)" });
+    }
+
+    const imagePath = path.join(process.cwd(), "st01.jpg");
+    const base64Data = imageBase64.includes(",") ? imageBase64.split(",")[1] : imageBase64;
+    const imageBuffer = Buffer.from(base64Data, "base64");
+
+    fs.writeFileSync(imagePath, imageBuffer);
+    console.log(`[Camera Upload] Nhan va luu anh WebRTC tu browser thanh cong: ${imagePath} (${imageBuffer.length} bytes)`);
+    addSystemLog("CAMERA_UPLOAD", `[UPLOAD] Da nhan anh tu webcam browser (${imageBuffer.length} bytes) -> st01.jpg`, "SUCCESS");
+
+    res.json({
+      success: true,
+      message: "Da luu anh webcam tu browser thanh cong!",
+      imageUrl: "/api/camera/image?t=" + Date.now(),
+      size: imageBuffer.length,
+    });
+  } catch (err) {
+    console.error(`[Camera Upload Error] ${err.message}`);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 // 3. Endpoint chụp ảnh trực tiếp ngay lập tức từ USB Camera
 app.post("/api/camera/snapshot", async (req, res) => {
   try {
@@ -3208,15 +3398,45 @@ app.post("/api/plant-inspect", async (req, res) => {
     await sendDirectCommandToArduino(`P${pointIdx + 1}`).catch(() => {});
 
     // 2. Capture actual USB camera image
+    // Priority: dung anh tu browser (snapshotBase64) neu co, else dung FFmpeg (Linux only)
     let imagePathToSend = null;
-    try {
-      imagePathToSend = await captureImage();
-      addSystemLog("CAM_CAPTURE", `📷 [Camera Log] Đã chụp ảnh thành công từ USB Camera (${trayName} / st01.jpg)!`, "SUCCESS");
-    } catch (capErr) {
-      console.warn(`[Inspect Capture Warn] ${capErr.message}`);
-      addSystemLog("CAM_CAPTURE", `⚠️ [Camera Log] Không thể chụp trực tiếp, sử dụng snapshot fallback: ${capErr.message}`, "WARNING");
+    const { snapshotBase64 } = req.body;
+    if (snapshotBase64) {
+      try {
+        const imgPath = path.join(process.cwd(), "st01.jpg");
+        const b64Data = snapshotBase64.includes(",") ? snapshotBase64.split(",")[1] : snapshotBase64;
+        const imgBuf = Buffer.from(b64Data, "base64");
+        fs.writeFileSync(imgPath, imgBuf);
+        imagePathToSend = imgPath;
+        addSystemLog("CAM_CAPTURE", `[BROWSER CAM] Da luu anh WebRTC tu browser (${imgBuf.length} bytes) -> st01.jpg`, "SUCCESS");
+        console.log(`[Plant Inspect] Dung anh browser ${imgBuf.length} bytes cho diem ${pointIdx + 1}`);
+      } catch (uploadErr) {
+        console.warn(`[Plant Inspect] Loi luu anh browser: ${uploadErr.message}`);
+      }
+    }
+    if (!imagePathToSend) {
+      try {
+        imagePathToSend = await captureImage();
+        addSystemLog("CAM_CAPTURE", `[Camera Log] Da chup anh thanh cong tu USB Camera (${trayName} / st01.jpg)!`, "SUCCESS");
+      } catch (capErr) {
+        console.error(`[Inspect Capture Error] ${capErr.message}`);
+        addSystemLog("CAM_CAPTURE", `❌ Chụp ảnh không thành công: ${capErr.message}`, "ALERT");
+        pushWebNotification(`❌ Lỗi chụp ảnh camera: ${capErr.message}`, "ALERT");
+        return res.status(500).json({
+          success: false,
+          error: `Chụp ảnh không thành công: ${capErr.message}. Vui lòng kiểm tra lại kết nối camera!`,
+        });
+      }
     }
 
+    if (!imagePathToSend || !fs.existsSync(imagePathToSend)) {
+      addSystemLog("CAM_CAPTURE", `❌ Chụp ảnh không thành công: Không tìm thấy file st01.jpg`, "ALERT");
+      pushWebNotification(`❌ Lỗi chụp ảnh camera: Không có file hình ảnh!`, "ALERT");
+      return res.status(500).json({
+        success: false,
+        error: "Chụp ảnh không thành công: Không có dữ liệu hình ảnh từ camera!",
+      });
+    }
     // 3. Perform Gemini AI analysis
     let formattedResult = "";
     const keys = getKeysList();
@@ -3239,16 +3459,20 @@ app.post("/api/plant-inspect", async (req, res) => {
 
     addSystemLog("GEMINI_REQ", `🤖 Đang gửi dữ liệu hình ảnh st01.jpg tới mô hình Gemini AI để phân tích diệp lục & sâu bệnh...`, "PROCESS");
 
+    // Payload theo dung v2.mjs: text truoc, inlineData sau, them thinkingConfig + maxOutputTokens
     const payload = {
       contents: [
         {
+          role: "user",
           parts: [
-            ...(imageBase64 ? [{ inlineData: { mimeType: "image/jpeg", data: imageBase64 } }] : []),
-            { text: createPrompt(pointIdx) }
+            { text: createPrompt(pointIdx) },
+            ...(imageBase64 ? [{ inlineData: { mimeType: "image/jpeg", data: imageBase64 } }] : [])
           ]
         }
       ],
       generationConfig: {
+        maxOutputTokens: 1200,
+        thinkingConfig: { thinkingLevel: "minimal" },
         responseMimeType: "application/json",
         responseSchema: GEMINI_RESPONSE_SCHEMA
       }
@@ -3297,7 +3521,7 @@ app.post("/api/plant-inspect", async (req, res) => {
 
     // 5. Send to Telegram
     try {
-      await sendTelegramPhoto(imagePathToSend, telegramCaption);
+      sendTelegramPhoto(imagePathToSend, telegramCaption).catch(() => {});
     } catch (tErr) {}
 
     // 6. Save persistent snapshot file for history log

@@ -89,8 +89,39 @@ export function CameraView({ nightVision = false }: CameraViewProps) {
           fps: settings.frameRate || 60,
         });
 
+        // Tự động đẩy khung hình MỚI sang server mỗi 1 giây để giữ st01.jpg luôn là ảnh chụp thực tế theo thời gian thực
+        const pushFrameToServer = () => {
+          if (videoRef.current && videoRef.current.readyState >= 2 && videoRef.current.videoWidth > 0) {
+            try {
+              const canvas = document.createElement("canvas");
+              canvas.width = videoRef.current.videoWidth;
+              canvas.height = videoRef.current.videoHeight;
+              const ctx = canvas.getContext("2d");
+              if (ctx) {
+                ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+                const imageBase64 = canvas.toDataURL("image/jpeg", 0.85);
+                fetch("/api/camera/upload-snapshot", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ imageBase64 }),
+                }).catch(() => {});
+              }
+            } catch (e) {}
+          }
+        };
+
+        // Đẩy 1 frame ngay lập tức khi vừa kết nối camera
+        setTimeout(pushFrameToServer, 500);
+
+        // Đẩy liên tục mỗi 300ms (3 lần / giây) để đảm bảo chụp tức thì ảnh mới khi tới vị trí
+        const syncTimer = setInterval(pushFrameToServer, 300);
+
+        // Cleanup timer khi unmount
+        (localStream as any)._syncTimer = syncTimer;
+
         // Bắt sự kiện rút phích cắm Camera USB ngay lập tức
         track.onended = () => {
+          clearInterval(syncTimer);
           setCamStatus({
             connected: false,
             device: "Không có thiết bị",
@@ -112,6 +143,7 @@ export function CameraView({ nightVision = false }: CameraViewProps) {
 
     return () => {
       if (localStream) {
+        if ((localStream as any)._syncTimer) clearInterval((localStream as any)._syncTimer);
         localStream.getTracks().forEach((track) => track.stop());
       }
     };
