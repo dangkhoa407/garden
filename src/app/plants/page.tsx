@@ -148,14 +148,9 @@ export default function PlantsPage() {
                 </div>
 
                 <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <label className="block font-label-caps text-label-caps text-on-surface-variant font-semibold">
-                      VỊ TRÍ TRỒNG
-                    </label>
-                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">
-                      Ẩn khay đã thêm
-                    </span>
-                  </div>
+                  <label className="block font-label-caps text-label-caps text-on-surface-variant mb-1 font-semibold">
+                    VỊ TRÍ TRỒNG
+                  </label>
 
                   {availableLocations.length > 0 ? (
                     <select
@@ -165,7 +160,7 @@ export default function PlantsPage() {
                     >
                       {availableLocations.map((loc) => (
                         <option key={loc} value={loc}>
-                          {loc} (Trống)
+                          {loc}
                         </option>
                       ))}
                     </select>
