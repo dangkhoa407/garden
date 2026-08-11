@@ -955,6 +955,7 @@ app.post("/api/arduino/command", async (req, res) => {
       success: false,
       error: `Lỗi truyền lệnh tới Arduino: ${err.message}`,
       command: mapped.cmd,
+    });
   }
 });
 
