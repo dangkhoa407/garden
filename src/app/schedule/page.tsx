@@ -37,31 +37,31 @@ const ACTION_OPTIONS: {
   badge: string;
   color: string;
 }[] = [
-  {
-    type: "INSPECT",
-    title: "Kiểm tra sâu hại",
-    desc: "Chụp 6 điểm bằng camera & phân tích hình ảnh qua AI Gemini (Phím k)",
-    icon: "bug_report",
-    badge: "Phím k",
-    color: "from-emerald-500/10 to-teal-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400",
-  },
-  {
-    type: "FERTILIZE",
-    title: "Tưới Phân",
-    desc: "Kích hoạt Popup/tiến trình tưới phân tự động (Tùy chỉnh ml hoặc Phối trộn AI)",
-    icon: "water_drop",
-    badge: "ESP32",
-    color: "from-cyan-500/10 to-blue-500/10 border-cyan-500/30 text-cyan-700 dark:text-cyan-400",
-  },
-  {
-    type: "SPRAY_ALL",
-    title: "Phun toàn bộ vườn",
-    desc: "Kích hoạt hệ thống phun dung dịch sinh học trên toàn bộ các khay (Phím p)",
-    icon: "shower",
-    badge: "Phím p",
-    color: "from-teal-500/10 to-emerald-500/10 border-teal-500/30 text-teal-700 dark:text-teal-400",
-  },
-];
+    {
+      type: "INSPECT",
+      title: "Kiểm tra sâu hại",
+      desc: "Chụp 6 điểm bằng camera & phân tích hình ảnh qua AI Gemini (Phím k)",
+      icon: "bug_report",
+      badge: "Phím k",
+      color: "from-emerald-500/10 to-teal-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400",
+    },
+    {
+      type: "FERTILIZE",
+      title: "Tưới Phân",
+      desc: "Kích hoạt Popup/tiến trình tưới phân tự động (Tùy chỉnh ml hoặc Phối trộn AI)",
+      icon: "water_drop",
+      badge: "ESP32",
+      color: "from-cyan-500/10 to-blue-500/10 border-cyan-500/30 text-cyan-700 dark:text-cyan-400",
+    },
+    {
+      type: "SPRAY_ALL",
+      title: "Phun toàn bộ vườn",
+      desc: "Kích hoạt hệ thống phun dung dịch sinh học trên toàn bộ các khay (Phím p)",
+      icon: "shower",
+      badge: "Phím p",
+      color: "from-teal-500/10 to-emerald-500/10 border-teal-500/30 text-teal-700 dark:text-teal-400",
+    },
+  ];
 
 const DAYS_OF_WEEK = [
   { key: "T2", label: "Thứ 2" },
@@ -103,7 +103,7 @@ export default function SchedulePage() {
 
   const [newTitle, setNewTitle] = useState("");
   const [newScheduleType, setNewScheduleType] = useState<"once" | "repeating">("once");
-  
+
   // Single Row Combined Date + Time for "Once" mode
   const todayStr = new Date().toISOString().split("T")[0];
   const [slotDateInput, setSlotDateInput] = useState(todayStr);
@@ -147,10 +147,10 @@ export default function SchedulePage() {
       prev.map((s) =>
         s.id === id
           ? {
-              ...s,
-              enabled: !currentEnabled,
-              status: !currentEnabled ? "upcoming" : "completed",
-            }
+            ...s,
+            enabled: !currentEnabled,
+            status: !currentEnabled ? "upcoming" : "completed",
+          }
           : s
       )
     );
@@ -493,31 +493,28 @@ export default function SchedulePage() {
           <div className="flex gap-2">
             <button
               onClick={() => setFilter("all")}
-              className={`px-4 py-2 rounded-full text-xs font-bold uppercase transition-all ${
-                filter === "all"
-                  ? "bg-primary text-white shadow-sm"
-                  : "bg-surface-container-low border border-outline-variant/30 text-on-surface-variant hover:bg-surface-container-high"
-              }`}
+              className={`px-4 py-2 rounded-full text-xs font-bold uppercase transition-all ${filter === "all"
+                ? "bg-primary text-white shadow-sm"
+                : "bg-surface-container-low border border-outline-variant/30 text-on-surface-variant hover:bg-surface-container-high"
+                }`}
             >
               TẤT CẢ ({schedules.length})
             </button>
             <button
               onClick={() => setFilter("upcoming")}
-              className={`px-4 py-2 rounded-full text-xs font-bold uppercase transition-all ${
-                filter === "upcoming"
-                  ? "bg-primary text-white shadow-sm"
-                  : "bg-surface-container-low border border-outline-variant/30 text-on-surface-variant hover:bg-surface-container-high"
-              }`}
+              className={`px-4 py-2 rounded-full text-xs font-bold uppercase transition-all ${filter === "upcoming"
+                ? "bg-primary text-white shadow-sm"
+                : "bg-surface-container-low border border-outline-variant/30 text-on-surface-variant hover:bg-surface-container-high"
+                }`}
             >
               SẮP TỚI ({schedules.filter((s) => s.enabled && s.status !== "completed").length})
             </button>
             <button
               onClick={() => setFilter("completed")}
-              className={`px-4 py-2 rounded-full text-xs font-bold uppercase transition-all ${
-                filter === "completed"
-                  ? "bg-primary text-white shadow-sm"
-                  : "bg-surface-container-low border border-outline-variant/30 text-on-surface-variant hover:bg-surface-container-high"
-              }`}
+              className={`px-4 py-2 rounded-full text-xs font-bold uppercase transition-all ${filter === "completed"
+                ? "bg-primary text-white shadow-sm"
+                : "bg-surface-container-low border border-outline-variant/30 text-on-surface-variant hover:bg-surface-container-high"
+                }`}
             >
               HOÀN THÀNH / ĐÃ TẮT ({schedules.filter((s) => !s.enabled || s.status === "completed").length})
             </button>
@@ -581,11 +578,10 @@ export default function SchedulePage() {
                 return (
                   <div
                     key={item.id}
-                    className={`bg-surface rounded-2xl p-4 border transition-all shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4 ${
-                      item.enabled
-                        ? "border-outline-variant/30 hover:border-primary/40"
-                        : "border-outline-variant/20 opacity-60 bg-surface-container-lowest"
-                    }`}
+                    className={`bg-surface rounded-2xl p-4 border transition-all shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4 ${item.enabled
+                      ? "border-outline-variant/30 hover:border-primary/40"
+                      : "border-outline-variant/20 opacity-60 bg-surface-container-lowest"
+                      }`}
                   >
                     {/* Left: Time & Actions Sequence */}
                     <div className="flex items-center gap-4 min-w-0">
@@ -776,7 +772,7 @@ export default function SchedulePage() {
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <label className="block text-xs font-bold uppercase tracking-wider text-on-surface">
-                      1. CHỌN CÁC CHỨC NĂNG & KÉO THẢ ĐỔI THỨ TỰ:
+                      1. CHỌN CÁC CHỨC NĂNG:
                     </label>
                     <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md flex items-center gap-1">
                       <span className="material-symbols-outlined text-xs">drag_indicator</span>
@@ -798,11 +794,10 @@ export default function SchedulePage() {
                           onDragStart={(e) => isSelected && handleDragStart(e, actionIdx)}
                           onDragOver={(e) => isSelected && handleDragOver(e, actionIdx)}
                           onDragEnd={handleDragEnd}
-                          className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
-                            isSelected
-                              ? "bg-primary/10 border-primary shadow-xs cursor-grab active:cursor-grabbing"
-                              : "bg-surface-container-low border-outline-variant/30 hover:border-primary/30"
-                          } ${isDragging ? "opacity-40 border-dashed scale-95" : ""}`}
+                          className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-3 ${isSelected
+                            ? "bg-primary/10 border-primary shadow-xs cursor-grab active:cursor-grabbing"
+                            : "bg-surface-container-low border-outline-variant/30 hover:border-primary/30"
+                            } ${isDragging ? "opacity-40 border-dashed scale-95" : ""}`}
                         >
                           <div className="flex items-center gap-3 min-w-0 flex-1">
                             {/* Drag Handle Icon for selected items */}
@@ -829,11 +824,10 @@ export default function SchedulePage() {
                               className="flex items-center gap-3 cursor-pointer flex-1 min-w-0 select-none"
                             >
                               <div
-                                className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${
-                                  isSelected
-                                    ? "bg-primary border-primary text-white"
-                                    : "border-outline-variant bg-surface"
-                                }`}
+                                className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${isSelected
+                                  ? "bg-primary border-primary text-white"
+                                  : "border-outline-variant bg-surface"
+                                  }`}
                               >
                                 {isSelected && (
                                   <span className="material-symbols-outlined text-xs font-bold">
@@ -888,27 +882,25 @@ export default function SchedulePage() {
                     <button
                       type="button"
                       onClick={() => setNewScheduleType("once")}
-                      className={`py-2.5 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
-                        newScheduleType === "once"
-                          ? "bg-primary text-white border-primary shadow-xs"
-                          : "bg-surface-container-low border-outline-variant/30 text-on-surface-variant"
-                      }`}
+                      className={`py-2.5 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${newScheduleType === "once"
+                        ? "bg-primary text-white border-primary shadow-xs"
+                        : "bg-surface-container-low border-outline-variant/30 text-on-surface-variant"
+                        }`}
                     >
                       <span className="material-symbols-outlined text-base">event</span>
-                      Chạy 1 Lần (Nhiều mốc ngày giờ)
+                      Chạy 1 Lần
                     </button>
 
                     <button
                       type="button"
                       onClick={() => setNewScheduleType("repeating")}
-                      className={`py-2.5 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
-                        newScheduleType === "repeating"
-                          ? "bg-primary text-white border-primary shadow-xs"
-                          : "bg-surface-container-low border-outline-variant/30 text-on-surface-variant"
-                      }`}
+                      className={`py-2.5 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${newScheduleType === "repeating"
+                        ? "bg-primary text-white border-primary shadow-xs"
+                        : "bg-surface-container-low border-outline-variant/30 text-on-surface-variant"
+                        }`}
                     >
                       <span className="material-symbols-outlined text-base">update</span>
-                      Lặp Lại Hàng Tuần
+                      Hàng Tuần
                     </button>
                   </div>
                 </div>
@@ -918,7 +910,7 @@ export default function SchedulePage() {
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
                       <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant">
-                        THỜI GIAN THỰC THI (GHÉP CHUNG NGÀY + GIỜ)
+                        THỜI GIAN THỰC THI
                       </label>
                       <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded">
                         Đã chọn {dateTimeSlots.length} mốc
@@ -985,11 +977,10 @@ export default function SchedulePage() {
                               key={d.key}
                               type="button"
                               onClick={() => handleDayToggle(d.key)}
-                              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                                isSelected
-                                  ? "bg-emerald-600 text-white shadow-xs"
-                                  : "bg-surface-container-low border border-outline-variant/30 text-on-surface-variant"
-                              }`}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${isSelected
+                                ? "bg-emerald-600 text-white shadow-xs"
+                                : "bg-surface-container-low border border-outline-variant/30 text-on-surface-variant"
+                                }`}
                             >
                               {d.label}
                             </button>
@@ -1002,7 +993,7 @@ export default function SchedulePage() {
                     <div>
                       <div className="flex items-center justify-between mb-1.5">
                         <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant">
-                          GIỜ CHẠY TRONG NGÀY (THÊM ĐƯỢC NHIỀU GIỜ)
+                          GIỜ CHẠY TRONG NGÀY
                         </label>
                         <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded">
                           Đã chọn {repeatTimes.length} khung giờ
@@ -1051,11 +1042,9 @@ export default function SchedulePage() {
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant">
-                      KHU VỰC / CÂY TRỒNG (/PLANTS):
+                      KHU VỰC:
                     </label>
-                    <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md">
-                      Chọn được nhiều cây
-                    </span>
+
                   </div>
 
                   <div className="flex flex-wrap gap-2 p-3 bg-surface-container-low border border-outline-variant/30 rounded-2xl max-h-[140px] overflow-y-auto">
@@ -1063,16 +1052,15 @@ export default function SchedulePage() {
                     <button
                       type="button"
                       onClick={() => handleLocationToggle("Toàn bộ khu vườn")}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                        selectedLocations.includes("Toàn bộ khu vườn")
-                          ? "bg-primary text-white shadow-xs"
-                          : "bg-surface border border-outline-variant/30 text-on-surface-variant hover:border-primary/40"
-                      }`}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${selectedLocations.includes("Toàn bộ khu vườn")
+                        ? "bg-primary text-white shadow-xs"
+                        : "bg-surface border border-outline-variant/30 text-on-surface-variant hover:border-primary/40"
+                        }`}
                     >
                       <span className="material-symbols-outlined text-sm">
                         {selectedLocations.includes("Toàn bộ khu vườn") ? "check_circle" : "park"}
                       </span>
-                      🌿 Toàn bộ khu vườn
+                      Toàn bộ
                     </button>
 
                     {/* Plants from /plants */}
@@ -1086,16 +1074,15 @@ export default function SchedulePage() {
                             key={p.id}
                             type="button"
                             onClick={() => handleLocationToggle(locVal)}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                              isSelected
-                                ? "bg-emerald-600 text-white shadow-xs"
-                                : "bg-surface border border-outline-variant/30 text-on-surface-variant hover:border-emerald-500/40"
-                            }`}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${isSelected
+                              ? "bg-emerald-600 text-white shadow-xs"
+                              : "bg-surface border border-outline-variant/30 text-on-surface-variant hover:border-emerald-500/40"
+                              }`}
                           >
                             <span className="material-symbols-outlined text-sm">
                               {isSelected ? "check_circle" : "eco"}
                             </span>
-                            🌱 {p.name} - {p.location}
+                            {p.name} - {p.location}
                           </button>
                         );
                       })}

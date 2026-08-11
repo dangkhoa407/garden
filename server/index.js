@@ -829,7 +829,7 @@ async function getOrInitArduinoSerialPort() {
             // 4. CHỈ KHI CÓ SÂU (needSpray returns true) MỚI PHUN THUỐC (SPRAY)
             action = needSpray(formattedResult) ? "SPRAY" : "NO_SPRAY";
 
-            // Lưu kết quả kiểm tra điểm này cho Web UI
+            // Lưu kết quả kiểm tra điểm này cho Web UI & Persistent File
             const pointRecord = {
               pointIndex: pointIndex + 1,
               timestamp: new Date().toLocaleTimeString("vi-VN"),
@@ -839,6 +839,26 @@ async function getOrInitArduinoSerialPort() {
             };
 
             lastInspectionResults.push(pointRecord);
+
+            // Lưu nhật ký thực tế vào data/inspection_history.json
+            try {
+              const fullHistory = readJson("inspection_history.json", []);
+              fullHistory.unshift({
+                id: `insp-${Date.now()}-${pointIndex + 1}`,
+                type: "PEST",
+                timestamp: new Date().toLocaleString("vi-VN"),
+                pointIndex: pointIndex + 1,
+                title: `ĐIỂM KIỂM TRA ${pointIndex + 1}`,
+                detail: formattedResult,
+                telegramCaption: telegramCaption,
+                status: action === "SPRAY" ? "Phát hiện sâu hại" : "Sức khỏe tốt",
+                image: "/api/camera/image?t=" + Date.now(),
+              });
+              writeJson("inspection_history.json", fullHistory);
+            } catch (hErr) {
+              console.warn(`[History Save Error] ${hErr.message}`);
+            }
+
             pushWebNotification(`Kết quả Điểm ${pointIndex + 1}: ${pointRecord.action}`, action === "SPRAY" ? "WARNING" : "SUCCESS");
 
             if (cancellationId === currentCancellationId && activeSerialPort.isOpen) {
@@ -2782,6 +2802,65 @@ app.delete("/api/schedules/:id", (req, res) => {
     schedules = schedules.filter((item) => item.id !== id);
     writeJson("schedules.json", schedules);
     res.json({ success: true, schedules });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// =========================================================
+// REAL INSPECTION HISTORY API ENDPOINTS
+// =========================================================
+app.get("/api/inspection-history", (req, res) => {
+  try {
+    const history = readJson("inspection_history.json", []);
+    res.json(history);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/inspection-history", (req, res) => {
+  try {
+    const history = readJson("inspection_history.json", []);
+    const newEntry = {
+      id: `insp-${Date.now()}`,
+      timestamp: new Date().toLocaleString("vi-VN"),
+      image: "/api/camera/image?t=" + Date.now(),
+      ...req.body,
+    };
+    history.unshift(newEntry);
+    writeJson("inspection_history.json", history);
+    res.json({ success: true, history });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.delete("/api/inspection-history/:id", (req, res) => {
+  try {
+    const { id } = req.params;
+    let history = readJson("inspection_history.json", []);
+    history = history.filter((item) => item.id !== id);
+    writeJson("inspection_history.json", history);
+    res.json({ success: true, history });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.delete("/api/inspection-history", (req, res) => {
+  try {
+    const { type, plantId } = req.query;
+    let history = readJson("inspection_history.json", []);
+    if (type) {
+      history = history.filter((item) => item.type !== type);
+    } else if (plantId) {
+      history = history.filter((item) => item.plantId !== plantId);
+    } else {
+      history = [];
+    }
+    writeJson("inspection_history.json", history);
+    res.json({ success: true, history });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
