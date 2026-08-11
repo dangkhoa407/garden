@@ -377,9 +377,14 @@ function formatGeminiResult(data) {
 function needSpray(resultText) {
   const text = String(resultText).normalize("NFC").toUpperCase();
   return (
-    text.includes("TÌNH TRẠNG: SÂU VÀ BỆNH") ||
+    text.includes("TÌNH TRẠNG: SÂU") ||
     text.includes("TÌNH TRẠNG: LÁ BỊ SÂU ĂN") ||
-    text.includes("TÌNH TRẠNG: SÂU")
+    text.includes("TÌNH TRẠNG: BỆNH") ||
+    text.includes("TÌNH TRẠNG: SÂU VÀ BỆNH") ||
+    text.includes("CẦN PHUN") ||
+    text.includes("SÂU HẠI") ||
+    text.includes("NẤM MỐC") ||
+    text.includes("BỌ TRĨ")
   );
 }
 
@@ -3198,30 +3203,28 @@ app.post("/api/plant-inspect", async (req, res) => {
       } catch (e) {}
     }
 
-    const promptText = `Bạn là chuyên gia nông nghiệp thông minh. Hãy phân tích hình ảnh cây ${plantName || "trồng"} tại vị trí ${trayName}. Phát hiện sâu hại, bệnh hại lá (bọ trĩ, nhện đỏ, nấm mốc, đốm lá). Đưa ra câu trả lời tiếng Việt ngắn gọn theo định dạng:
-KẾT QUẢ KIỂM TRA TẠI ${trayName.toUpperCase()}
-Tình trạng: [SÂU / BỆNH / SÂU VÀ BỆNH / KHÔNG PHÁT HIỆN SÂU VÀ BỆNH]
-Mô tả chi tiết: [Mô tả diệp lục, bề mặt lá và dấu hiệu bệnh thực tế trên ảnh]
-Khuyến nghị: [Hướng xử lý cụ thể]
-Thời gian kiểm tra: ${new Date().toLocaleString("vi-VN")}`;
-
     const payload = {
       contents: [
         {
           parts: [
             ...(imageBase64 ? [{ inlineData: { mimeType: "image/jpeg", data: imageBase64 } }] : []),
-            { text: promptText }
+            { text: createPrompt(pointIdx) }
           ]
         }
-      ]
+      ],
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: GEMINI_RESPONSE_SCHEMA
+      }
     };
 
+    let parsedResult = null;
     try {
       const aiResult = await callGeminiApiWithRotation(payload);
       if (aiResult && aiResult.text) {
         try {
-          const parsed = parseGeminiResult(aiResult.text);
-          formattedResult = formatGeminiResult(parsed);
+          parsedResult = parseGeminiResult(aiResult.text);
+          formattedResult = formatGeminiResult(parsedResult);
         } catch (pErr) {
           formattedResult = aiResult.text;
         }
@@ -3238,12 +3241,14 @@ Thời gian kiểm tra: ${new Date().toLocaleString("vi-VN")}`;
     }
 
     const hasPest = needSpray(formattedResult);
+    const aiStatusText = parsedResult ? parsedResult.status : (hasPest ? "CÓ SÂU / BỆNH" : "KHÔNG PHÁT HIỆN SÂU VÀ BỆNH");
+
     if (hasPest) {
       await sendDirectCommandToArduino("SPRAY").catch(() => {});
-      pushWebNotification(`🚨 Gemini AI phát hiện sâu bệnh tại ${trayName}! Đã kích hoạt bơm phun thuốc 1.5s.`, "WARNING");
+      pushWebNotification(`🚨 Gemini AI phân tích ${plantName || trayName}: [${aiStatusText}]! Đã kích hoạt bơm SPRAY.`, "WARNING");
     } else {
       await sendDirectCommandToArduino("NO_SPRAY").catch(() => {});
-      pushWebNotification(`🌿 Gemini AI phân tích ${plantName || trayName}: Không phát hiện sâu bệnh.`, "SUCCESS");
+      pushWebNotification(`🌿 Gemini AI phân tích ${plantName || trayName}: [${aiStatusText}].`, "SUCCESS");
     }
 
     // 4. Format Telegram report
