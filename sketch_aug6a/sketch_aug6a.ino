@@ -213,6 +213,73 @@ void runSprayPoints() {
   runMotor(STEP2_PIN, DIR2_PIN, steps14, false);
 }
 
+// ================== DI CHUYỂN TRỰC TIẾP TỚI 1 ĐIỂM / KHAY ==================
+void moveToPoint(int idx) {
+  if (!homeAll()) return;
+  Serial.print("MOVING_TO_POINT:");
+  Serial.println(idx);
+
+  if (idx == 0) {
+    // Điểm 0 (Khay 01): (0, 0)
+    Serial.println("MOVED:0");
+  } else if (idx == 1) {
+    // Điểm 1 (Khay 02): X = 7cm
+    runMotor(STEP1_PIN, DIR1_PIN, steps7, true);
+    Serial.println("MOVED:1");
+  } else if (idx == 2) {
+    // Điểm 2 (Khay 03): Y = 7cm
+    runMotor(STEP2_PIN, DIR2_PIN, steps7, true);
+    Serial.println("MOVED:2");
+  } else if (idx == 3) {
+    // Điểm 3 (Khay 04): X = 7cm, Y = 7cm
+    runMotor(STEP1_PIN, DIR1_PIN, steps7, true);
+    runMotor(STEP2_PIN, DIR2_PIN, steps7, true);
+    Serial.println("MOVED:3");
+  } else if (idx == 4) {
+    // Điểm 4 (Khay 05): Y = 14cm
+    runMotor(STEP2_PIN, DIR2_PIN, steps14, true);
+    Serial.println("MOVED:4");
+  } else if (idx == 5) {
+    // Điểm 5 (Khay 06): X = 7cm, Y = 14cm
+    runMotor(STEP1_PIN, DIR1_PIN, steps7, true);
+    runMotor(STEP2_PIN, DIR2_PIN, steps14, true);
+    Serial.println("MOVED:5");
+  }
+}
+
+// ================== LẮNG NGHE & XỬ LÝ LỆNH SERIAL (NON-BLOCKING) ==================
+void checkSerialCommands() {
+  while (Serial.available() > 0) {
+    String cmd = Serial.readStringUntil('\n');
+    cmd.trim();
+    if (cmd.length() == 0) continue;
+
+    String normalized = cmd;
+    normalized.toUpperCase();
+
+    if (normalized == "PING") {
+      Serial.println("PONG:NODE_CONNECTED");
+    } else if (normalized == "HOME" || normalized == "H") {
+      homeAll();
+    } else if (normalized == "CHECK_PESTS" || normalized == "RUN") {
+      runSprayPoints();
+    } else if (normalized == "SPRAY") {
+      pumpON();
+      delay(SPRAY_TIME_MS);
+      pumpOFF();
+      Serial.println("PHUN OK");
+    } else if (normalized.startsWith("GOTO:") || normalized.startsWith("MOVE:") || normalized.startsWith("POINT:")) {
+      int idx = normalized.substring(normalized.indexOf(':') + 1).toInt();
+      if (idx >= 0 && idx <= 5) moveToPoint(idx);
+    } else if (normalized == "P1" || normalized == "POINT0") { moveToPoint(0); }
+    else if (normalized == "P2" || normalized == "POINT1") { moveToPoint(1); }
+    else if (normalized == "P3" || normalized == "POINT2") { moveToPoint(2); }
+    else if (normalized == "P4" || normalized == "POINT3") { moveToPoint(3); }
+    else if (normalized == "P5" || normalized == "POINT4") { moveToPoint(4); }
+    else if (normalized == "P6" || normalized == "POINT5") { moveToPoint(5); }
+  }
+}
+
 // ================== SETUP ==================
 void setup() {
   Serial.begin(9600);
@@ -242,20 +309,16 @@ void setup() {
 void loop() {
   if (systemError) return;
 
-  runSprayPoints();
+  // Lắng nghe và điều khiển robot di chuyển theo lệnh từ Web / Node.js
+  checkSerialCommands();
 
-  unsigned long waitStart = millis();
-  bool fullSpray = false;
-
-  while (millis() - waitStart < LOOP_DELAY_MS) {
+  // Nút bấm vật lý kích hoạt quét toàn bộ khay
+  if (digitalRead(BUTTON_PIN) == LOW) {
+    delay(100);
     if (digitalRead(BUTTON_PIN) == LOW) {
-      delay(100);
-      fullSpray = true;
-      break;
+      runSprayPoints();
     }
   }
 
-  if (fullSpray) sprayCycle();
-
-  delay(LOOP_DELAY_MS);
+  delay(50);
 }

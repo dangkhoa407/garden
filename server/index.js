@@ -3283,7 +3283,9 @@ app.post("/api/plant-move", async (req, res) => {
 
     pushWebNotification(`🤖 Đang điều khiển Robot di chuyển tới ${trayName} (Điểm ${pointIdx + 1}) để quan sát...`, "PROCESS");
 
-    // Send movement command to Arduino Serial: POINT:n and Pn
+    // Send movement command to Arduino Serial: MOVE:n, GOTO:n, POINT:n, Pn
+    await sendDirectCommandToArduino(`MOVE:${pointIdx}`).catch(() => {});
+    await sendDirectCommandToArduino(`GOTO:${pointIdx}`).catch(() => {});
     await sendDirectCommandToArduino(`POINT:${pointIdx}`).catch(() => {});
     await sendDirectCommandToArduino(`P${pointIdx + 1}`).catch(() => {});
 
@@ -3323,6 +3325,8 @@ app.post("/api/plant-water", async (req, res) => {
     pushWebNotification(`🤖 Robot đang di chuyển tới ${trayName} (Điểm ${pointIdx + 1}) để tiến hành tưới phân...`, "PROCESS");
 
     // 1. Move robot to tray position
+    await sendDirectCommandToArduino(`MOVE:${pointIdx}`).catch(() => {});
+    await sendDirectCommandToArduino(`GOTO:${pointIdx}`).catch(() => {});
     await sendDirectCommandToArduino(`POINT:${pointIdx}`).catch(() => {});
     await sendDirectCommandToArduino(`P${pointIdx + 1}`).catch(() => {});
 
@@ -3394,6 +3398,8 @@ app.post("/api/plant-inspect", async (req, res) => {
     pushWebNotification(`🐛 Đang điều khiển Robot di chuyển tới ${trayName} (Điểm ${pointIdx + 1}) để kiểm tra sâu bệnh trên cây ${plantName || ""}...`, "AI_ANALYSIS");
 
     // 1. Send command to Arduino to move camera to tray/point
+    await sendDirectCommandToArduino(`MOVE:${pointIdx}`).catch(() => {});
+    await sendDirectCommandToArduino(`GOTO:${pointIdx}`).catch(() => {});
     await sendDirectCommandToArduino(`POINT:${pointIdx}`).catch(() => {});
     await sendDirectCommandToArduino(`P${pointIdx + 1}`).catch(() => {});
 
