@@ -3195,7 +3195,6 @@ Thời gian kiểm tra: ${new Date().toLocaleString("vi-VN")}`;
       ]
     };
 
-    let formattedResult = "";
     try {
       const aiResult = await callGeminiApiWithRotation(payload);
       if (aiResult && aiResult.text) {
