@@ -4,12 +4,15 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useGarden } from "@/context/GardenContext";
 
+export type ActionType = "INSPECT" | "FERTILIZE" | "SPRAY_ALL";
+
 export interface ScheduleItem {
   id: string;
   title: string;
-  actionType: "INSPECT" | "FERTILIZE" | "SPRAY_ALL";
-  actionLabel: string;
-  icon: string;
+  actions?: ActionType[];
+  actionType?: ActionType;
+  actionLabel?: string;
+  icon?: string;
   scheduleType: "once" | "repeating";
   date?: string;
   repeatDays?: string[];
@@ -21,9 +24,16 @@ export interface ScheduleItem {
   createdAt?: string;
 }
 
-const ACTION_OPTIONS = [
+const ACTION_OPTIONS: {
+  type: ActionType;
+  title: string;
+  desc: string;
+  icon: string;
+  badge: string;
+  color: string;
+}[] = [
   {
-    type: "INSPECT" as const,
+    type: "INSPECT",
     title: "Kiểm tra sâu hại",
     desc: "Chụp 6 điểm bằng camera & phân tích hình ảnh qua AI Gemini (Phím k)",
     icon: "bug_report",
@@ -31,7 +41,7 @@ const ACTION_OPTIONS = [
     color: "from-emerald-500/10 to-teal-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400",
   },
   {
-    type: "FERTILIZE" as const,
+    type: "FERTILIZE",
     title: "Tưới Phân",
     desc: "Kích hoạt Popup/tiến trình tưới phân tự động (Tùy chỉnh ml hoặc Phối trộn AI)",
     icon: "water_drop",
@@ -39,7 +49,7 @@ const ACTION_OPTIONS = [
     color: "from-cyan-500/10 to-blue-500/10 border-cyan-500/30 text-cyan-700 dark:text-cyan-400",
   },
   {
-    type: "SPRAY_ALL" as const,
+    type: "SPRAY_ALL",
     title: "Phun toàn bộ vườn",
     desc: "Kích hoạt hệ thống phun dung dịch sinh học trên toàn bộ các khay (Phím p)",
     icon: "shower",
@@ -68,9 +78,9 @@ export default function SchedulePage() {
   const [showModal, setShowModal] = useState(false);
   const [mounted, setMounted] = useState(false);
 
-  // Form State
+  // Form State - Selected Actions Array (preserves execution order)
+  const [selectedActions, setSelectedActions] = useState<ActionType[]>(["INSPECT"]);
   const [newTitle, setNewTitle] = useState("");
-  const [newActionType, setNewActionType] = useState<"INSPECT" | "FERTILIZE" | "SPRAY_ALL">("INSPECT");
   const [newScheduleType, setNewScheduleType] = useState<"once" | "repeating">("once");
   const [newDate, setNewDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [newTime, setNewTime] = useState("08:00");
@@ -101,7 +111,6 @@ export default function SchedulePage() {
   };
 
   const handleToggleSchedule = async (id: string, currentEnabled: boolean) => {
-    // Optimistic update
     setSchedules((prev) =>
       prev.map((s) =>
         s.id === id
@@ -125,7 +134,7 @@ export default function SchedulePage() {
       });
     } catch (e) {
       console.error(e);
-      fetchSchedules(); // revert on error
+      fetchSchedules();
     }
   };
 
@@ -150,9 +159,38 @@ export default function SchedulePage() {
     );
   };
 
+  // Toggle selection of an action
+  const handleActionToggle = (actionType: ActionType) => {
+    if (selectedActions.includes(actionType)) {
+      if (selectedActions.length === 1) {
+        alert("Vui lòng chọn ít nhất 1 chức năng!");
+        return;
+      }
+      setSelectedActions(selectedActions.filter((a) => a !== actionType));
+    } else {
+      setSelectedActions([...selectedActions, actionType]);
+    }
+  };
+
+  // Move action order up or down
+  const handleMoveActionOrder = (index: number, direction: "up" | "down") => {
+    const newArr = [...selectedActions];
+    const targetIdx = direction === "up" ? index - 1 : index + 1;
+    if (targetIdx < 0 || targetIdx >= newArr.length) return;
+
+    const temp = newArr[index];
+    newArr[index] = newArr[targetIdx];
+    newArr[targetIdx] = temp;
+    setSelectedActions(newArr);
+  };
+
   const handleCreateSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTime) return;
+    if (selectedActions.length === 0) {
+      alert("Vui lòng chọn ít nhất 1 chức năng!");
+      return;
+    }
     if (newScheduleType === "repeating" && newRepeatDays.length === 0) {
       alert("Vui lòng chọn ít nhất 1 ngày trong tuần cho lịch lặp lại!");
       return;
@@ -160,12 +198,17 @@ export default function SchedulePage() {
 
     setIsSubmitting(true);
     try {
+      const defaultTitle = selectedActions
+        .map((a) => ACTION_OPTIONS.find((opt) => opt.type === a)?.title)
+        .join(" ➔ ");
+
       const res = await fetch("/api/schedules", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: newTitle.trim(),
-          actionType: newActionType,
+          title: newTitle.trim() || defaultTitle,
+          actions: selectedActions,
+          actionType: selectedActions[0],
           scheduleType: newScheduleType,
           date: newScheduleType === "once" ? newDate : "",
           repeatDays: newScheduleType === "repeating" ? newRepeatDays : [],
@@ -180,9 +223,8 @@ export default function SchedulePage() {
           setSchedules(data.schedules);
         }
         setShowModal(false);
-        // Reset form
         setNewTitle("");
-        setNewActionType("INSPECT");
+        setSelectedActions(["INSPECT"]);
         setNewScheduleType("once");
       }
     } catch (e) {
@@ -209,7 +251,7 @@ export default function SchedulePage() {
             Lịch Trình Quản Lý
           </h2>
           <p className="font-body-lg text-body-lg text-on-surface-variant">
-            Tự động hóa chăm sóc vườn theo khung giờ • Kết nối nút điều khiển thực tế
+            Tự động hóa chăm sóc vườn theo khung giờ • Chọn nhiều chức năng & chạy lần lượt theo thứ tự
           </p>
         </div>
 
@@ -309,21 +351,25 @@ export default function SchedulePage() {
           ) : (
             <div className="space-y-3">
               {filteredSchedules.map((item) => {
-                const actionMeta = ACTION_OPTIONS.find((a) => a.type === item.actionType) || ACTION_OPTIONS[0];
+                const itemActions: ActionType[] = Array.isArray(item.actions) && item.actions.length > 0
+                  ? item.actions
+                  : [item.actionType || "INSPECT"];
+
+                const firstMeta = ACTION_OPTIONS.find((a) => a.type === itemActions[0]) || ACTION_OPTIONS[0];
 
                 return (
                   <div
                     key={item.id}
-                    className={`bg-surface rounded-2xl p-4 border transition-all shadow-xs flex items-center justify-between gap-4 ${
+                    className={`bg-surface rounded-2xl p-4 border transition-all shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4 ${
                       item.enabled
                         ? "border-outline-variant/30 hover:border-primary/40"
                         : "border-outline-variant/20 opacity-60 bg-surface-container-lowest"
                     }`}
                   >
-                    {/* Left: Time & Icon & Details */}
+                    {/* Left: Time & Actions Sequence */}
                     <div className="flex items-center gap-4 min-w-0">
                       {/* Time display */}
-                      <div className="text-center min-w-[65px] px-2 py-1.5 bg-surface-container-high rounded-xl border border-outline-variant/20">
+                      <div className="text-center min-w-[65px] px-2.5 py-2 bg-surface-container-high rounded-xl border border-outline-variant/20 flex-shrink-0">
                         <div className="font-mono text-base font-black text-primary leading-none">
                           {item.time}
                         </div>
@@ -332,25 +378,39 @@ export default function SchedulePage() {
                         </div>
                       </div>
 
-                      {/* Action Icon */}
-                      <div className={`w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 bg-gradient-to-br ${actionMeta.color}`}>
+                      {/* Icon */}
+                      <div className={`w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 bg-gradient-to-br ${firstMeta.color}`}>
                         <span className="material-symbols-outlined text-xl font-bold">
-                          {item.icon || actionMeta.icon}
+                          {firstMeta.icon}
                         </span>
                       </div>
 
-                      {/* Title & Badge */}
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h4 className={`font-bold text-sm truncate ${item.enabled ? "text-on-surface" : "text-on-surface-variant line-through"}`}>
-                            {item.title}
-                          </h4>
-                          <span className="px-2 py-0.5 bg-primary/10 text-primary text-[10px] font-mono font-bold rounded-md">
-                            {actionMeta.badge}
-                          </span>
+                      {/* Title & Sequence */}
+                      <div className="min-w-0 space-y-1">
+                        <h4 className={`font-bold text-sm truncate ${item.enabled ? "text-on-surface" : "text-on-surface-variant line-through"}`}>
+                          {item.title}
+                        </h4>
+
+                        {/* Sequence of actions */}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[11px] font-bold text-on-surface-variant">Thứ tự chạy:</span>
+                          {itemActions.map((actType, idx) => {
+                            const meta = ACTION_OPTIONS.find((a) => a.type === actType);
+                            return (
+                              <div key={idx} className="flex items-center gap-1">
+                                {idx > 0 && <span className="text-xs text-primary font-bold">➔</span>}
+                                <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold rounded-lg border border-emerald-500/20 flex items-center gap-1">
+                                  <span className="w-3.5 h-3.5 rounded-full bg-emerald-500 text-white text-[9px] font-mono flex items-center justify-center font-bold">
+                                    {idx + 1}
+                                  </span>
+                                  {meta?.title}
+                                </span>
+                              </div>
+                            );
+                          })}
                         </div>
 
-                        <div className="flex items-center gap-3 text-xs text-on-surface-variant mt-1 flex-wrap font-medium">
+                        <div className="flex items-center gap-3 text-xs text-on-surface-variant flex-wrap font-medium">
                           <span>📍 {item.location}</span>
                           <span>•</span>
                           {item.scheduleType === "repeating" ? (
@@ -367,8 +427,7 @@ export default function SchedulePage() {
                     </div>
 
                     {/* Right: Toggle Switch & Delete */}
-                    <div className="flex items-center gap-3 flex-shrink-0">
-                      {/* Toggle Enable/Disable */}
+                    <div className="flex items-center gap-3 flex-shrink-0 self-end md:self-center">
                       <label className="relative inline-flex items-center cursor-pointer">
                         <input
                           type="checkbox"
@@ -379,7 +438,6 @@ export default function SchedulePage() {
                         <div className="w-11 h-6 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary" />
                       </label>
 
-                      {/* Delete Button */}
                       <button
                         onClick={() => handleDeleteSchedule(item.id)}
                         className="p-2 text-on-surface-variant/60 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all"
@@ -397,7 +455,6 @@ export default function SchedulePage() {
 
         {/* Side Panel: Action Button Preview & Environment Info (Span 4) */}
         <div className="col-span-12 xl:col-span-4 space-y-gutter">
-          {/* Quick Action Reference Card */}
           <div className="bg-surface rounded-2xl p-5 border border-outline-variant/30 space-y-4 shadow-xs">
             <h3 className="font-bold text-sm text-on-surface uppercase tracking-wider flex items-center gap-2">
               <span className="material-symbols-outlined text-primary text-lg">touch_app</span>
@@ -481,50 +538,98 @@ export default function SchedulePage() {
               </div>
 
               <form onSubmit={handleCreateSchedule} className="space-y-4">
-                {/* 1. Chọn 1 trong 3 Chức Năng ở Nút Điều Khiển */}
+                {/* 1. CHỌN NHIỀU CHỨC NĂNG & TÙY CHỈNH THỨ TỰ CHẠY */}
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-on-surface mb-2">
-                    1. CHỌN CHỨC NĂNG ĐIỀU KHIỂN (1 TRONG 3 NÚT):
-                  </label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-on-surface">
+                      1. CHỌN CÁC CHỨC NĂNG & TÙY CHỈNH THỨ TỰ CHẠY:
+                    </label>
+                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md">
+                      Có thể chọn nhiều chức năng
+                    </span>
+                  </div>
+
                   <div className="space-y-2">
                     {ACTION_OPTIONS.map((opt) => {
-                      const isSelected = newActionType === opt.type;
+                      const isSelected = selectedActions.includes(opt.type);
+                      const orderIndex = selectedActions.indexOf(opt.type);
+
                       return (
                         <div
                           key={opt.type}
-                          onClick={() => {
-                            setNewActionType(opt.type);
-                            if (!newTitle) setNewTitle(opt.title);
-                          }}
-                          className={`p-3 rounded-2xl border cursor-pointer transition-all flex items-center justify-between ${
+                          className={`p-3.5 rounded-2xl border transition-all ${
                             isSelected
                               ? "bg-primary/10 border-primary shadow-sm"
-                              : "bg-surface-container-low border-outline-variant/30 hover:border-primary/40"
+                              : "bg-surface-container-low border-outline-variant/30 hover:border-primary/30"
                           }`}
                         >
-                          <div className="flex items-center gap-3">
+                          <div className="flex items-center justify-between gap-2">
+                            {/* Left Checkbox & Action Title */}
                             <div
-                              className={`w-9 h-9 rounded-xl flex items-center justify-center ${
-                                isSelected ? "bg-primary text-white" : "bg-surface-container-high text-on-surface-variant"
-                              }`}
+                              onClick={() => handleActionToggle(opt.type)}
+                              className="flex items-center gap-3 cursor-pointer flex-1 min-w-0"
                             >
-                              <span className="material-symbols-outlined text-lg">
-                                {opt.icon}
-                              </span>
-                            </div>
-                            <div>
-                              <div className="font-bold text-xs text-on-surface">
-                                {opt.title}
+                              <div
+                                className={`w-6 h-6 rounded-lg border flex items-center justify-center transition-all ${
+                                  isSelected
+                                    ? "bg-primary border-primary text-white"
+                                    : "border-outline-variant bg-surface"
+                                }`}
+                              >
+                                {isSelected && (
+                                  <span className="material-symbols-outlined text-base font-bold">
+                                    check
+                                  </span>
+                                )}
                               </div>
-                              <div className="text-[11px] text-on-surface-variant truncate max-w-[240px]">
-                                {opt.desc}
-                              </div>
-                            </div>
-                          </div>
 
-                          <span className="px-2 py-0.5 bg-primary/10 text-primary text-[10px] font-mono font-bold rounded">
-                            {opt.badge}
-                          </span>
+                              <div className="min-w-0">
+                                <div className="font-bold text-xs text-on-surface flex items-center gap-2">
+                                  <span>{opt.title}</span>
+                                  <span className="px-1.5 py-0.5 bg-surface-container-high text-on-surface-variant text-[10px] font-mono font-bold rounded">
+                                    {opt.badge}
+                                  </span>
+                                </div>
+                                <div className="text-[11px] text-on-surface-variant truncate max-w-[220px]">
+                                  {opt.desc}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Right: Order Badge & Reorder Arrows */}
+                            {isSelected && (
+                              <div className="flex items-center gap-2 flex-shrink-0 bg-surface px-2.5 py-1 rounded-xl border border-primary/20">
+                                <span className="text-[11px] font-extrabold text-primary flex items-center gap-1">
+                                  Thứ tự {orderIndex + 1}
+                                </span>
+
+                                <div className="flex flex-col gap-0.5">
+                                  <button
+                                    type="button"
+                                    disabled={orderIndex === 0}
+                                    onClick={() => handleMoveActionOrder(orderIndex, "up")}
+                                    className="p-0.5 text-on-surface-variant hover:text-primary disabled:opacity-30 disabled:hover:text-on-surface-variant"
+                                    title="Chuyển lên trước"
+                                  >
+                                    <span className="material-symbols-outlined text-xs font-bold">
+                                      arrow_upward
+                                    </span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={orderIndex === selectedActions.length - 1}
+                                    onClick={() => handleMoveActionOrder(orderIndex, "down")}
+                                    className="p-0.5 text-on-surface-variant hover:text-primary disabled:opacity-30 disabled:hover:text-on-surface-variant"
+                                    title="Chuyển xuống sau"
+                                  >
+                                    <span className="material-symbols-outlined text-xs font-bold">
+                                      arrow_downward
+                                    </span>
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
@@ -538,8 +643,11 @@ export default function SchedulePage() {
                   </label>
                   <input
                     type="text"
-                    required
-                    placeholder="Ví dụ: Phun thuốc sâu sinh học sáng thứ 2"
+                    placeholder={
+                      selectedActions.length > 0
+                        ? selectedActions.map((a) => ACTION_OPTIONS.find((o) => o.type === a)?.title).join(" ➔ ")
+                        : "Nhập tên lịch trình"
+                    }
                     value={newTitle}
                     onChange={(e) => setNewTitle(e.target.value)}
                     className="w-full px-3.5 py-2.5 bg-surface-container-low border border-outline-variant/40 rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary"
@@ -662,7 +770,7 @@ export default function SchedulePage() {
                   </button>
                   <button
                     type="submit"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || selectedActions.length === 0}
                     className="px-6 py-2.5 rounded-xl text-xs font-bold bg-primary text-white hover:bg-primary/90 shadow-md transition-all active:scale-95 disabled:opacity-50"
                   >
                     {isSubmitting ? "Đang lưu..." : "Tạo Lịch Trình Tự Động"}

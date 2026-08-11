@@ -2660,10 +2660,14 @@ app.get("/api/schedules", (req, res) => {
 app.post("/api/schedules", (req, res) => {
   try {
     const schedules = readJson("schedules.json", []);
-    const { title, actionType, scheduleType, date, repeatDays, time, location } = req.body;
+    const { title, actions, actionType, scheduleType, date, repeatDays, time, location } = req.body;
 
-    if (!actionType || !time) {
-      return res.status(400).json({ success: false, error: "Thiếu loại chức năng hoặc thời gian!" });
+    const finalActions = Array.isArray(actions) && actions.length > 0
+      ? actions
+      : (actionType ? [actionType] : ["INSPECT"]);
+
+    if (!time) {
+      return res.status(400).json({ success: false, error: "Thiếu thời gian cài đặt lịch!" });
     }
 
     const actionLabels = {
@@ -2678,12 +2682,15 @@ app.post("/api/schedules", (req, res) => {
       SPRAY_ALL: "shower",
     };
 
+    const firstAction = finalActions[0];
+
     const newItem = {
       id: `sched-${Date.now()}`,
-      title: title || actionLabels[actionType] || "Lịch tự động",
-      actionType,
-      actionLabel: actionLabels[actionType] || actionType,
-      icon: actionIcons[actionType] || "event",
+      title: title || finalActions.map((a) => actionLabels[a] || a).join(" + "),
+      actions: finalActions,
+      actionType: firstAction,
+      actionLabel: actionLabels[firstAction] || firstAction,
+      icon: actionIcons[firstAction] || "event",
       scheduleType: scheduleType || "once",
       date: date || "",
       repeatDays: Array.isArray(repeatDays) ? repeatDays : [],
@@ -2783,7 +2790,11 @@ function initScheduleRunner() {
         }
 
         if (shouldTrigger) {
-          console.log(`[Schedule Runner] ⏰ KÍCH HOẠT LỊCH TRÌNH: "${item.title}" (${item.actionType}) lúc ${runKey}`);
+          const actionsToRun = Array.isArray(item.actions) && item.actions.length > 0
+            ? item.actions
+            : [item.actionType || "INSPECT"];
+
+          console.log(`[Schedule Runner] ⏰ KÍCH HOẠT LỊCH TRÌNH: "${item.title}" (${actionsToRun.join(" -> ")}) lúc ${runKey}`);
           item.lastRun = runKey;
           updated = true;
 
@@ -2794,32 +2805,46 @@ function initScheduleRunner() {
             item.status = "active";
           }
 
-          try {
-            if (item.actionType === "INSPECT") {
-              pushWebNotification(`⏰ Lịch tự động: Kích hoạt Kiểm tra sâu hại 6 điểm ("${item.title}")`, "PROCESS");
-              await sendTelegramText(`⏰ LỊCH TỰ ĐỘNG CHẠY:\n📌 Tên: ${item.title}\n🐛 Hành động: Kiểm tra sâu hại (chụp 6 điểm & Gemini AI)\n⏱ Thời gian: ${currentTimeStr}`);
-              await sendDirectCommandToArduino("k").catch((e) => console.warn(`[Sched k Err] ${e.message}`));
-            } else if (item.actionType === "FERTILIZE") {
-              pushWebNotification(`⏰ Lịch tự động: Kích hoạt Tưới Phân Bón ESP32 ("${item.title}")`, "PROCESS");
-              await sendTelegramText(`⏰ LỊCH TỰ ĐỘNG CHẠY:\n📌 Tên: ${item.title}\n💧 Hành động: Tưới Phân bón ESP32\n⏱ Thời gian: ${currentTimeStr}`);
-              await fetch(`http://localhost:${PORT}/api/esp32/dose`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  dosages: [
-                    { tankCode: "Bình A", ml: 2.0 },
-                    { tankCode: "Bình B", ml: 2.0 },
-                  ],
-                }),
-              }).catch(() => {});
-            } else if (item.actionType === "SPRAY_ALL") {
-              pushWebNotification(`⏰ Lịch tự động: Kích hoạt Phun dung dịch sinh học toàn bộ vườn ("${item.title}")`, "PROCESS");
-              await sendTelegramText(`⏰ LỊCH TỰ ĐỘNG CHẠY:\n📌 Tên: ${item.title}\n🚿 Hành động: Phun dung dịch sinh học toàn bộ vườn (Phím p)\n⏱ Thời gian: ${currentTimeStr}`);
-              await sendDirectCommandToArduino("p").catch((e) => console.warn(`[Sched p Err] ${e.message}`));
+          // Execute actions sequentially
+          (async () => {
+            for (let idx = 0; idx < actionsToRun.length; idx++) {
+              const act = actionsToRun[idx];
+              const stepNum = idx + 1;
+              const totalSteps = actionsToRun.length;
+
+              try {
+                if (act === "INSPECT") {
+                  pushWebNotification(`⏰ Lịch [Bước ${stepNum}/${totalSteps}]: Kích hoạt Kiểm tra sâu hại 6 điểm ("${item.title}")`, "PROCESS");
+                  await sendTelegramText(`⏰ LỊCH TỰ ĐỘNG [Bước ${stepNum}/${totalSteps}]:\n📌 Tên: ${item.title}\n🐛 Hành động: Kiểm tra sâu hại (chụp 6 điểm & Gemini AI)\n⏱ Thời gian: ${currentTimeStr}`);
+                  await sendDirectCommandToArduino("k").catch((e) => console.warn(`[Sched k Err] ${e.message}`));
+                } else if (act === "FERTILIZE") {
+                  pushWebNotification(`⏰ Lịch [Bước ${stepNum}/${totalSteps}]: Kích hoạt Tưới Phân Bón ESP32 ("${item.title}")`, "PROCESS");
+                  await sendTelegramText(`⏰ LỊCH TỰ ĐỘNG [Bước ${stepNum}/${totalSteps}]:\n📌 Tên: ${item.title}\n💧 Hành động: Tưới Phân bón ESP32\n⏱ Thời gian: ${currentTimeStr}`);
+                  await fetch(`http://localhost:${PORT}/api/esp32/dose`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      dosages: [
+                        { tankCode: "Bình A", ml: 2.0 },
+                        { tankCode: "Bình B", ml: 2.0 },
+                      ],
+                    }),
+                  }).catch(() => {});
+                } else if (act === "SPRAY_ALL") {
+                  pushWebNotification(`⏰ Lịch [Bước ${stepNum}/${totalSteps}]: Kích hoạt Phun toàn bộ vườn ("${item.title}")`, "PROCESS");
+                  await sendTelegramText(`⏰ LỊCH TỰ ĐỘNG [Bước ${stepNum}/${totalSteps}]:\n📌 Tên: ${item.title}\n🚿 Hành động: Phun toàn bộ vườn (Phím p)\n⏱ Thời gian: ${currentTimeStr}`);
+                  await sendDirectCommandToArduino("p").catch((e) => console.warn(`[Sched p Err] ${e.message}`));
+                }
+
+                if (idx < totalSteps - 1) {
+                  console.log(`[Schedule Runner] Chờ 5s chuyển sang bước ${stepNum + 1}/${totalSteps}...`);
+                  await new Promise((r) => setTimeout(r, 5000));
+                }
+              } catch (stepErr) {
+                console.error(`[Schedule Step ${stepNum} Error] ${stepErr.message}`);
+              }
             }
-          } catch (execErr) {
-            console.error(`[Schedule Exec Error] ${execErr.message}`);
-          }
+          })();
         }
       }
 
