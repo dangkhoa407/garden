@@ -118,6 +118,30 @@ export function GardenProvider({ children }: { children: React.ReactNode }) {
     loadData();
   }, []);
 
+  // Poll real-time ESP32 soil moisture sensor telemetry every 3s
+  useEffect(() => {
+    const fetchEsp32Moisture = async () => {
+      try {
+        const res = await fetch("/api/esp32/sensors");
+        if (res.ok) {
+          const json = await res.json();
+          if (json.data && typeof json.data.avgMoisture === "number") {
+            setControls((prev) => ({
+              ...prev,
+              soilMoisture: json.data.avgMoisture,
+            }));
+          }
+        }
+      } catch (e) {
+        // Ignore background polling error
+      }
+    };
+
+    fetchEsp32Moisture();
+    const interval = setInterval(fetchEsp32Moisture, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
   const addPlant = async (plantData: Omit<Plant, "id">) => {
     const newPlant: Plant = {
       ...plantData,
