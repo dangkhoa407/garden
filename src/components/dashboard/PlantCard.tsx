@@ -29,13 +29,34 @@ function cleanLocation(loc?: string): string {
 
 export function PlantCard({ plant, onObserve, onWater, onHistory }: PlantCardProps) {
   const { triggerQuickAction, updateControls, controls } = useGarden();
-  const [actionLoading, setActionLoading] = useState<"inspect" | "water" | null>(null);
+  const [actionLoading, setActionLoading] = useState<"observe" | "inspect" | "water" | null>(null);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
 
   const now = new Date();
   const defaultDateStr = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`;
   const displayDate = plant.createdDate || defaultDateStr;
   const displayLocation = cleanLocation(plant.location);
+
+  const handleObserveClick = async () => {
+    setActionLoading("observe");
+    try {
+      if (onObserve) {
+        onObserve(plant);
+      } else {
+        // Send command to Arduino to move camera to tray
+        await fetch("/api/arduino/command", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ command: "CHECK" }),
+        }).catch(() => {});
+        triggerQuickAction(
+          `🔍 Đang di chuyển camera robot tới ${displayLocation} để quan sát cây ${plant.name}...`
+        );
+      }
+    } finally {
+      setTimeout(() => setActionLoading(null), 1200);
+    }
+  };
 
   const handleInspectClick = async () => {
     setActionLoading("inspect");
@@ -44,26 +65,22 @@ export function PlantCard({ plant, onObserve, onWater, onHistory }: PlantCardPro
     );
 
     try {
-      if (onObserve) {
-        onObserve(plant);
-      } else {
-        const res = await fetch("/api/plant-inspect", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            plantId: plant.id,
-            plantName: plant.name,
-            location: displayLocation,
-          }),
-        });
+      const res = await fetch("/api/plant-inspect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plantId: plant.id,
+          plantName: plant.name,
+          location: displayLocation,
+        }),
+      });
 
-        if (res.ok) {
-          triggerQuickAction(
-            `✅ Đã quét xong sâu bệnh cho cây ${plant.name}! Ảnh & báo cáo đã được lưu vào Lịch sử và gửi về Telegram.`
-          );
-        } else {
-          triggerQuickAction(`⚠️ Không thể kết nối quét sâu bệnh cho ${plant.name}`);
-        }
+      if (res.ok) {
+        triggerQuickAction(
+          `✅ Đã quét xong sâu bệnh cho cây ${plant.name}! Ảnh & báo cáo đã được lưu vào Lịch sử và gửi về Telegram.`
+        );
+      } else {
+        triggerQuickAction(`⚠️ Không thể kết nối quét sâu bệnh cho ${plant.name}`);
       }
     } catch (e) {
       triggerQuickAction(`⚠️ Lỗi khi kích hoạt kiểm tra sâu cho ${plant.name}`);
@@ -174,14 +191,31 @@ export function PlantCard({ plant, onObserve, onWater, onHistory }: PlantCardPro
           </div>
         </div>
 
-        {/* Action Buttons: Kiểm tra sâu, Tưới phân, Lịch sử */}
-        <div className="pt-3 border-t border-outline-variant/15 flex items-center justify-between gap-1.5">
+        {/* 4 Action Buttons: Quan sát, Kiểm tra sâu, Tưới phân, Lịch sử */}
+        <div className="pt-3 border-t border-outline-variant/15 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={handleObserveClick}
+            disabled={actionLoading === "observe"}
+            className="py-2 px-2.5 bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/40 dark:hover:bg-sky-900/60 text-sky-700 dark:text-sky-300 border border-sky-200/80 dark:border-sky-800/80 rounded-xl font-bold text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
+            title="Di chuyển camera robot tới khay này để quan sát trực tiếp"
+          >
+            {actionLoading === "observe" ? (
+              <span className="material-symbols-outlined text-sm animate-spin">
+                progress_activity
+              </span>
+            ) : (
+              <span className="material-symbols-outlined text-sm">visibility</span>
+            )}
+            Quan sát
+          </button>
+
           <button
             type="button"
             onClick={handleInspectClick}
             disabled={actionLoading === "inspect"}
-            className="flex-1 py-2 px-2 bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/40 dark:hover:bg-sky-900/60 text-sky-700 dark:text-sky-300 border border-sky-200/80 dark:border-sky-800/80 rounded-xl font-bold text-xs transition-all active:scale-95 flex items-center justify-center gap-1 disabled:opacity-50"
-            title="Điều khiển Robot tới khay này để chụp ảnh & quét sâu bệnh qua AI Gemini"
+            className="py-2 px-2.5 bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/40 dark:hover:bg-teal-900/60 text-teal-700 dark:text-teal-300 border border-teal-200/80 dark:border-teal-800/80 rounded-xl font-bold text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
+            title="Chụp ảnh & quét sâu bệnh qua AI Gemini tại vị trí cây này"
           >
             {actionLoading === "inspect" ? (
               <span className="material-symbols-outlined text-sm animate-spin">
@@ -197,7 +231,8 @@ export function PlantCard({ plant, onObserve, onWater, onHistory }: PlantCardPro
             type="button"
             onClick={handleFertilizeClick}
             disabled={actionLoading === "water"}
-            className="flex-1 py-2 px-2 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/80 rounded-xl font-bold text-xs transition-all active:scale-95 flex items-center justify-center gap-1 disabled:opacity-50"
+            className="py-2 px-2.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/80 rounded-xl font-bold text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
+            title="Điều khiển robot tới khay này để tiến hành tưới phân bón"
           >
             {actionLoading === "water" ? (
               <span className="material-symbols-outlined text-sm animate-spin">
@@ -212,7 +247,8 @@ export function PlantCard({ plant, onObserve, onWater, onHistory }: PlantCardPro
           <button
             type="button"
             onClick={handleHistoryClick}
-            className="flex-1 py-2 px-2 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:hover:bg-purple-900/60 text-purple-700 dark:text-purple-300 border border-purple-200/80 dark:border-purple-800/80 rounded-xl font-bold text-xs transition-all active:scale-95 flex items-center justify-center gap-1"
+            className="py-2 px-2.5 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:hover:bg-purple-900/60 text-purple-700 dark:text-purple-300 border border-purple-200/80 dark:border-purple-800/80 rounded-xl font-bold text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5"
+            title="Xem nhật ký kiểm tra sâu, phun sương & tưới phân của cây này"
           >
             <span className="material-symbols-outlined text-sm">history</span>
             Lịch sử
