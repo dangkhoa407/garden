@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "server": "node server/index.js",
+    "server": "node --watch server/index.js",
     "dev:all": "concurrently -k -n \"SERVER,NEXT\" -c \"yellow.bold,cyan.bold\" \"npm run server\" \"npm run dev\"",
     "build": "next build",
     "start": "next start",

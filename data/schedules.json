@@ -1,0 +1,50 @@
+[
+  {
+    "id": "sched-101",
+    "title": "Kiểm tra sâu hại định kỳ",
+    "actionType": "INSPECT",
+    "actionLabel": "Kiểm tra sâu hại (chụp 6 điểm & Gemini AI)",
+    "icon": "bug_report",
+    "scheduleType": "repeating",
+    "repeatDays": ["T2", "T4", "T6"],
+    "date": "",
+    "time": "08:00",
+    "location": "Toàn bộ khu vườn",
+    "enabled": true,
+    "status": "upcoming",
+    "lastRun": "",
+    "createdAt": "2026-08-11T08:00:00.000Z"
+  },
+  {
+    "id": "sched-102",
+    "title": "Tưới Phân bón tự động ESP32",
+    "actionType": "FERTILIZE",
+    "actionLabel": "Tưới Phân bón (ESP32)",
+    "icon": "water_drop",
+    "scheduleType": "repeating",
+    "repeatDays": ["T3", "T5", "CN"],
+    "date": "",
+    "time": "14:00",
+    "location": "Nhà kính 01",
+    "enabled": true,
+    "status": "upcoming",
+    "lastRun": "",
+    "createdAt": "2026-08-11T08:00:00.000Z"
+  },
+  {
+    "id": "sched-103",
+    "title": "Phun dung dịch sinh học toàn bộ vườn",
+    "actionType": "SPRAY_ALL",
+    "actionLabel": "Phun toàn bộ vườn (Phím p)",
+    "icon": "shower",
+    "scheduleType": "once",
+    "repeatDays": [],
+    "date": "2026-08-12",
+    "time": "16:30",
+    "location": "Tất cả các khay",
+    "enabled": true,
+    "status": "upcoming",
+    "lastRun": "",
+    "createdAt": "2026-08-11T08:00:00.000Z"
+  }
+]

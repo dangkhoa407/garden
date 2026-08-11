@@ -2651,6 +2651,189 @@ app.delete("/api/fertilizers/:id", (req, res) => {
   res.json(fertilizers);
 });
 
+// SCHEDULE CRUD & BACKGROUND RUNNER ENGINE
+app.get("/api/schedules", (req, res) => {
+  const schedules = readJson("schedules.json", []);
+  res.json(schedules);
+});
+
+app.post("/api/schedules", (req, res) => {
+  try {
+    const schedules = readJson("schedules.json", []);
+    const { title, actionType, scheduleType, date, repeatDays, time, location } = req.body;
+
+    if (!actionType || !time) {
+      return res.status(400).json({ success: false, error: "Thiếu loại chức năng hoặc thời gian!" });
+    }
+
+    const actionLabels = {
+      INSPECT: "Kiểm tra sâu hại (chụp 6 điểm & Gemini AI)",
+      FERTILIZE: "Tưới Phân bón (ESP32)",
+      SPRAY_ALL: "Phun toàn bộ vườn (Phím p)",
+    };
+
+    const actionIcons = {
+      INSPECT: "bug_report",
+      FERTILIZE: "water_drop",
+      SPRAY_ALL: "shower",
+    };
+
+    const newItem = {
+      id: `sched-${Date.now()}`,
+      title: title || actionLabels[actionType] || "Lịch tự động",
+      actionType,
+      actionLabel: actionLabels[actionType] || actionType,
+      icon: actionIcons[actionType] || "event",
+      scheduleType: scheduleType || "once",
+      date: date || "",
+      repeatDays: Array.isArray(repeatDays) ? repeatDays : [],
+      time,
+      location: location || "Toàn bộ khu vườn",
+      enabled: true,
+      status: "upcoming",
+      lastRun: "",
+      createdAt: new Date().toISOString(),
+    };
+
+    schedules.unshift(newItem);
+    writeJson("schedules.json", schedules);
+    res.json({ success: true, item: newItem, schedules });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.put("/api/schedules/:id", (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+    let schedules = readJson("schedules.json", []);
+
+    let found = false;
+    schedules = schedules.map((item) => {
+      if (item.id === id) {
+        found = true;
+        return { ...item, ...updates };
+      }
+      return item;
+    });
+
+    if (!found) {
+      return res.status(404).json({ success: false, error: "Không tìm thấy lịch trình" });
+    }
+
+    writeJson("schedules.json", schedules);
+    res.json({ success: true, schedules });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.delete("/api/schedules/:id", (req, res) => {
+  try {
+    const { id } = req.params;
+    let schedules = readJson("schedules.json", []);
+    schedules = schedules.filter((item) => item.id !== id);
+    writeJson("schedules.json", schedules);
+    res.json({ success: true, schedules });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+function initScheduleRunner() {
+  console.log("[Schedule Runner] Khởi động trình tự động hóa lịch trình vườn...");
+
+  setInterval(async () => {
+    try {
+      const schedules = readJson("schedules.json", []);
+      if (!Array.isArray(schedules) || schedules.length === 0) return;
+
+      const now = new Date();
+      const hours = String(now.getHours()).padStart(2, "0");
+      const minutes = String(now.getMinutes()).padStart(2, "0");
+      const currentTimeStr = `${hours}:${minutes}`;
+
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, "0");
+      const dateNum = String(now.getDate()).padStart(2, "0");
+      const currentDateStr = `${year}-${month}-${dateNum}`;
+
+      const dayMap = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+      const currentDayStr = dayMap[now.getDay()];
+
+      const runKey = `${currentDateStr} ${currentTimeStr}`;
+      let updated = false;
+
+      for (const item of schedules) {
+        if (!item.enabled) continue;
+        if (item.time !== currentTimeStr) continue;
+        if (item.lastRun === runKey) continue;
+
+        let shouldTrigger = false;
+
+        if (item.scheduleType === "once") {
+          if (item.date === currentDateStr) {
+            shouldTrigger = true;
+          }
+        } else if (item.scheduleType === "repeating") {
+          if (Array.isArray(item.repeatDays) && item.repeatDays.includes(currentDayStr)) {
+            shouldTrigger = true;
+          }
+        }
+
+        if (shouldTrigger) {
+          console.log(`[Schedule Runner] ⏰ KÍCH HOẠT LỊCH TRÌNH: "${item.title}" (${item.actionType}) lúc ${runKey}`);
+          item.lastRun = runKey;
+          updated = true;
+
+          if (item.scheduleType === "once") {
+            item.enabled = false;
+            item.status = "completed";
+          } else {
+            item.status = "active";
+          }
+
+          try {
+            if (item.actionType === "INSPECT") {
+              pushWebNotification(`⏰ Lịch tự động: Kích hoạt Kiểm tra sâu hại 6 điểm ("${item.title}")`, "PROCESS");
+              await sendTelegramText(`⏰ LỊCH TỰ ĐỘNG CHẠY:\n📌 Tên: ${item.title}\n🐛 Hành động: Kiểm tra sâu hại (chụp 6 điểm & Gemini AI)\n⏱ Thời gian: ${currentTimeStr}`);
+              await sendDirectCommandToArduino("k").catch((e) => console.warn(`[Sched k Err] ${e.message}`));
+            } else if (item.actionType === "FERTILIZE") {
+              pushWebNotification(`⏰ Lịch tự động: Kích hoạt Tưới Phân Bón ESP32 ("${item.title}")`, "PROCESS");
+              await sendTelegramText(`⏰ LỊCH TỰ ĐỘNG CHẠY:\n📌 Tên: ${item.title}\n💧 Hành động: Tưới Phân bón ESP32\n⏱ Thời gian: ${currentTimeStr}`);
+              await fetch(`http://localhost:${PORT}/api/esp32/dose`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  dosages: [
+                    { tankCode: "Bình A", ml: 2.0 },
+                    { tankCode: "Bình B", ml: 2.0 },
+                  ],
+                }),
+              }).catch(() => {});
+            } else if (item.actionType === "SPRAY_ALL") {
+              pushWebNotification(`⏰ Lịch tự động: Kích hoạt Phun dung dịch sinh học toàn bộ vườn ("${item.title}")`, "PROCESS");
+              await sendTelegramText(`⏰ LỊCH TỰ ĐỘNG CHẠY:\n📌 Tên: ${item.title}\n🚿 Hành động: Phun dung dịch sinh học toàn bộ vườn (Phím p)\n⏱ Thời gian: ${currentTimeStr}`);
+              await sendDirectCommandToArduino("p").catch((e) => console.warn(`[Sched p Err] ${e.message}`));
+            }
+          } catch (execErr) {
+            console.error(`[Schedule Exec Error] ${execErr.message}`);
+          }
+        }
+      }
+
+      if (updated) {
+        writeJson("schedules.json", schedules);
+      }
+    } catch (err) {
+      console.error(`[Schedule Runner Error] ${err.message}`);
+    }
+  }, 15000);
+}
+
+initScheduleRunner();
+
 app.listen(PORT, () => {
   console.log(`✅ GrowHub Node.js Express Backend running on http://localhost:${PORT}`);
   console.log(`📁 Persistent JSON database path: ${dataDir}`);
