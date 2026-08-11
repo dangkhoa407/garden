@@ -692,11 +692,19 @@ async function getOrInitArduinoSerialPort() {
       return activeSerialPort;
     }
 
-    const esp32Path = activeEsp32Port && activeEsp32Port.isOpen ? activeEsp32Port.path : null;
+    if (activeSerialPort) {
+      try {
+        activeSerialPort.removeAllListeners();
+        if (activeSerialPort.isOpen) activeSerialPort.close();
+      } catch (e) {}
+      activeSerialPort = null;
+    }
+
+    const esp32PathUpper = (activeEsp32Port && activeEsp32Port.path) ? activeEsp32Port.path.toUpperCase() : "";
     const ports = await SerialPort.list();
     const candidates = ports.filter((p) => {
-      if (p.path === esp32Path) return false;
       const pPath = (p.path || "").toUpperCase();
+      if (esp32PathUpper && pPath === esp32PathUpper) return false;
       const mfg = (p.manufacturer || "").toUpperCase();
 
       // Bỏ qua các chip thuộc về ESP32 tuyệt đối
@@ -1109,11 +1117,8 @@ async function sendDirectCommandToArduino(cmdString) {
 
   return new Promise((resolve, reject) => {
     port.write(`${cmdString}\n`, (err) => {
-      if (err) return reject(err);
-      port.drain((drainErr) => {
-        if (drainErr) return reject(drainErr);
-        resolve(true);
-      });
+      if (err) return reject(new Error(`Lỗi truyền lệnh tới Arduino: ${err.message}`));
+      resolve(true);
     });
   });
 }
@@ -1279,12 +1284,12 @@ async function getRealEsp32Status() {
       };
     }
 
-    const arduinoPortPath = activeSerialPort && activeSerialPort.isOpen ? activeSerialPort.path : null;
+    const arduinoPortPathUpper = (activeSerialPort && activeSerialPort.path) ? activeSerialPort.path.toUpperCase() : "";
 
     // Lọc duy nhất các cổng thuộc về ESP32 (CP210x, Silicon Labs, Espressif, CH9102)
     const esp32Candidates = ports.filter((p) => {
-      if (p.path === arduinoPortPath) return false; // Không lấy trùng cổng với Arduino
       const pathStr = (p.path || "").toUpperCase();
+      if (arduinoPortPathUpper && pathStr === arduinoPortPathUpper) return false; // Không bao giờ chạm vào cổng Arduino COM
       const mfg = (p.manufacturer || "").toUpperCase();
 
       // Bỏ qua chip đặc trưng của Arduino
@@ -1433,10 +1438,10 @@ async function sendDirectCommandToEsp32(cmdString) {
     }
 
     const ports = await SerialPort.list();
-    const arduinoPath = activeSerialPort && activeSerialPort.isOpen ? activeSerialPort.path : null;
+    const arduinoPathUpper = (activeSerialPort && activeSerialPort.path) ? activeSerialPort.path.toUpperCase() : "";
     const candidates = ports.filter((p) => {
-      if (p.path === arduinoPath) return false;
       const pathStr = (p.path || "").toUpperCase();
+      if (arduinoPathUpper && pathStr === arduinoPathUpper) return false;
       const mfg = (p.manufacturer || "").toUpperCase();
 
       if (mfg.includes("ARDUINO") || mfg.includes("GENUINO")) {
