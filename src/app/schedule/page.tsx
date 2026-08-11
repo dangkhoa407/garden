@@ -69,7 +69,7 @@ const DAYS_OF_WEEK = [
 ];
 
 export default function SchedulePage() {
-  const { controls } = useGarden();
+  const { controls, plants } = useGarden();
   const [schedules, setSchedules] = useState<ScheduleItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "upcoming" | "completed">("all");
@@ -739,7 +739,7 @@ export default function SchedulePage() {
                   </div>
                 )}
 
-                {/* 4. Giờ chạy & Khu vực */}
+                {/* 4. Giờ chạy & Khu vực (Cây trồng từ /plants) */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-1">
@@ -756,16 +756,27 @@ export default function SchedulePage() {
 
                   <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-1">
-                      KHU VỰC
+                      KHU VỰC / CÂY TRỒNG (/PLANTS)
                     </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Toàn bộ khu vườn"
+                    <select
                       value={newLocation}
                       onChange={(e) => setNewLocation(e.target.value)}
-                      className="w-full px-3.5 py-2.5 bg-surface-container-low border border-outline-variant/40 rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
+                      className="w-full px-3.5 py-2.5 bg-surface-container-low border border-outline-variant/40 rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary text-on-surface cursor-pointer"
+                    >
+                      <option value="Toàn bộ khu vườn">🌿 Toàn bộ khu vườn (Tất cả cây)</option>
+                      {plants && plants.length > 0 && (
+                        <optgroup label="Cây trồng đã thêm (/plants)">
+                          {plants.map((p) => {
+                            const val = `${p.name} (${p.location})`;
+                            return (
+                              <option key={p.id} value={val}>
+                                🌱 {p.name} - {p.location} ({p.category})
+                              </option>
+                            );
+                          })}
+                        </optgroup>
+                      )}
+                    </select>
                   </div>
                 </div>
 
