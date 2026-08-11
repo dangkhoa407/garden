@@ -80,6 +80,8 @@ export default function SchedulePage() {
 
   // Form State - Selected Actions Array (preserves execution order)
   const [selectedActions, setSelectedActions] = useState<ActionType[]>(["INSPECT"]);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+
   const [newTitle, setNewTitle] = useState("");
   const [newScheduleType, setNewScheduleType] = useState<"once" | "repeating">("once");
   const [newDate, setNewDate] = useState(() => new Date().toISOString().split("T")[0]);
@@ -172,16 +174,27 @@ export default function SchedulePage() {
     }
   };
 
-  // Move action order up or down
-  const handleMoveActionOrder = (index: number, direction: "up" | "down") => {
-    const newArr = [...selectedActions];
-    const targetIdx = direction === "up" ? index - 1 : index + 1;
-    if (targetIdx < 0 || targetIdx >= newArr.length) return;
+  // HTML5 Drag and Drop handlers
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = "move";
+  };
 
-    const temp = newArr[index];
-    newArr[index] = newArr[targetIdx];
-    newArr[targetIdx] = temp;
-    setSelectedActions(newArr);
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === index) return;
+
+    const updated = [...selectedActions];
+    const itemToMove = updated[draggedIndex];
+    updated.splice(draggedIndex, 1);
+    updated.splice(index, 0, itemToMove);
+
+    setDraggedIndex(index);
+    setSelectedActions(updated);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
   };
 
   const handleCreateSchedule = async (e: React.FormEvent) => {
@@ -242,6 +255,12 @@ export default function SchedulePage() {
 
   const activeRunningTask = schedules.find((s) => s.enabled && s.status === "active");
 
+  // Order all actions list: selected ones first in selectedActions order, then unselected ones
+  const allActionsOrdered = [
+    ...selectedActions.map((type) => ACTION_OPTIONS.find((opt) => opt.type === type)!),
+    ...ACTION_OPTIONS.filter((opt) => !selectedActions.includes(opt.type)),
+  ];
+
   return (
     <div className="space-y-lg max-w-[1600px] mx-auto">
       {/* Header */}
@@ -251,7 +270,7 @@ export default function SchedulePage() {
             Lịch Trình Quản Lý
           </h2>
           <p className="font-body-lg text-body-lg text-on-surface-variant">
-            Tự động hóa chăm sóc vườn theo khung giờ • Chọn nhiều chức năng & chạy lần lượt theo thứ tự
+            Tự động hóa chăm sóc vườn theo khung giờ • Kéo thả đổi thứ tự chạy các chức năng
           </p>
         </div>
 
@@ -538,46 +557,71 @@ export default function SchedulePage() {
               </div>
 
               <form onSubmit={handleCreateSchedule} className="space-y-4">
-                {/* 1. CHỌN NHIỀU CHỨC NĂNG & TÙY CHỈNH THỨ TỰ CHẠY */}
+                {/* 1. CHỌN NHIỀU CHỨC NĂNG & KÉO THẢ ĐỔI THỨ TỰ */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <label className="block text-xs font-bold uppercase tracking-wider text-on-surface">
-                      1. CHỌN CÁC CHỨC NĂNG & TÙY CHỈNH THỨ TỰ CHẠY:
+                      1. CHỌN CÁC CHỨC NĂNG & KÉO THẢ ĐỔI THỨ TỰ:
                     </label>
-                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md">
-                      Có thể chọn nhiều chức năng
+                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md flex items-center gap-1">
+                      <span className="material-symbols-outlined text-xs">drag_indicator</span>
+                      Kéo thả để sắp xếp
                     </span>
                   </div>
 
                   <div className="space-y-2">
-                    {ACTION_OPTIONS.map((opt) => {
+                    {allActionsOrdered.map((opt) => {
                       const isSelected = selectedActions.includes(opt.type);
-                      const orderIndex = selectedActions.indexOf(opt.type);
+                      const orderNum = isSelected ? selectedActions.indexOf(opt.type) + 1 : null;
+                      const actionIdx = isSelected ? selectedActions.indexOf(opt.type) : -1;
+                      const isDragging = isSelected && draggedIndex === actionIdx;
 
                       return (
                         <div
                           key={opt.type}
-                          className={`p-3.5 rounded-2xl border transition-all ${
+                          draggable={isSelected}
+                          onDragStart={(e) => isSelected && handleDragStart(e, actionIdx)}
+                          onDragOver={(e) => isSelected && handleDragOver(e, actionIdx)}
+                          onDragEnd={handleDragEnd}
+                          className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
                             isSelected
-                              ? "bg-primary/10 border-primary shadow-sm"
+                              ? "bg-primary/10 border-primary shadow-xs cursor-grab active:cursor-grabbing"
                               : "bg-surface-container-low border-outline-variant/30 hover:border-primary/30"
-                          }`}
+                          } ${isDragging ? "opacity-40 border-dashed scale-95" : ""}`}
                         >
-                          <div className="flex items-center justify-between gap-2">
-                            {/* Left Checkbox & Action Title */}
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            {/* Drag Handle Icon for selected items */}
+                            {isSelected ? (
+                              <span className="material-symbols-outlined text-on-surface-variant/50 hover:text-primary cursor-grab select-none">
+                                drag_indicator
+                              </span>
+                            ) : (
+                              <div className="w-5" />
+                            )}
+
+                            {/* Number Badge at the Front */}
+                            {isSelected ? (
+                              <div className="w-7 h-7 rounded-full bg-emerald-600 text-white font-extrabold text-xs flex items-center justify-center flex-shrink-0 shadow-xs">
+                                {orderNum}
+                              </div>
+                            ) : (
+                              <div className="w-7 h-7 rounded-full border-2 border-outline-variant/40 flex-shrink-0" />
+                            )}
+
+                            {/* Action Checkbox & Info */}
                             <div
                               onClick={() => handleActionToggle(opt.type)}
-                              className="flex items-center gap-3 cursor-pointer flex-1 min-w-0"
+                              className="flex items-center gap-3 cursor-pointer flex-1 min-w-0 select-none"
                             >
                               <div
-                                className={`w-6 h-6 rounded-lg border flex items-center justify-center transition-all ${
+                                className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${
                                   isSelected
                                     ? "bg-primary border-primary text-white"
                                     : "border-outline-variant bg-surface"
                                 }`}
                               >
                                 {isSelected && (
-                                  <span className="material-symbols-outlined text-base font-bold">
+                                  <span className="material-symbols-outlined text-xs font-bold">
                                     check
                                   </span>
                                 )}
@@ -590,45 +634,11 @@ export default function SchedulePage() {
                                     {opt.badge}
                                   </span>
                                 </div>
-                                <div className="text-[11px] text-on-surface-variant truncate max-w-[220px]">
+                                <div className="text-[11px] text-on-surface-variant truncate max-w-[240px]">
                                   {opt.desc}
                                 </div>
                               </div>
                             </div>
-
-                            {/* Right: Order Badge & Reorder Arrows */}
-                            {isSelected && (
-                              <div className="flex items-center gap-2 flex-shrink-0 bg-surface px-2.5 py-1 rounded-xl border border-primary/20">
-                                <span className="text-[11px] font-extrabold text-primary flex items-center gap-1">
-                                  Thứ tự {orderIndex + 1}
-                                </span>
-
-                                <div className="flex flex-col gap-0.5">
-                                  <button
-                                    type="button"
-                                    disabled={orderIndex === 0}
-                                    onClick={() => handleMoveActionOrder(orderIndex, "up")}
-                                    className="p-0.5 text-on-surface-variant hover:text-primary disabled:opacity-30 disabled:hover:text-on-surface-variant"
-                                    title="Chuyển lên trước"
-                                  >
-                                    <span className="material-symbols-outlined text-xs font-bold">
-                                      arrow_upward
-                                    </span>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    disabled={orderIndex === selectedActions.length - 1}
-                                    onClick={() => handleMoveActionOrder(orderIndex, "down")}
-                                    className="p-0.5 text-on-surface-variant hover:text-primary disabled:opacity-30 disabled:hover:text-on-surface-variant"
-                                    title="Chuyển xuống sau"
-                                  >
-                                    <span className="material-symbols-outlined text-xs font-bold">
-                                      arrow_downward
-                                    </span>
-                                  </button>
-                                </div>
-                              </div>
-                            )}
                           </div>
                         </div>
                       );
