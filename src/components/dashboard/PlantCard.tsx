@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Plant } from "@/lib/data";
 import { useGarden } from "@/context/GardenContext";
 import { InspectionHistoryModal } from "@/components/dashboard/InspectionHistoryModal";
+import { CameraObserveModal } from "@/components/dashboard/CameraObserveModal";
 
 interface PlantCardProps {
   plant: Plant;
@@ -31,6 +32,7 @@ export function PlantCard({ plant, onObserve, onWater, onHistory }: PlantCardPro
   const { triggerQuickAction, updateControls, controls } = useGarden();
   const [actionLoading, setActionLoading] = useState<"observe" | "inspect" | "water" | null>(null);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showObserveModal, setShowObserveModal] = useState(false);
 
   const now = new Date();
   const defaultDateStr = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`;
@@ -55,19 +57,27 @@ export function PlantCard({ plant, onObserve, onWater, onHistory }: PlantCardPro
       if (onObserve) {
         onObserve(plant);
       } else {
-        await fetch("/api/arduino/command", {
+        // Gửi lệnh di chuyển robot tới đúng vị trí khay để mở camera quan sát
+        triggerQuickAction(
+          `🔍 Đang điều khiển Robot di chuyển tới ${displayLocation} để mở camera quan sát cây ${plant.name}...`
+        );
+
+        await fetch("/api/plant-move", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ command: "CHECK" }),
+          body: JSON.stringify({
+            plantId: plant.id,
+            plantName: plant.name,
+            location: displayLocation,
+          }),
         }).catch(() => {});
-        triggerQuickAction(
-          `🔍 Đang di chuyển camera robot tới ${displayLocation} để quan sát cây ${plant.name}...`
-        );
+
+        setShowObserveModal(true);
       }
     } catch (e) {
       triggerQuickAction(`❌ Lỗi hệ thống khi kết nối thiết bị quan sát tại ${displayLocation}`);
     } finally {
-      setTimeout(() => setActionLoading(null), 1000);
+      setTimeout(() => setActionLoading(null), 800);
     }
   };
 
@@ -106,7 +116,7 @@ export function PlantCard({ plant, onObserve, onWater, onHistory }: PlantCardPro
 
       if (res.ok) {
         triggerQuickAction(
-          `✅ Đã quét xong sâu bệnh cho cây ${plant.name}! Ảnh & báo cáo đã được lưu vào Lịch sử và gửi về Telegram.`
+          `✅ Đã di chuyển tới ${displayLocation} và quét xong sâu bệnh cho ${plant.name}! Báo cáo đã lưu vào Lịch sử & gửi Telegram.`
         );
         setShowHistoryModal(true);
       } else {
@@ -142,46 +152,35 @@ export function PlantCard({ plant, onObserve, onWater, onHistory }: PlantCardPro
         onWater(plant);
       } else {
         triggerQuickAction(
-          `🤖 Robot đang di chuyển tới ${displayLocation} để tiến hành tưới phân...`
+          `🤖 Robot đang di chuyển tới ${displayLocation} để tiến hành tưới phân cho ${plant.name}...`
         );
 
-        await fetch("/api/arduino/command", {
+        const res = await fetch("/api/plant-water", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ command: "CHECK" }),
-        }).catch(() => {});
-
-        await new Promise((res) => setTimeout(res, 1500));
-
-        await fetch("/api/arduino/command", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ command: "SPRAY" }),
-        }).catch(() => {});
-
-        await fetch("/api/esp32/command", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ command: "WATER ON" }),
-        }).catch(() => {});
-
-        updateControls({
-          watering: true,
-          soilMoisture: Math.min(100, (controls.soilMoisture || 60) + 10),
+          body: JSON.stringify({
+            plantId: plant.id,
+            plantName: plant.name,
+            location: displayLocation,
+          }),
         });
 
-        triggerQuickAction(
-          `🌱 Robot đã tới ${displayLocation} và kích hoạt tưới phân thành công cho cây ${plant.name}!`
-        );
+        if (res.ok) {
+          updateControls({
+            watering: true,
+            soilMoisture: Math.min(100, (controls.soilMoisture || 60) + 10),
+          });
 
-        setTimeout(async () => {
-          await fetch("/api/esp32/command", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ command: "WATER OFF" }),
-          }).catch(() => {});
-          updateControls({ watering: false });
-        }, 5000);
+          triggerQuickAction(
+            `🌱 Robot đã tới ${displayLocation} và kích hoạt tưới phân bón thành công cho cây ${plant.name}!`
+          );
+
+          setTimeout(() => {
+            updateControls({ watering: false });
+          }, 5000);
+        } else {
+          triggerQuickAction(`❌ Lỗi tưới phân cho ${plant.name}: Không thể phát lệnh bơm phần cứng`);
+        }
       }
     } catch (e) {
       triggerQuickAction(`❌ Lỗi phần cứng khi tưới phân cho ${plant.name}`);
@@ -240,7 +239,7 @@ export function PlantCard({ plant, onObserve, onWater, onHistory }: PlantCardPro
             onClick={handleObserveClick}
             disabled={actionLoading === "observe"}
             className="py-2 px-2.5 bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/40 dark:hover:bg-sky-900/60 text-sky-700 dark:text-sky-300 border border-sky-200/80 dark:border-sky-800/80 rounded-xl font-bold text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
-            title="Di chuyển camera robot tới khay này để quan sát trực tiếp (yêu cầu kết nối Arduino)"
+            title="Di chuyển robot tới khay này và mở camera quan sát trực tiếp"
           >
             {actionLoading === "observe" ? (
               <span className="material-symbols-outlined text-sm animate-spin">
@@ -257,7 +256,7 @@ export function PlantCard({ plant, onObserve, onWater, onHistory }: PlantCardPro
             onClick={handleInspectClick}
             disabled={actionLoading === "inspect"}
             className="py-2 px-2.5 bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/40 dark:hover:bg-teal-900/60 text-teal-700 dark:text-teal-300 border border-teal-200/80 dark:border-teal-800/80 rounded-xl font-bold text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
-            title="Chụp ảnh & quét sâu bệnh qua AI Gemini tại vị trí cây này (yêu cầu Arduino & USB Camera)"
+            title="Di chuyển robot tới khay này, chụp ảnh & quét sâu bệnh qua AI Gemini"
           >
             {actionLoading === "inspect" ? (
               <span className="material-symbols-outlined text-sm animate-spin">
@@ -274,7 +273,7 @@ export function PlantCard({ plant, onObserve, onWater, onHistory }: PlantCardPro
             onClick={handleFertilizeClick}
             disabled={actionLoading === "water"}
             className="py-2 px-2.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/80 rounded-xl font-bold text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
-            title="Điều khiển robot tới khay này để tiến hành tưới phân bón (yêu cầu ESP32/Arduino)"
+            title="Di chuyển robot tới khay này và kích hoạt bơm tưới phân bón"
           >
             {actionLoading === "water" ? (
               <span className="material-symbols-outlined text-sm animate-spin">
@@ -303,6 +302,13 @@ export function PlantCard({ plant, onObserve, onWater, onHistory }: PlantCardPro
         plant={plant}
         isOpen={showHistoryModal}
         onClose={() => setShowHistoryModal(false)}
+      />
+
+      {/* Camera Live Observe Modal */}
+      <CameraObserveModal
+        plant={plant}
+        isOpen={showObserveModal}
+        onClose={() => setShowObserveModal(false)}
       />
     </>
   );

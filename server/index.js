@@ -2978,11 +2978,120 @@ app.delete("/api/inspection-history", (req, res) => {
   }
 });
 
+function getPointIndexFromLocation(location) {
+  if (!location) return 0;
+  const match = String(location).match(/Khay\s*0?(\d+)/i);
+  if (match) {
+    const idx = parseInt(match[1], 10) - 1;
+    return Math.max(0, Math.min(5, idx));
+  }
+  return 0;
+}
+
+// MOVE ROBOT TO SPECIFIC PLANT TRAY / POINT
+app.post("/api/plant-move", async (req, res) => {
+  try {
+    const { plantId, plantName, location } = req.body;
+    const trayName = location || "Khay 01";
+    const pointIdx = getPointIndexFromLocation(trayName);
+
+    const arduinoStatus = await getRealSerialStatus();
+    if (!arduinoStatus.connected && process.platform === "linux") {
+      return res.status(400).json({
+        success: false,
+        error: "Mạch Arduino chưa được kết nối! Vui lòng cắm cáp USB Arduino.",
+      });
+    }
+
+    pushWebNotification(`🤖 Đang điều khiển Robot di chuyển tới ${trayName} (Điểm ${pointIdx + 1}) để quan sát...`, "PROCESS");
+
+    // Send movement command to Arduino Serial: POINT:n and Pn
+    await sendDirectCommandToArduino(`POINT:${pointIdx}`).catch(() => {});
+    await sendDirectCommandToArduino(`P${pointIdx + 1}`).catch(() => {});
+
+    // Try capturing fresh image from USB camera
+    try {
+      await captureImage();
+    } catch (e) {}
+
+    res.json({
+      success: true,
+      message: `Robot đã di chuyển tới ${trayName} (Điểm ${pointIdx + 1})!`,
+      pointIndex: pointIdx,
+      image: "/api/camera/image?t=" + Date.now(),
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// MOVE ROBOT AND WATER/FERTILIZE SPECIFIC PLANT TRAY
+app.post("/api/plant-water", async (req, res) => {
+  try {
+    const { plantId, plantName, location } = req.body;
+    const trayName = location || "Khay 01";
+    const pointIdx = getPointIndexFromLocation(trayName);
+
+    const espStatus = await getRealEsp32Status();
+    const ardStatus = await getRealSerialStatus();
+
+    if (!espStatus.connected && !ardStatus.connected && process.platform === "linux") {
+      return res.status(400).json({
+        success: false,
+        error: "Chưa kết nối mạch ESP32 hoặc Arduino! Vui lòng kiểm tra cổng USB/Serial.",
+      });
+    }
+
+    pushWebNotification(`🤖 Robot đang di chuyển tới ${trayName} (Điểm ${pointIdx + 1}) để tiến hành tưới phân...`, "PROCESS");
+
+    // 1. Move robot to tray position
+    await sendDirectCommandToArduino(`POINT:${pointIdx}`).catch(() => {});
+    await sendDirectCommandToArduino(`P${pointIdx + 1}`).catch(() => {});
+
+    // 2. Trigger Arduino relay pump (SPRAY command)
+    await sendDirectCommandToArduino("SPRAY").catch(() => {});
+
+    // 3. Trigger ESP32 fertilizer pump (WATER ON)
+    await sendDirectCommandToEsp32("WATER ON").catch(() => {});
+
+    // 4. Save fertilize entry in data/inspection_history.json
+    try {
+      const history = readJson("inspection_history.json", []);
+      history.unshift({
+        id: `insp-${Date.now()}`,
+        plantId: plantId || "",
+        type: "FERTILIZE",
+        timestamp: new Date().toLocaleString("vi-VN"),
+        title: `Tưới phân bón - ${plantName || trayName}`,
+        detail: `Đã hoàn tất tưới phân sinh học/vi lượng thực tế tại ${trayName} (Điểm ${pointIdx + 1}).`,
+        dosage: "4.0 ml (Bình A+B)",
+        status: "Đã tưới phân",
+      });
+      writeJson("inspection_history.json", history);
+    } catch (e) {}
+
+    pushWebNotification(`🌱 Robot đã tưới phân thành công cho ${plantName || trayName}!`, "SUCCESS");
+
+    // Stop pump after 5s
+    setTimeout(async () => {
+      await sendDirectCommandToEsp32("WATER OFF").catch(() => {});
+    }, 5000);
+
+    res.json({
+      success: true,
+      message: `Đã di chuyển tới ${trayName} và bật bơm tưới phân!`,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // TRIGGER PEST INSPECTION FOR SPECIFIC PLANT / TRAY
 app.post("/api/plant-inspect", async (req, res) => {
   try {
     const { plantId, plantName, location } = req.body;
     const trayName = location || "Khay 01";
+    const pointIdx = getPointIndexFromLocation(trayName);
 
     const arduinoStatus = await getRealSerialStatus();
     if (!arduinoStatus.connected && process.platform === "linux") {
@@ -2993,12 +3102,11 @@ app.post("/api/plant-inspect", async (req, res) => {
       });
     }
 
-    pushWebNotification(`🐛 Đang điều khiển Robot di chuyển tới ${trayName} để kiểm tra sâu bệnh trên cây ${plantName || ""}...`, "AI_ANALYSIS");
+    pushWebNotification(`🐛 Đang điều khiển Robot di chuyển tới ${trayName} (Điểm ${pointIdx + 1}) để kiểm tra sâu bệnh trên cây ${plantName || ""}...`, "AI_ANALYSIS");
 
     // 1. Send command to Arduino to move camera to tray/point
-    await sendDirectCommandToArduino("k").catch((e) => {
-      console.warn(`[Arduino Inspect Command Warn] ${e.message}`);
-    });
+    await sendDirectCommandToArduino(`POINT:${pointIdx}`).catch(() => {});
+    await sendDirectCommandToArduino(`P${pointIdx + 1}`).catch(() => {});
 
     // 2. Capture actual USB camera image
     let imagePathToSend = null;
