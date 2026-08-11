@@ -3,11 +3,13 @@
 import { useState } from "react";
 import { Plant } from "@/lib/data";
 import { useGarden } from "@/context/GardenContext";
+import { InspectionHistoryModal } from "@/components/dashboard/InspectionHistoryModal";
 
 interface PlantCardProps {
   plant: Plant;
   onObserve?: (plant: Plant) => void;
   onWater?: (plant: Plant) => void;
+  onHistory?: (plant: Plant) => void;
 }
 
 function cleanLocation(loc?: string): string {
@@ -25,9 +27,10 @@ function cleanLocation(loc?: string): string {
   );
 }
 
-export function PlantCard({ plant, onObserve, onWater }: PlantCardProps) {
+export function PlantCard({ plant, onObserve, onWater, onHistory }: PlantCardProps) {
   const { triggerQuickAction, updateControls, controls } = useGarden();
   const [actionLoading, setActionLoading] = useState<"observe" | "water" | null>(null);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
 
   const now = new Date();
   const defaultDateStr = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`;
@@ -112,74 +115,100 @@ export function PlantCard({ plant, onObserve, onWater }: PlantCardProps) {
     }
   };
 
+  const handleHistoryClick = () => {
+    if (onHistory) {
+      onHistory(plant);
+    } else {
+      setShowHistoryModal(true);
+    }
+  };
+
   return (
-    <div className="bg-surface rounded-2xl p-md card-shadow border border-outline-variant/20 hover:shadow-lg transition-all hover:-translate-y-0.5 group flex flex-col justify-between">
-      <div>
-        <div className="flex justify-between items-start mb-md pr-6">
-          <div>
-            <h4 className="font-body-lg text-body-lg font-bold text-on-surface group-hover:text-primary transition-colors">
-              {plant.name}
-            </h4>
-            <p className="font-body-sm text-body-sm text-on-surface-variant mt-0.5">
-              {displayLocation} - {displayDate}
-            </p>
+    <>
+      <div className="bg-surface rounded-2xl p-md card-shadow border border-outline-variant/20 hover:shadow-lg transition-all hover:-translate-y-0.5 group flex flex-col justify-between">
+        <div>
+          <div className="flex justify-between items-start mb-md pr-6">
+            <div>
+              <h4 className="font-body-lg text-body-lg font-bold text-on-surface group-hover:text-primary transition-colors">
+                {plant.name}
+              </h4>
+              <p className="font-body-sm text-body-sm text-on-surface-variant mt-0.5">
+                {displayLocation} - {displayDate}
+              </p>
+            </div>
+          </div>
+
+          <div className="mb-md">
+            <div className="flex justify-between items-center mb-1.5">
+              <span
+                className={`font-label-caps text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${plant.statusColor}`}
+              >
+                {plant.status}
+              </span>
+              <span className="font-label-caps text-[10px] text-on-surface-variant font-medium">
+                {plant.progress}%
+              </span>
+            </div>
+            <div className="w-full bg-surface-container-high rounded-full h-2 overflow-hidden">
+              <div
+                className="bg-primary h-2 rounded-full transition-all duration-500"
+                style={{ width: `${plant.progress}%` }}
+              />
+            </div>
           </div>
         </div>
 
-        <div className="mb-md">
-          <div className="flex justify-between items-center mb-1.5">
-            <span
-              className={`font-label-caps text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${plant.statusColor}`}
-            >
-              {plant.status}
-            </span>
-            <span className="font-label-caps text-[10px] text-on-surface-variant font-medium">
-              {plant.progress}%
-            </span>
-          </div>
-          <div className="w-full bg-surface-container-high rounded-full h-2 overflow-hidden">
-            <div
-              className="bg-primary h-2 rounded-full transition-all duration-500"
-              style={{ width: `${plant.progress}%` }}
-            />
-          </div>
+        {/* Action Buttons: Quan sát, Tưới phân, Lịch sử */}
+        <div className="pt-3 border-t border-outline-variant/15 flex items-center justify-between gap-1.5">
+          <button
+            type="button"
+            onClick={handleObserveClick}
+            disabled={actionLoading === "observe"}
+            className="flex-1 py-2 px-2 bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/40 dark:hover:bg-sky-900/60 text-sky-700 dark:text-sky-300 border border-sky-200/80 dark:border-sky-800/80 rounded-xl font-bold text-xs transition-all active:scale-95 flex items-center justify-center gap-1 disabled:opacity-50"
+          >
+            {actionLoading === "observe" ? (
+              <span className="material-symbols-outlined text-sm animate-spin">
+                progress_activity
+              </span>
+            ) : (
+              <span className="material-symbols-outlined text-sm">visibility</span>
+            )}
+            Quan sát
+          </button>
+
+          <button
+            type="button"
+            onClick={handleFertilizeClick}
+            disabled={actionLoading === "water"}
+            className="flex-1 py-2 px-2 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/80 rounded-xl font-bold text-xs transition-all active:scale-95 flex items-center justify-center gap-1 disabled:opacity-50"
+          >
+            {actionLoading === "water" ? (
+              <span className="material-symbols-outlined text-sm animate-spin">
+                progress_activity
+              </span>
+            ) : (
+              <span className="material-symbols-outlined text-sm">water_drop</span>
+            )}
+            Tưới phân
+          </button>
+
+          <button
+            type="button"
+            onClick={handleHistoryClick}
+            className="flex-1 py-2 px-2 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:hover:bg-purple-900/60 text-purple-700 dark:text-purple-300 border border-purple-200/80 dark:border-purple-800/80 rounded-xl font-bold text-xs transition-all active:scale-95 flex items-center justify-center gap-1"
+          >
+            <span className="material-symbols-outlined text-sm">history</span>
+            Lịch sử
+          </button>
         </div>
       </div>
 
-      {/* Action Buttons: Nút Quan Sát & Nút Tưới Phân */}
-      <div className="pt-3 border-t border-outline-variant/15 flex items-center justify-between gap-2">
-        <button
-          type="button"
-          onClick={handleObserveClick}
-          disabled={actionLoading === "observe"}
-          className="flex-1 py-2 px-3 bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/40 dark:hover:bg-sky-900/60 text-sky-700 dark:text-sky-300 border border-sky-200/80 dark:border-sky-800/80 rounded-xl font-bold text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
-        >
-          {actionLoading === "observe" ? (
-            <span className="material-symbols-outlined text-sm animate-spin">
-              progress_activity
-            </span>
-          ) : (
-            <span className="material-symbols-outlined text-base">visibility</span>
-          )}
-          Quan sát
-        </button>
-
-        <button
-          type="button"
-          onClick={handleFertilizeClick}
-          disabled={actionLoading === "water"}
-          className="flex-1 py-2 px-3 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/80 rounded-xl font-bold text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
-        >
-          {actionLoading === "water" ? (
-            <span className="material-symbols-outlined text-sm animate-spin">
-              progress_activity
-            </span>
-          ) : (
-            <span className="material-symbols-outlined text-base">water_drop</span>
-          )}
-          Tưới phân
-        </button>
-      </div>
-    </div>
+      {/* History Popup Modal */}
+      <InspectionHistoryModal
+        plant={plant}
+        isOpen={showHistoryModal}
+        onClose={() => setShowHistoryModal(false)}
+      />
+    </>
   );
 }
