@@ -499,6 +499,19 @@ async function generateFallbackSnapshot(imagePath) {
   }
 }
 
+function addSystemLog(command, label, status = "RECEIVED") {
+  const timestamp = new Date().toLocaleTimeString("vi-VN");
+  const logEntry = {
+    timestamp,
+    command: String(command).toUpperCase(),
+    label: String(label),
+    status: String(status).toUpperCase(),
+  };
+  lastArduinoLogs.unshift(logEntry);
+  if (lastArduinoLogs.length > 50) lastArduinoLogs.pop();
+  return logEntry;
+}
+
 async function captureImage() {
   const imagePath = path.join(process.cwd(), "st01.jpg");
   console.log("Đang mở camera chụp ảnh...");
@@ -551,6 +564,7 @@ async function captureImage() {
           const sharp = require("sharp");
           await sharp(bestPath).removeAlpha().linear(alpha, beta).jpeg({ quality: JPEG_QUALITY }).toFile(imagePath);
           console.log(`[Camera Engine] Đã chụp và lưu ảnh thành công: ${imagePath}`);
+          addSystemLog("CAMERA", `📷 Camera USB: Đã chụp và lưu ảnh thành công (${path.basename(imagePath)})`, "SUCCESS");
           return imagePath;
         }
       }
@@ -3170,6 +3184,7 @@ app.post("/api/plant-inspect", async (req, res) => {
       });
     }
 
+    addSystemLog("INSPECT_MOVE", `🐛 Đang điều khiển Robot di chuyển tới ${trayName} (Điểm ${pointIdx + 1}) để kiểm tra sâu bệnh...`, "PROCESS");
     pushWebNotification(`🐛 Đang điều khiển Robot di chuyển tới ${trayName} (Điểm ${pointIdx + 1}) để kiểm tra sâu bệnh trên cây ${plantName || ""}...`, "AI_ANALYSIS");
 
     // 1. Send command to Arduino to move camera to tray/point
@@ -3180,14 +3195,17 @@ app.post("/api/plant-inspect", async (req, res) => {
     let imagePathToSend = null;
     try {
       imagePathToSend = await captureImage();
+      addSystemLog("CAM_CAPTURE", `📷 [Camera Log] Đã chụp ảnh thành công từ USB Camera (${trayName} / st01.jpg)!`, "SUCCESS");
     } catch (capErr) {
       console.warn(`[Inspect Capture Warn] ${capErr.message}`);
+      addSystemLog("CAM_CAPTURE", `⚠️ [Camera Log] Không thể chụp trực tiếp, sử dụng snapshot fallback: ${capErr.message}`, "WARNING");
     }
 
     // 3. Perform Gemini AI analysis
     let formattedResult = "";
     const keys = getKeysList();
     if (keys.length === 0) {
+      addSystemLog("GEMINI_ERR", `❌ Chưa thiết lập Gemini API Key trong hệ thống`, "ALERT");
       pushWebNotification(`❌ Chưa thiết lập Gemini API Key! Vui lòng vào trang 'Cấu hình API' để nhập Key trước khi quét sâu.`, "ALERT");
       return res.status(400).json({
         success: false,
@@ -3202,6 +3220,8 @@ app.post("/api/plant-inspect", async (req, res) => {
         imageBase64 = imgBuf.toString("base64");
       } catch (e) {}
     }
+
+    addSystemLog("GEMINI_REQ", `🤖 Đang gửi dữ liệu hình ảnh st01.jpg tới mô hình Gemini AI để phân tích diệp lục & sâu bệnh...`, "PROCESS");
 
     const payload = {
       contents: [
@@ -3233,6 +3253,7 @@ app.post("/api/plant-inspect", async (req, res) => {
       }
     } catch (aiErr) {
       console.error(`[Gemini AI Inspect Error] ${aiErr.message}`);
+      addSystemLog("GEMINI_ERR", `❌ [Gemini AI Log] Lỗi kết nối API: ${aiErr.message}`, "ALERT");
       pushWebNotification(`❌ Lỗi gọi Gemini AI API: ${aiErr.message}`, "ALERT");
       return res.status(500).json({
         success: false,
@@ -3243,11 +3264,15 @@ app.post("/api/plant-inspect", async (req, res) => {
     const hasPest = needSpray(formattedResult);
     const aiStatusText = parsedResult ? parsedResult.status : (hasPest ? "CÓ SÂU / BỆNH" : "KHÔNG PHÁT HIỆN SÂU VÀ BỆNH");
 
+    addSystemLog("GEMINI_RES", `🤖 [Gemini AI Log] Phân tích hoàn tất: Tình trạng [${aiStatusText}] | Mô tả: ${parsedResult?.description || "Bình thường"}`, "SUCCESS");
+
     if (hasPest) {
       await sendDirectCommandToArduino("SPRAY").catch(() => {});
+      addSystemLog("ACTUATE", `🚨 Lệnh Arduino: SPRAY (Kích hoạt bơm phun thuốc sinh học 1.5s)`, "WARNING");
       pushWebNotification(`🚨 Gemini AI phân tích ${plantName || trayName}: [${aiStatusText}]! Đã kích hoạt bơm SPRAY.`, "WARNING");
     } else {
       await sendDirectCommandToArduino("NO_SPRAY").catch(() => {});
+      addSystemLog("ACTUATE", `🌿 Lệnh Arduino: NO_SPRAY (Cây khỏe mạnh, không cần phun thuốc)`, "SUCCESS");
       pushWebNotification(`🌿 Gemini AI phân tích ${plantName || trayName}: [${aiStatusText}].`, "SUCCESS");
     }
 
