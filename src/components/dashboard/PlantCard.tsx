@@ -115,7 +115,7 @@ export function PlantCard({ plant, onObserve, onWater }: PlantCardProps) {
   return (
     <div className="bg-surface rounded-2xl p-md card-shadow border border-outline-variant/20 hover:shadow-lg transition-all hover:-translate-y-0.5 group flex flex-col justify-between">
       <div>
-        <div className="flex justify-between items-start mb-md">
+        <div className="flex justify-between items-start mb-md pr-6">
           <div>
             <h4 className="font-body-lg text-body-lg font-bold text-on-surface group-hover:text-primary transition-colors">
               {plant.name}
@@ -123,13 +123,6 @@ export function PlantCard({ plant, onObserve, onWater }: PlantCardProps) {
             <p className="font-body-sm text-body-sm text-on-surface-variant mt-0.5">
               {displayLocation} - {displayDate}
             </p>
-          </div>
-          <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-surface-container-high relative flex-shrink-0">
-            <img
-              src={plant.image}
-              alt={plant.name}
-              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-            />
           </div>
         </div>
 
