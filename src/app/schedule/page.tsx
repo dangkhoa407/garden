@@ -78,7 +78,7 @@ export default function SchedulePage() {
   const [showModal, setShowModal] = useState(false);
   const [mounted, setMounted] = useState(false);
 
-  // Form State - Selected Actions Array (preserves execution order)
+  // Form State
   const [selectedActions, setSelectedActions] = useState<ActionType[]>(["INSPECT"]);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
@@ -87,7 +87,7 @@ export default function SchedulePage() {
   const [newDate, setNewDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [newTime, setNewTime] = useState("08:00");
   const [newRepeatDays, setNewRepeatDays] = useState<string[]>(["T2", "T4", "T6"]);
-  const [newLocation, setNewLocation] = useState("Toàn bộ khu vườn");
+  const [selectedLocations, setSelectedLocations] = useState<string[]>(["Toàn bộ khu vườn"]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -161,6 +161,26 @@ export default function SchedulePage() {
     );
   };
 
+  // Multi-location selection handler
+  const handleLocationToggle = (loc: string) => {
+    if (loc === "Toàn bộ khu vườn") {
+      setSelectedLocations(["Toàn bộ khu vườn"]);
+    } else {
+      let updated = selectedLocations.filter((l) => l !== "Toàn bộ khu vườn");
+      if (updated.includes(loc)) {
+        updated = updated.filter((l) => l !== loc);
+      } else {
+        updated.push(loc);
+      }
+
+      if (updated.length === 0) {
+        setSelectedLocations(["Toàn bộ khu vườn"]);
+      } else {
+        setSelectedLocations(updated);
+      }
+    }
+  };
+
   // Toggle selection of an action
   const handleActionToggle = (actionType: ActionType) => {
     if (selectedActions.includes(actionType)) {
@@ -215,6 +235,8 @@ export default function SchedulePage() {
         .map((a) => ACTION_OPTIONS.find((opt) => opt.type === a)?.title)
         .join(" ➔ ");
 
+      const locationStr = selectedLocations.join(", ");
+
       const res = await fetch("/api/schedules", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -226,7 +248,7 @@ export default function SchedulePage() {
           date: newScheduleType === "once" ? newDate : "",
           repeatDays: newScheduleType === "repeating" ? newRepeatDays : [],
           time: newTime,
-          location: newLocation.trim() || "Toàn bộ khu vườn",
+          location: locationStr || "Toàn bộ khu vườn",
         }),
       });
 
@@ -239,6 +261,7 @@ export default function SchedulePage() {
         setNewTitle("");
         setSelectedActions(["INSPECT"]);
         setNewScheduleType("once");
+        setSelectedLocations(["Toàn bộ khu vườn"]);
       }
     } catch (e) {
       console.error(e);
@@ -255,7 +278,6 @@ export default function SchedulePage() {
 
   const activeRunningTask = schedules.find((s) => s.enabled && s.status === "active");
 
-  // Order all actions list: selected ones first in selectedActions order, then unselected ones
   const allActionsOrdered = [
     ...selectedActions.map((type) => ACTION_OPTIONS.find((opt) => opt.type === type)!),
     ...ACTION_OPTIONS.filter((opt) => !selectedActions.includes(opt.type)),
@@ -270,7 +292,7 @@ export default function SchedulePage() {
             Lịch Trình Quản Lý
           </h2>
           <p className="font-body-lg text-body-lg text-on-surface-variant">
-            Tự động hóa chăm sóc vườn theo khung giờ • Kéo thả đổi thứ tự chạy các chức năng
+            Tự động hóa chăm sóc vườn theo khung giờ • Chọn nhiều chức năng & nhiều khu vực
           </p>
         </div>
 
@@ -739,8 +761,8 @@ export default function SchedulePage() {
                   </div>
                 )}
 
-                {/* 4. Giờ chạy & Khu vực (Cây trồng từ /plants) */}
-                <div className="grid grid-cols-2 gap-3">
+                {/* 4. Giờ chạy & Khu vực (Chọn nhiều khu vực / cây trồng) */}
+                <div className="space-y-3">
                   <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-1">
                       GIỜ CHẠY (HH:MM)
@@ -754,29 +776,59 @@ export default function SchedulePage() {
                     />
                   </div>
 
+                  {/* CHỌN NHIỀU KHU VỰC / CÂY TRỒNG */}
                   <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-1">
-                      KHU VỰC / CÂY TRỒNG (/PLANTS)
-                    </label>
-                    <select
-                      value={newLocation}
-                      onChange={(e) => setNewLocation(e.target.value)}
-                      className="w-full px-3.5 py-2.5 bg-surface-container-low border border-outline-variant/40 rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary text-on-surface cursor-pointer"
-                    >
-                      <option value="Toàn bộ khu vườn">🌿 Toàn bộ khu vườn (Tất cả cây)</option>
-                      {plants && plants.length > 0 && (
-                        <optgroup label="Cây trồng đã thêm (/plants)">
-                          {plants.map((p) => {
-                            const val = `${p.name} (${p.location})`;
-                            return (
-                              <option key={p.id} value={val}>
-                                🌱 {p.name} - {p.location} ({p.category})
-                              </option>
-                            );
-                          })}
-                        </optgroup>
-                      )}
-                    </select>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant">
+                        KHU VỰC / CÂY TRỒNG (/PLANTS):
+                      </label>
+                      <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md">
+                        Chọn được nhiều cây
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 p-3 bg-surface-container-low border border-outline-variant/30 rounded-2xl max-h-[140px] overflow-y-auto">
+                      {/* Option: Toàn bộ khu vườn */}
+                      <button
+                        type="button"
+                        onClick={() => handleLocationToggle("Toàn bộ khu vườn")}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                          selectedLocations.includes("Toàn bộ khu vườn")
+                            ? "bg-primary text-white shadow-xs"
+                            : "bg-surface border border-outline-variant/30 text-on-surface-variant hover:border-primary/40"
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-sm">
+                          {selectedLocations.includes("Toàn bộ khu vườn") ? "check_circle" : "park"}
+                        </span>
+                        🌿 Toàn bộ khu vườn
+                      </button>
+
+                      {/* Plants from /plants */}
+                      {plants &&
+                        plants.map((p) => {
+                          const locVal = `${p.name} (${p.location})`;
+                          const isSelected = selectedLocations.includes(locVal);
+
+                          return (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onClick={() => handleLocationToggle(locVal)}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                                isSelected
+                                  ? "bg-emerald-600 text-white shadow-xs"
+                                  : "bg-surface border border-outline-variant/30 text-on-surface-variant hover:border-emerald-500/40"
+                              }`}
+                            >
+                              <span className="material-symbols-outlined text-sm">
+                                {isSelected ? "check_circle" : "eco"}
+                              </span>
+                              🌱 {p.name} - {p.location}
+                            </button>
+                          );
+                        })}
+                    </div>
                   </div>
                 </div>
 
