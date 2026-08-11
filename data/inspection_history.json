@@ -1,1 +1,12 @@
-[]
+[
+  {
+    "id": "insp-1786418648683",
+    "type": "PEST",
+    "timestamp": "10:24:08 11/8/2026",
+    "title": "Quét Camera Serial Arduino",
+    "detail": "Chưa thiết lập Gemini API Key! Vui lòng vào trang 'Cấu hình API' trên Web để thêm chìa khóa Gemini.",
+    "telegramCaption": "📸 ĐIỂM QUÉT CAMERA KẾT NỐI ARDUINO\n\nChưa thiết lập Gemini API Key! Vui lòng vào trang 'Cấu hình API' trên Web để thêm chìa khóa Gemini.",
+    "status": "Sức khỏe tốt",
+    "image": "/api/camera/image?t=1786418648683"
+  }
+]

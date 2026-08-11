@@ -818,8 +818,10 @@ async function getOrInitArduinoSerialPort() {
             let action = "NO_SPRAY";
             const keys = getKeysList();
 
+            let parsedResult = null;
             if (keys.length === 0) {
               formattedResult = "Chưa thiết lập Gemini API Key! Vui lòng vào trang 'Cấu hình API' trên Web để thêm chìa khóa Gemini.";
+              addSystemLog("GEMINI_ERR", `❌ Chưa thiết lập Gemini API Key trong hệ thống`, "ALERT");
               pushWebNotification(formattedResult, "WARNING");
             } else {
               let imageBase64 = null;
@@ -829,6 +831,8 @@ async function getOrInitArduinoSerialPort() {
                   imageBase64 = imgBuf.toString("base64");
                 } catch (e) {}
               }
+
+              addSystemLog("GEMINI_REQ", `🤖 [Serial Capture] Đang gửi ảnh st01.jpg sang Google Gemini AI để phân tích thực tế...`, "PROCESS");
 
               const payload = {
                 contents: [
@@ -849,8 +853,8 @@ async function getOrInitArduinoSerialPort() {
                 const aiResult = await callGeminiApiWithRotation(payload);
                 if (aiResult && aiResult.text) {
                   try {
-                    const parsed = parseGeminiResult(aiResult.text);
-                    formattedResult = formatGeminiResult(parsed);
+                    parsedResult = parseGeminiResult(aiResult.text);
+                    formattedResult = formatGeminiResult(parsedResult);
                   } catch (pErr) {
                     formattedResult = aiResult.text;
                   }
@@ -858,6 +862,7 @@ async function getOrInitArduinoSerialPort() {
               } catch (aiErr) {
                 console.error(`[Serial Gemini AI Error] ${aiErr.message}`);
                 formattedResult = `Lỗi phân tích Gemini AI: ${aiErr.message}`;
+                addSystemLog("GEMINI_ERR", `❌ [Serial Gemini AI Log] Lỗi kết nối API: ${aiErr.message}`, "ALERT");
                 pushWebNotification(`❌ Lỗi gọi Gemini AI API: ${aiErr.message}`, "ALERT");
               }
             }
@@ -867,16 +872,22 @@ async function getOrInitArduinoSerialPort() {
               await sendTelegramPhoto(imagePathToSend, telegramCaption);
             } catch (tErr) {}
 
-            action = needSpray(formattedResult) ? "SPRAY" : "NO_SPRAY";
+            const hasPest = needSpray(formattedResult);
+            action = hasPest ? "SPRAY" : "NO_SPRAY";
+            const aiStatusText = parsedResult ? parsedResult.status : (hasPest ? "CÓ SÂU / BỆNH" : "KHÔNG PHÁT HIỆN SÂU VÀ BỆNH");
+
+            addSystemLog("GEMINI_RES", `🤖 [Gemini AI Log] Phân tích hoàn tất: Tình trạng [${aiStatusText}] | Mô tả: ${parsedResult?.description || formattedResult}`, "SUCCESS");
 
             // Nếu phát hiện sâu bệnh, gửi lệnh SPRAY xuống Arduino qua Serial
             if (action === "SPRAY" && activeSerialPort && activeSerialPort.isOpen) {
               activeSerialPort.write("SPRAY\n");
               console.log("[Server -> Arduino Serial] SPRAY (Kích hoạt bơm phun thuốc)");
-              pushWebNotification("🚨 Gemini AI phát hiện sâu bệnh! Đã gửi lệnh SPRAY tới Arduino bật bơm 1.5s.", "WARNING");
+              addSystemLog("ACTUATE", `🚨 Lệnh Arduino: SPRAY (Phát hiện [${aiStatusText}] -> Bật bơm 1.5s)`, "WARNING");
+              pushWebNotification(`🚨 Gemini AI phân tích: [${aiStatusText}]! Đã gửi lệnh SPRAY tới Arduino bật bơm 1.5s.`, "WARNING");
             } else {
               console.log("[Server -> Arduino Serial] NO_SPRAY");
-              pushWebNotification("🌿 Gemini AI: Không phát hiện sâu bệnh trên lá.", "SUCCESS");
+              addSystemLog("ACTUATE", `🌿 Lệnh Arduino: NO_SPRAY (Tình trạng [${aiStatusText}])`, "SUCCESS");
+              pushWebNotification(`🌿 Gemini AI phân tích: [${aiStatusText}].`, "SUCCESS");
             }
 
             // Save history
