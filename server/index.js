@@ -608,111 +608,86 @@ function makeSnapPath() {
 
 async function captureImage(minTimestamp = 0) {
   const liveViewPath = path.join(process.cwd(), "st01.jpg");
-  const targetMinTime = minTimestamp > 0 ? minTimestamp : Date.now() - 2000;
+  const targetMinTime = minTimestamp > 0 ? minTimestamp : Date.now() - 1500;
 
-  // 1. Trên Windows: ưu tiên dùng ảnh random mới nhất từ browser push (không đụng FFmpeg)
-  if (process.platform === "win32") {
-    // Chờ tối đa 2s để browser push ảnh mới
-    for (let elapsed = 0; elapsed < 2000; elapsed += 100) {
-      if (latestSnapshotPath && fs.existsSync(latestSnapshotPath)) {
-        try {
-          const stats = fs.statSync(latestSnapshotPath);
-          if (stats.mtimeMs >= targetMinTime) {
-            console.log(`[Camera Engine] Windows: Dùng ảnh random mới (${(Date.now() - stats.mtimeMs).toFixed(0)}ms): ${path.basename(latestSnapshotPath)}`);
-            return latestSnapshotPath; // Caller sẽ xóa sau khi dùng
-          }
-        } catch (e) {}
+  // 1. Nếu browser vừa push ảnh mới (< 1.5s) thì dùng ngay - nhanh nhất
+  if (latestSnapshotPath && fs.existsSync(latestSnapshotPath)) {
+    try {
+      const stats = fs.statSync(latestSnapshotPath);
+      if (stats.mtimeMs >= targetMinTime) {
+        console.log(`[Camera Engine] Dùng ảnh browser push mới (${(Date.now() - stats.mtimeMs).toFixed(0)}ms): ${path.basename(latestSnapshotPath)}`);
+        return latestSnapshotPath;
       }
-      await new Promise((r) => setTimeout(r, 100));
-    }
-
-    // Fallback: dùng st01.jpg nếu không có snapshot random
-    if (fs.existsSync(liveViewPath)) {
-      const stats = fs.statSync(liveViewPath);
-      console.log(`[Camera Engine] Windows fallback: Dùng st01.jpg (${(Date.now() - stats.mtimeMs).toFixed(0)}ms tuổi)`);
-      return liveViewPath;
-    }
-
-    throw new Error("Windows: Chưa có ảnh từ camera. Vui lòng mở trang Camera để stream ảnh live.");
+    } catch (e) {}
   }
 
-  // 2. Kiểm tra ảnh random mới nhất (cross-platform)
-  for (let elapsed = 0; elapsed < 800; elapsed += 100) {
-    if (latestSnapshotPath && fs.existsSync(latestSnapshotPath)) {
-      try {
-        const stats = fs.statSync(latestSnapshotPath);
-        if (stats.mtimeMs >= targetMinTime) {
-          console.log(`[Camera Engine] Dùng ảnh random mới (${(Date.now() - stats.mtimeMs).toFixed(0)}ms): ${path.basename(latestSnapshotPath)}`);
-          return latestSnapshotPath;
-        }
-      } catch (e) {}
-    }
-    await new Promise((r) => setTimeout(r, 100));
-  }
+  // 2. Chụp trực tiếp qua FFmpeg (Windows: DirectShow, Linux: V4L2)
+  console.log(`[Camera Engine] Chụp ảnh trực tiếp qua FFmpeg DirectShow...`);
+  const snapPath = makeSnapPath();
 
-  // 3. Linux / Raspberry Pi: Chụp trực tiếp qua FFmpeg
-  console.log("Dang mo camera CHỤP ẢNH MỚI qua FFmpeg...");
-
-  try { await configureCamera(); } catch (e) {}
-
-  const directory = await fs.promises.mkdtemp(
-    path.join(require("os").tmpdir(), "vuon-rau-camera-")
-  ).catch(() => null);
-
-  let ffmpegErr = null;
   try {
-    if (directory) {
-      await captureFramesCrossPlatform(directory);
+    if (process.platform === "win32") {
+      const cameraDevice = await getWindowsCameraDevice();
+      if (!cameraDevice) throw new Error("Không phát hiện camera USB nào. Vui lòng cắm cáp USB camera.");
 
-      const frameFiles = (await fs.promises.readdir(directory))
-        .filter((name) => name.toLowerCase().endsWith(".jpg"))
-        .sort()
-        .slice(WARMUP_FRAMES, WARMUP_FRAMES + CHECK_FRAMES);
-
-      if (frameFiles.length === 0) throw new Error("Camera khong tao du khung hinh.");
-
-      let bestPath = null, bestInfo = null, bestScore = Infinity;
-      for (const fileName of frameFiles) {
-        const framePath = path.join(directory, fileName);
-        const info = await analyzeFrameLight(framePath);
-        const score = Math.abs(info.meanBrightness - TARGET_BRIGHTNESS) + info.overexposedRatio * 300 + info.darkRatio * 60;
-        if (score < bestScore) { bestScore = score; bestPath = framePath; bestInfo = info; }
-      }
-      if (!bestPath || !bestInfo) throw new Error("Khong chon duoc anh tot tu camera.");
-
-      const brightness = bestInfo.meanBrightness;
-      const overexposedRatio = bestInfo.overexposedRatio;
-      let alpha = 1, beta = 0;
-      if (overexposedRatio > 0.25 || brightness > 200) { alpha = 0.58; beta = -30; }
-      else if (overexposedRatio > 0.15 || brightness > 175) { alpha = 0.72; beta = -18; }
-      else if (overexposedRatio > 0.07 || brightness > 150) { alpha = 0.84; beta = -8; }
-      else if (overexposedRatio > 0.03 || brightness > 130) { alpha = 0.94; beta = -2; }
-      else if (brightness < 35) { alpha = 1.30; beta = 30; }
-      else if (brightness < 65) { alpha = 1.15; beta = 15; }
-      else if (brightness < 90) { alpha = 1.07; beta = 8; }
-      else if (brightness < 115) { alpha = 1.03; beta = 4; }
-
-      // Lưu vào file random để caller xóa sau khi dùng
-      const snapName = `snap_${Date.now()}_ffmpeg.jpg`;
-      const snapPath = path.join(process.cwd(), snapName);
-      const sharp = require("sharp");
-      await sharp(bestPath).removeAlpha().linear(alpha, beta).jpeg({ quality: JPEG_QUALITY }).toFile(snapPath);
-      // Cũng cập nhật st01.jpg cho live view
-      fs.copyFileSync(snapPath, liveViewPath);
-
-      console.log(`[Camera Engine] Da chup va luu anh: ${snapPath}`);
-      return snapPath; // Caller xóa sau khi xử lý xong
+      console.log(`[Camera Engine] Windows DirectShow: "${cameraDevice}"`);
+      await execFileAsync(
+        ffmpegBin,
+        [
+          "-hide_banner", "-loglevel", "error", "-y",
+          "-f", "dshow",
+          "-framerate", String(CAMERA_FPS),
+          "-video_size", `${CAMERA_WIDTH}x${CAMERA_HEIGHT}`,
+          "-i", `video=${cameraDevice}`,
+          "-frames:v", "1",
+          "-q:v", "2",
+          snapPath,
+        ],
+        { timeout: 8000, maxBuffer: 4 * 1024 * 1024 }
+      );
+    } else {
+      // Linux / Raspberry Pi
+      try { await configureCamera(); } catch (e) {}
+      await execFileAsync(
+        ffmpegBin,
+        [
+          "-hide_banner", "-loglevel", "error", "-y",
+          "-f", "v4l2",
+          "-framerate", String(CAMERA_FPS),
+          "-video_size", `${CAMERA_WIDTH}x${CAMERA_HEIGHT}`,
+          "-i", CAMERA_DEVICE,
+          "-frames:v", "1",
+          "-q:v", "2",
+          snapPath,
+        ],
+        { timeout: 5000, maxBuffer: 4 * 1024 * 1024 }
+      );
     }
+
+    if (!fs.existsSync(snapPath)) throw new Error("FFmpeg không tạo được file ảnh.");
+
+    // Cập nhật st01.jpg cho live view
+    fs.copyFileSync(snapPath, liveViewPath);
+    console.log(`[Camera Engine] Đã chụp và lưu: ${path.basename(snapPath)}`);
+    return snapPath;
+
   } catch (capErr) {
-    ffmpegErr = capErr;
-    console.warn(`[Camera Engine Warn] Khong the chup qua FFmpeg (${capErr.message}).`);
-  } finally {
-    if (directory) await fs.promises.rm(directory, { recursive: true, force: true }).catch(() => {});
+    console.warn(`[Camera Engine Warn] FFmpeg thất bại (${capErr.message}). Thử dùng ảnh cũ nhất...`);
+    // Cleanup file lỗi
+    try { if (fs.existsSync(snapPath)) fs.unlinkSync(snapPath); } catch (e) {}
   }
 
-  if (fs.existsSync(liveViewPath)) return liveViewPath;
+  // 3. Fallback cuối: dùng st01.jpg hoặc latestSnapshotPath nếu có
+  if (latestSnapshotPath && fs.existsSync(latestSnapshotPath)) {
+    console.log(`[Camera Engine] Fallback: dùng ảnh browser cũ ${path.basename(latestSnapshotPath)}`);
+    return latestSnapshotPath;
+  }
+  if (fs.existsSync(liveViewPath)) {
+    console.log(`[Camera Engine] Fallback cuối: dùng st01.jpg`);
+    return liveViewPath;
+  }
 
-  throw new Error(`Khong the chup anh tu camera: ${ffmpegErr?.message || "FFmpeg capture that bai"}.`);
+  throw new Error("Không thể chụp ảnh: camera USB chưa được cắm hoặc đang bị chiếm bởi ứng dụng khác.");
 }
 
 
