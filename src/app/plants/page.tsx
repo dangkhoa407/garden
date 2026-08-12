@@ -75,7 +75,7 @@ export default function PlantsPage() {
             Quản Lý Vườn Cây
           </h2>
           <p className="font-body-lg text-body-lg text-on-surface-variant">
-            Danh sách tất cả cây trồng đang được theo dõi và lưu trữ trong hệ thống GrowHub
+            Danh sách tất cả cây trồng đang được theo dõi và lưu trữ trong hệ thống
           </p>
         </div>
         <button
@@ -167,7 +167,7 @@ export default function PlantsPage() {
                   ) : (
                     <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-700 dark:text-amber-300 text-xs font-bold flex items-center gap-2">
                       <span className="material-symbols-outlined text-base">warning</span>
-                      Tất cả các khay (Khay 01 - Khay 06) đều đã được trồng cây!
+                      Đã hết vị trí để thêm!
                     </div>
                   )}
                 </div>

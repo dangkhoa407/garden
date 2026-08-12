@@ -82,7 +82,7 @@ export default function FertilizersPage() {
             setEspSensors(data.sensors);
           }
         }
-      } catch (e) {}
+      } catch (e) { }
     };
 
     fetchSensors();
@@ -245,25 +245,25 @@ export default function FertilizersPage() {
 
     try {
       // 1. TRÍCH XUẤT PHÂN BÓN (DOSE)
-        const expectedSec = Math.round(t.ml * 60);
-        setIrrigateLog((prev) => [
-          ...prev,
-          `🧪 Gửi lệnh DOSE: Đang bơm ${t.ml} ml từ ${t.tankCode} (Tốc độ 1 ml/phút => Bơm chạy trong ${expectedSec} giây)...`,
-        ]);
-        const res = await fetch("/api/esp32/dose", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tankCode: t.tankCode, ml: t.ml }),
-        });
-        const data = await res.json();
-        const actualSec = data.durationSec || expectedSec;
-        setIrrigateLog((prev) => [
-          ...prev,
-          `✅ Đã trích xuất thành công ${t.ml} ml từ ${t.tankCode}! (Lệnh: ${data.command || "DOSE"}, Thời gian: ${actualSec}s)`,
-        ]);
+      const expectedSec = Math.round(t.ml * 60);
+      setIrrigateLog((prev) => [
+        ...prev,
+        `🧪 Gửi lệnh DOSE: Đang bơm ${t.ml} ml từ ${t.tankCode} (Tốc độ 1 ml/phút => Bơm chạy trong ${expectedSec} giây)...`,
+      ]);
+      const res = await fetch("/api/esp32/dose", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tankCode: t.tankCode, ml: t.ml }),
+      });
+      const data = await res.json();
+      const actualSec = data.durationSec || expectedSec;
+      setIrrigateLog((prev) => [
+        ...prev,
+        `✅ Đã trích xuất thành công ${t.ml} ml từ ${t.tankCode}! (Lệnh: ${data.command || "DOSE"}, Thời gian: ${actualSec}s)`,
+      ]);
 
-        // Đợi thời gian bơm phân
-        await new Promise((r) => setTimeout(r, actualSec * 1000 + 500));
+      // Đợi thời gian bơm phân
+      await new Promise((r) => setTimeout(r, actualSec * 1000 + 500));
 
       // 2. BƠM NƯỚC VÀO BỒN TRỘN (WELL ON - ĐỢI PHAO CAO BẬT)
       setIrrigateStep("well");
@@ -393,28 +393,15 @@ export default function FertilizersPage() {
             <span className="material-symbols-outlined text-primary text-4xl">science</span>
             <div>
               <h2 className="font-display-lg text-display-lg font-bold text-primary">
-                Quản Lý Bình Phân Bón & Bơm Tưới
+                Quản Lý Bình Phân Bón
               </h2>
-              <p className="font-body-lg text-body-lg text-on-surface-variant">
-                Quản lý 4 bình phân bón (Bình A, B, C, D) kết nối trực tiếp với ESP32 (Giới hạn tối đa 6ml/bình, lưu tại <code className="font-mono text-xs text-primary">data/fertilizers.json</code>)
-              </p>
+
             </div>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          {/* Action Button: Tưới Phân (Thay thế nút Ping) */}
-          <button
-            onClick={() => {
-              setIrrigateStep("idle");
-              setIrrigateLog([]);
-              setShowIrrigateModal(true);
-            }}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-3 rounded-xl font-body-lg font-bold transition-all shadow-md flex items-center justify-center gap-2 active:scale-95 border border-emerald-500/30"
-          >
-            <span className="material-symbols-outlined text-xl">water_drop</span>
-            Tưới Phân
-          </button>
+
 
           {/* Action Button: Thêm Bình Phân */}
           <button
@@ -423,7 +410,7 @@ export default function FertilizersPage() {
             className="bg-primary text-on-primary px-5 py-3 rounded-xl font-body-lg font-semibold hover:bg-primary-container transition-all shadow-sm flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
           >
             <span className="material-symbols-outlined">add</span>
-            Thêm bình phân mới ({fertilizers.length}/4)
+            Thêm bình mới
           </button>
         </div>
       </div>
@@ -477,18 +464,17 @@ export default function FertilizersPage() {
                     <div className="flex justify-between items-center text-xs font-semibold">
                       <span className="text-on-surface-variant">Lượng phân bón</span>
                       <span className="font-mono text-primary font-bold">
-                        {cur} ml / 6 ml ({percent}%)
+                        {cur}/6 ml ({percent}%)
                       </span>
                     </div>
                     <div className="w-full bg-surface-container-high rounded-full h-3 overflow-hidden">
                       <div
-                        className={`h-3 rounded-full transition-all duration-500 ${
-                          percent < 20
-                            ? "bg-rose-500"
-                            : percent < 50
+                        className={`h-3 rounded-full transition-all duration-500 ${percent < 20
+                          ? "bg-rose-500"
+                          : percent < 50
                             ? "bg-amber-500"
                             : "bg-emerald-500"
-                        }`}
+                          }`}
                         style={{ width: `${percent}%` }}
                       />
                     </div>
@@ -498,13 +484,12 @@ export default function FertilizersPage() {
                 <div className="mt-md pt-sm border-t border-outline-variant/15 flex justify-between items-center text-xs">
                   <span className="text-on-surface-variant font-medium">Trạng thái bơm</span>
                   <span
-                    className={`px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider text-[10px] ${
-                      percent <= 0
-                        ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20"
-                        : percent < 20
+                    className={`px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider text-[10px] ${percent <= 0
+                      ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20"
+                      : percent < 20
                         ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
                         : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
-                    }`}
+                      }`}
                   >
                     {percent <= 0 ? "Hết phân" : percent < 20 ? "Cần thêm" : "Sẵn sàng"}
                   </span>
@@ -528,10 +513,10 @@ export default function FertilizersPage() {
 
                 <div>
                   <h4 className="font-headline-sm text-sm font-bold text-on-surface group-hover:text-primary transition-colors">
-                    Thêm phân bón cho {code}
+                    Thêm {code}
                   </h4>
                   <p className="text-xs text-on-surface-variant mt-0.5">
-                    Nhấn vào đây để nhập thông tin (Tối đa 6ml)
+                    Nhấn vào đây để thêm
                   </p>
                 </div>
               </div>
@@ -540,290 +525,7 @@ export default function FertilizersPage() {
         })}
       </div>
 
-      {/* MODAL TƯỚI PHÂN POPUP (2 TABS: TÙY CHỈNH vs AI) VIA PORTAL */}
-      {showIrrigateModal &&
-        mounted &&
-        createPortal(
-          <div className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
-            <div className="bg-surface rounded-3xl p-6 max-w-2xl w-full shadow-2xl border border-outline-variant/30 space-y-5 animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col justify-between">
-              {/* Modal Title Bar */}
-              <div className="flex justify-between items-center pb-3 border-b border-outline-variant/20">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
-                    <span className="material-symbols-outlined text-2xl">water_drop</span>
-                  </div>
-                  <div>
-                    <h3 className="font-headline-md text-xl font-bold text-on-surface">
-                      Hệ Thống Tưới Phân Sinh Học ESP32
-                    </h3>
-                    <p className="text-xs text-on-surface-variant">
-                      Điều khiển bơm trích xuất phân, bơm giếng và giám sát 2 Cảm biến độ ẩm
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowIrrigateModal(false)}
-                  disabled={isIrrigating}
-                  className="text-on-surface-variant hover:text-primary p-2 rounded-xl hover:bg-surface-container-high transition-colors disabled:opacity-50"
-                >
-                  <span className="material-symbols-outlined">close</span>
-                </button>
-              </div>
 
-              {/* Real-time Hardware Sensors Bar */}
-              <div className="bg-surface-container-low rounded-2xl p-4 border border-outline-variant/30 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-                <div className="bg-surface rounded-xl p-2.5 border border-outline-variant/20">
-                  <span className="text-[10px] font-bold text-on-surface-variant uppercase block mb-1">
-                    CẢM BIẾN ĐỘ ẨM 1
-                  </span>
-                  <span className="font-mono text-base font-bold text-emerald-600">
-                    {espSensors.soil1Percent}%
-                  </span>
-                  <span className="text-[10px] text-zinc-400 block font-mono">
-                    (Raw: {espSensors.soil1Raw})
-                  </span>
-                </div>
-
-                <div className="bg-surface rounded-xl p-2.5 border border-outline-variant/20">
-                  <span className="text-[10px] font-bold text-on-surface-variant uppercase block mb-1">
-                    CẢM BIẾN ĐỘ ẨM 2
-                  </span>
-                  <span className="font-mono text-base font-bold text-emerald-600">
-                    {espSensors.soil2Percent}%
-                  </span>
-                  <span className="text-[10px] text-zinc-400 block font-mono">
-                    (Raw: {espSensors.soil2Raw})
-                  </span>
-                </div>
-
-                <div className="bg-surface rounded-xl p-2.5 border border-outline-variant/20">
-                  <span className="text-[10px] font-bold text-on-surface-variant uppercase block mb-1">
-                    PHAO CAO (NƯỚC ĐẦY)
-                  </span>
-                  <span
-                    className={`font-bold text-xs px-2 py-0.5 rounded-full inline-block mt-0.5 ${
-                      espSensors.floatHigh
-                        ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
-                        : "bg-zinc-100 text-zinc-600 border border-zinc-300"
-                    }`}
-                  >
-                    {espSensors.floatHigh ? "ĐẦY BỒN" : "CHƯA ĐẦY"}
-                  </span>
-                </div>
-
-                <div className="bg-surface rounded-xl p-2.5 border border-outline-variant/20">
-                  <span className="text-[10px] font-bold text-on-surface-variant uppercase block mb-1">
-                    PHAO THẤP (NƯỚC CẠN)
-                  </span>
-                  <span
-                    className={`font-bold text-xs px-2 py-0.5 rounded-full inline-block mt-0.5 ${
-                      espSensors.floatLow
-                        ? "bg-rose-100 text-rose-800 border border-rose-300 animate-pulse"
-                        : "bg-zinc-100 text-zinc-600 border border-zinc-300"
-                    }`}
-                  >
-                    {espSensors.floatLow ? "CẠN BỒN" : "BÌNH THƯỜNG"}
-                  </span>
-                </div>
-              </div>
-
-              {/* 2 Tabs Header */}
-              <div className="flex bg-surface-container-high p-1 rounded-2xl border border-outline-variant/20">
-                <button
-                  onClick={() => setIrrigateTab("custom")}
-                  className={`flex-1 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all ${
-                    irrigateTab === "custom"
-                      ? "bg-primary text-on-primary shadow-sm"
-                      : "text-on-surface-variant hover:text-on-surface"
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-lg">tune</span>
-                  Tab 1: Tưới phân tùy chỉnh
-                </button>
-                <button
-                  onClick={() => setIrrigateTab("ai")}
-                  className={`flex-1 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all ${
-                    irrigateTab === "ai"
-                      ? "bg-primary text-on-primary shadow-sm"
-                      : "text-on-surface-variant hover:text-on-surface"
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-lg">auto_awesome</span>
-                  Tab 2: Tưới phân bằng AI
-                </button>
-              </div>
-
-              {/* TAB 1: TƯỚI PHÂN TÙY CHỈNH */}
-              {irrigateTab === "custom" && (
-                <div className="space-y-4">
-                  <p className="text-xs text-on-surface-variant font-medium">
-                    Tích chọn các bình phân đã cấu hình để chọn lượng phân (ml) cần trích xuất:
-                  </p>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {TANK_CODES.map((code) => {
-                      const fert = fertilizers.find((f: any) => f.tankCode === code);
-                      const item = selectedTanks[code] || { selected: false, ml: 2.0 };
-
-                      return (
-                        <div
-                          key={code}
-                          className={`p-3 rounded-2xl border transition-all ${
-                            item.selected
-                              ? "bg-primary/10 border-primary shadow-sm"
-                              : "bg-surface-container-low border-outline-variant/30 opacity-70"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between mb-2">
-                            <label className="flex items-center gap-2.5 cursor-pointer font-bold text-sm text-on-surface">
-                              <input
-                                type="checkbox"
-                                checked={item.selected}
-                                disabled={!fert || isIrrigating}
-                                onChange={() => handleToggleTank(code)}
-                                className="w-4 h-4 rounded text-primary focus:ring-primary"
-                              />
-                              <span className="font-mono text-primary font-bold">{code}</span>
-                              <span className="text-xs truncate max-w-[120px]">
-                                {fert ? fert.name : "(Chưa thêm)"}
-                              </span>
-                            </label>
-                          </div>
-
-                          {item.selected && fert && (
-                            <div className="mt-2 pt-2 border-t border-primary/20 flex items-center justify-between gap-2">
-                              <span className="text-xs text-on-surface-variant font-semibold">
-                                Lượng phân cần trích xuất:
-                              </span>
-                              <div className="flex items-center gap-1.5">
-                                <input
-                                  type="number"
-                                  min={0.1}
-                                  max={6}
-                                  step={0.5}
-                                  disabled={isIrrigating}
-                                  value={item.ml}
-                                  onChange={(e) => handleMlChange(code, Number(e.target.value))}
-                                  className="w-20 px-2 py-1 bg-surface border border-primary/40 rounded-xl font-mono text-sm font-bold text-primary text-center focus:outline-none focus:ring-1 focus:ring-primary"
-                                />
-                                <span className="text-xs font-mono font-bold text-on-surface-variant">
-                                  ml
-                                </span>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <div className="flex items-center justify-between bg-surface-container-low p-3 rounded-xl border border-outline-variant/20">
-                    <span className="text-xs font-semibold text-on-surface-variant">
-                      Chỉ số độ ẩm mục tiêu tự động dừng:
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        min={30}
-                        max={95}
-                        value={targetMoisture}
-                        onChange={(e) => setTargetMoisture(Number(e.target.value))}
-                        disabled={isIrrigating}
-                        className="w-16 px-2 py-1 bg-surface border border-outline-variant rounded-xl font-mono font-bold text-sm text-center"
-                      />
-                      <span className="text-xs font-mono font-bold text-on-surface-variant">%</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* TAB 2: TƯỚI PHÂN BẰNG AI */}
-              {irrigateTab === "ai" && (
-                <div className="space-y-4">
-                  <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-950/20 via-teal-900/10 to-primary/10 border border-primary/30 space-y-3">
-                    <div className="flex items-center gap-2 text-primary font-bold text-sm">
-                      <span className="material-symbols-outlined text-xl animate-spin">
-                        psychology
-                      </span>
-                      AI Đánh Giá Độ Ẩm & Khuyến Nghị Liều Lượng
-                    </div>
-                    <p className="text-xs text-on-surface-variant leading-relaxed">
-                      Độ ẩm trung bình đất trồng hiện tại là{" "}
-                      <strong className="text-primary font-mono font-bold">
-                        {espSensors.avgSoilPercent}%
-                      </strong>
-                      . AI đề xuất công thức phối trộn phân bón sinh học tối ưu:
-                    </p>
-                    <div className="grid grid-cols-2 gap-2 text-xs font-mono font-bold">
-                      <div className="p-2 bg-surface rounded-xl border border-outline-variant/30 flex justify-between">
-                        <span>Bình A (Đạm hữu cơ):</span>
-                        <span className="text-emerald-600">
-                          {espSensors.avgSoilPercent < 40 ? "3.0 ml" : "1.5 ml"}
-                        </span>
-                      </div>
-                      <div className="p-2 bg-surface rounded-xl border border-outline-variant/30 flex justify-between">
-                        <span>Bình B (Amino & Min):</span>
-                        <span className="text-emerald-600">
-                          {espSensors.avgSoilPercent < 40 ? "2.0 ml" : "1.0 ml"}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Execution Progress & Hardware Logs Box */}
-              {irrigateLog.length > 0 && (
-                <div className="p-3.5 bg-zinc-950 rounded-2xl font-mono text-xs text-zinc-300 space-y-1.5 border border-zinc-800 max-h-36 overflow-y-auto">
-                  <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider block border-b border-zinc-800 pb-1">
-                    TIẾN TRÌNH THỰC THI PHẦN CỨNG ESP32:
-                  </span>
-                  {irrigateLog.map((log, idx) => (
-                    <p key={idx} className="leading-relaxed">
-                      {log}
-                    </p>
-                  ))}
-                </div>
-              )}
-
-              {/* Modal Footer Actions */}
-              <div className="flex justify-end gap-3 pt-2 border-t border-outline-variant/15">
-                <button
-                  type="button"
-                  onClick={() => setShowIrrigateModal(false)}
-                  disabled={isIrrigating}
-                  className="px-4 py-2.5 rounded-xl text-body-sm font-semibold border border-outline-variant text-on-surface-variant hover:bg-surface-container-high disabled:opacity-50"
-                >
-                  Đóng
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleStartIrrigation(irrigateTab === "ai")}
-                  disabled={isIrrigating}
-                  className="px-6 py-2.5 rounded-xl text-body-sm font-bold bg-emerald-600 text-white hover:bg-emerald-700 shadow-md flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50"
-                >
-                  {isIrrigating ? (
-                    <>
-                      <span className="material-symbols-outlined text-lg animate-spin">
-                        progress_activity
-                      </span>
-                      Đang thực thi tưới phân...
-                    </>
-                  ) : (
-                    <>
-                      <span className="material-symbols-outlined text-lg">play_arrow</span>
-                      {irrigateTab === "ai"
-                        ? "Kích hoạt tưới phân bằng AI"
-                        : "Bắt đầu tưới phân tùy chỉnh"}
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
 
       {/* Add / Edit Fertilizer Modal via Portal */}
       {showAddModal &&

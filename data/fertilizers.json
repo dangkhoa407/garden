@@ -1,10 +1,20 @@
 [
   {
+    "id": "fert-1786441986514",
+    "name": "NPK",
+    "tankCode": "Bình B",
+    "capacityMl": 6,
+    "currentMl": 5.1,
+    "price": 50000,
+    "addedDate": "11/8/2026",
+    "status": "Sẵn sàng"
+  },
+  {
     "id": "fert-1786349085279",
     "name": "123",
     "tankCode": "Bình A",
     "capacityMl": 6,
-    "currentMl": 5.3,
+    "currentMl": 5.1,
     "price": 50000,
     "addedDate": "10/8/2026",
     "status": "Sẵn sàng"

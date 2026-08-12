@@ -606,8 +606,10 @@ async function captureImage(minTimestamp = 0) {
   const imagePath = path.join(process.cwd(), "st01.jpg");
   const targetMinTime = minTimestamp > 0 ? minTimestamp : Date.now() - 2000;
 
-  // 1. Kiểm tra & chờ tối đa 800ms xem trình duyệt WebRTC có đẩy khung hình MỚI TƯƠI vừa chụp hay không
-  for (let attempt = 0; attempt < 8; attempt++) {
+  // 1. Kiểm tra & chờ tối đa 2s xem trình duyệt WebRTC có đẩy khung hình MỚI TƯƠI vừa chụp hay không
+  const maxWaitMs = process.platform === "win32" ? 2000 : 800;
+  const pollMs = 100;
+  for (let elapsed = 0; elapsed < maxWaitMs; elapsed += pollMs) {
     if (fs.existsSync(imagePath)) {
       try {
         const stats = fs.statSync(imagePath);
@@ -618,18 +620,25 @@ async function captureImage(minTimestamp = 0) {
         }
       } catch (e) {}
     }
-    await new Promise((r) => setTimeout(r, 100));
+    await new Promise((r) => setTimeout(r, pollMs));
   }
 
-  // 2. Nếu chưa có ảnh mới từ trình duyệt: Chụp trực tiếp qua FFmpeg (timeout siêu ngắn 1.5s)
+  // 2. Trên Windows: KHÔNG dùng FFmpeg (DirectShow gây lock 30s). Dùng ảnh st01.jpg hiện có nếu có.
+  if (process.platform === "win32") {
+    if (fs.existsSync(imagePath)) {
+      console.log("[Camera Engine] Windows: Dùng ảnh st01.jpg hiện có (browser chưa push kịp ảnh mới).");
+      addSystemLog("CAMERA", "[Camera Engine] Windows: Dùng ảnh st01.jpg hiện có", "SUCCESS");
+      return imagePath;
+    }
+    throw new Error("Windows: Chưa có ảnh st01.jpg. Vui lòng mở trang Camera để stream ảnh live.");
+  }
+
+  // 3. Linux / Raspberry Pi: Chụp trực tiếp qua FFmpeg
   console.log("Dang mo camera CHỤP ẢNH MỚI qua FFmpeg...");
 
-  // Chi goi configureCamera tren Linux (v4l2-ctl khong co tren Windows)
-  if (process.platform !== "win32") {
-    try {
-      await configureCamera();
-    } catch (e) {}
-  }
+  try {
+    await configureCamera();
+  } catch (e) {}
 
   const directory = await fs.promises.mkdtemp(
     path.join(require("os").tmpdir(), "vuon-rau-camera-")
@@ -1335,22 +1344,28 @@ app.post("/api/arduino/command", async (req, res) => {
   }
 });
 
-// ESP32 REALTIME SENSOR DATA POLLING ENDPOINT
-let esp32SensorState = {
-  soil1Raw: 3171,
-  soil1Percent: 0,
-  soil2Raw: 4095,
-  soil2Percent: 0,
-  floatHigh: false,
-  floatLow: false,
-  avgMoisture: 0,
-  lastUpdated: new Date().toLocaleTimeString("vi-VN"),
-};
-
+// ESP32 REALTIME SENSOR DATA POLLING ENDPOINT - points to the live lastEsp32Sensors object
+// NOTE: lastEsp32Sensors is defined and updated at line ~1572 by the ESP32 serial parser
 app.get("/api/esp32/sensors", (req, res) => {
+  // Serve the live sensor data with both 'data' and 'sensors' keys for compatibility
+  const live = typeof lastEsp32Sensors !== 'undefined' ? lastEsp32Sensors : {
+    soil1Raw: 3171, soil1Percent: 0, soil2Raw: 4095, soil2Percent: 0,
+    avgSoilPercent: 0, floatLow: false, floatHigh: false, running: false,
+  };
   return res.json({
     success: true,
-    data: esp32SensorState,
+    data: {
+      soil1Raw: live.soil1Raw,
+      soil1Percent: live.soil1Percent,
+      soil2Raw: live.soil2Raw,
+      soil2Percent: live.soil2Percent,
+      floatHigh: live.floatHigh,
+      floatLow: live.floatLow,
+      avgMoisture: live.avgSoilPercent,
+      running: live.running,
+      lastUpdate: live.lastUpdate,
+    },
+    sensors: live,
   });
 });
 
@@ -1684,12 +1699,7 @@ setInterval(async () => {
   } catch (e) {}
 }, 1500);
 
-app.get("/api/esp32/sensors", async (req, res) => {
-  res.json({
-    success: true,
-    sensors: lastEsp32Sensors,
-  });
-});
+// NOTE: /api/esp32/sensors is defined above at line ~1338 (unified endpoint)
 
 app.post("/api/esp32/command", async (req, res) => {
   const { command } = req.body;

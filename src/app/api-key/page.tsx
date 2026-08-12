@@ -77,7 +77,7 @@ export default function ApiKeyPage() {
       if (res.ok) {
         setStatusAlert({
           type: "success",
-          msg: `Đã thêm API Key mới (${data.addedKeyMask}) vào danh sách xoay vòng (Tổng số: ${data.totalKeys} keys)!`,
+          msg: `Đã thêm API Key mới!`,
         });
         setNewApiKey("");
         await fetchKeys();
@@ -96,12 +96,12 @@ export default function ApiKeyPage() {
 
   // Delete a key
   const handleDeleteKey = async (id: string, maskedKey: string) => {
-    if (!confirm(`Bạn có chắc chắn muốn xóa chìa khóa ${maskedKey}?`)) return;
+    if (!confirm(`Bạn có chắc chắn muốn xóa key này?`)) return;
 
     try {
       const res = await fetch(`/api/settings/gemini/${id}`, { method: "DELETE" });
       if (res.ok) {
-        setStatusAlert({ type: "info", msg: `Đã xóa chìa khóa ${maskedKey} thành công.` });
+        setStatusAlert({ type: "info", msg: `Đã xóa key này thành công.` });
         await fetchKeys();
       }
     } catch (e) {
@@ -151,11 +151,11 @@ export default function ApiKeyPage() {
             vpn_key
           </span>
           <h1 className="font-display-lg text-headline-md font-bold text-on-surface">
-            Quản Lý Gemini API Key (Key Rotation & Fallback)
+            Quản Lý Gemini API Key
           </h1>
         </div>
         <p className="font-body-lg text-body-lg text-on-surface-variant">
-          Thêm nhiều chìa khóa API. Khi một chìa khóa bị lỗi hạn ngạch (quota) hoặc sự cố mạng, hệ thống sẽ tự động đẩy chìa khóa đó xuống cuối danh sách và chuyển ngay sang chìa khóa tiếp theo!
+          Nơi đây quản lý tất cả các API Key của Gemini để phục vụ cho hệ thống
         </p>
       </div>
 
@@ -166,29 +166,27 @@ export default function ApiKeyPage() {
             <span className="material-symbols-outlined text-primary text-xl">
               add_circle
             </span>
-            Thêm API Key Mới Vào Hàng Chờ
+            Thêm API Key
           </h2>
           <p className="font-body-sm text-xs text-on-surface-variant mt-1">
-            Mỗi chìa khóa mới sẽ được lưu vào file <code className="bg-surface-container-high px-1.5 py-0.5 rounded text-primary font-mono text-[11px]">data/settings.json</code>.
           </p>
         </div>
 
         {statusAlert && (
           <div
-            className={`p-md rounded-xl text-body-sm font-medium flex items-start gap-2 border ${
-              statusAlert.type === "success"
-                ? "bg-primary/10 text-primary border-primary/20"
-                : statusAlert.type === "error"
+            className={`p-md rounded-xl text-body-sm font-medium flex items-start gap-2 border ${statusAlert.type === "success"
+              ? "bg-primary/10 text-primary border-primary/20"
+              : statusAlert.type === "error"
                 ? "bg-error/10 text-error border-error/20"
                 : "bg-surface-container-high text-on-surface border-outline-variant/30"
-            }`}
+              }`}
           >
             <span className="material-symbols-outlined text-lg mt-0.5">
               {statusAlert.type === "success"
                 ? "check_circle"
                 : statusAlert.type === "error"
-                ? "error"
-                : "info"}
+                  ? "error"
+                  : "info"}
             </span>
             <span>{statusAlert.msg}</span>
           </div>
@@ -197,7 +195,7 @@ export default function ApiKeyPage() {
         <form onSubmit={handleAddKey} className="space-y-md">
           <div>
             <label className="block font-label-caps text-label-caps text-on-surface-variant mb-2 font-semibold uppercase">
-              NHẬP CÁC CHÌA KHÓA GEMINI API KEY MỚI
+              NHẬP API KEY (Gemini)
             </label>
             <div className="relative">
               <input
@@ -221,17 +219,6 @@ export default function ApiKeyPage() {
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-md pt-xs">
-            <button
-              type="button"
-              onClick={() => handleTestKeyPool()}
-              disabled={isTesting || keyData.totalKeys === 0}
-              className="bg-surface-container-high border border-outline-variant/30 text-on-surface hover:bg-surface-container-highest disabled:opacity-50 px-5 py-2.5 rounded-xl font-body-sm font-semibold transition-all flex items-center gap-2"
-            >
-              <span className="material-symbols-outlined text-lg">
-                {isTesting ? "sync" : "published_with_changes"}
-              </span>
-              {isTesting ? "Đang thử nghiệm..." : "Thử nghiệm xoay vòng (Test Pool)"}
-            </button>
 
             <button
               type="submit"
@@ -239,7 +226,7 @@ export default function ApiKeyPage() {
               className="bg-primary text-on-primary hover:bg-primary-container disabled:opacity-50 px-6 py-2.5 rounded-xl font-body-sm font-semibold transition-all shadow-sm active:scale-95 flex items-center gap-2"
             >
               <span className="material-symbols-outlined text-lg">add</span>
-              {isSaving ? "Đang lưu..." : "Thêm API Key vào danh sách"}
+              {isSaving ? "Đang lưu..." : "Lưu"}
             </button>
           </div>
         </form>
@@ -253,10 +240,10 @@ export default function ApiKeyPage() {
               <span className="material-symbols-outlined text-primary text-xl">
                 list_alt
               </span>
-              Danh Sách Chìa Khóa API ({keyData.totalKeys} Keys)
+              Danh Sách API Key
             </h3>
             <p className="font-body-sm text-xs text-on-surface-variant mt-1">
-              Chìa khóa ở vị trí #1 được ưu tiên sử dụng đầu tiên. Nếu lỗi sẽ bị đẩy xuống cuối!
+              Hiện có: {keyData.totalKeys}
             </p>
           </div>
         </div>
@@ -267,7 +254,7 @@ export default function ApiKeyPage() {
               vpn_key_off
             </span>
             <p className="font-body-sm text-on-surface-variant font-medium">
-              Chưa có chìa khóa API nào trong hệ thống. Hãy dán mã API Key ở trên để thêm!
+              Chưa có API Key nào trong hệ thống!
             </p>
           </div>
         ) : (
@@ -275,21 +262,19 @@ export default function ApiKeyPage() {
             {keyData.keys.map((k) => (
               <div
                 key={k.id}
-                className={`p-md rounded-xl border transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-md ${
-                  k.priorityOrder === 1
-                    ? "bg-primary/5 border-primary/30 shadow-xs"
-                    : k.status === "error"
+                className={`p-md rounded-xl border transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-md ${k.priorityOrder === 1
+                  ? "bg-primary/5 border-primary/30 shadow-xs"
+                  : k.status === "error"
                     ? "bg-error/5 border-error/20"
                     : "bg-surface-container-low border-outline-variant/20"
-                }`}
+                  }`}
               >
                 <div className="flex items-center gap-3">
                   <div
-                    className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs ${
-                      k.priorityOrder === 1
-                        ? "bg-primary text-on-primary"
-                        : "bg-surface-container-high text-on-surface-variant"
-                    }`}
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs ${k.priorityOrder === 1
+                      ? "bg-primary text-on-primary"
+                      : "bg-surface-container-high text-on-surface-variant"
+                      }`}
                   >
                     #{k.priorityOrder}
                   </div>
@@ -332,22 +317,6 @@ export default function ApiKeyPage() {
         )}
       </div>
 
-      {/* Informational Card */}
-      <div className="bg-primary-container/10 rounded-2xl p-md border border-primary/20 flex items-start gap-md">
-        <div className="w-10 h-10 rounded-xl bg-primary text-on-primary flex items-center justify-center flex-shrink-0 mt-1 shadow-sm">
-          <span className="material-symbols-outlined text-2xl icon-filled">
-            published_with_changes
-          </span>
-        </div>
-        <div className="space-y-1">
-          <h4 className="font-body-lg font-bold text-on-surface">
-            Cơ chế Xoay Vòng Chìa Khóa (Key Rotation Queue):
-          </h4>
-          <p className="text-body-sm text-on-surface-variant leading-relaxed">
-            Hệ thống tự động sử dụng chìa khóa đứng đầu hàng chờ (#1). Nếu chìa khóa đó gặp bất kỳ lỗi nào (hết quota miễn phí, bị giới hạn tần suất 429 hoặc sai key), hệ thống sẽ **tự động đẩy chìa khóa bị lỗi xuống cuối hàng chờ** và ngay lập tức lấy chìa khóa tiếp theo để xử lý cho người dùng mà **không làm gián đoạn trải nghiệm chat!**
-          </p>
-        </div>
-      </div>
     </div>
   );
 }

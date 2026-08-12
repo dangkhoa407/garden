@@ -119,7 +119,7 @@ export default function ControlsPage() {
         const json = await res.json();
         if (json.data) setEsp32Sensors(json.data);
       }
-    } catch (err) {}
+    } catch (err) { }
   };
 
   const fetchArduinoStatus = async () => {
@@ -296,10 +296,10 @@ export default function ControlsPage() {
     <div className="space-y-xl max-w-5xl mx-auto pb-12">
       <div>
         <h1 className="font-display-lg text-display-lg font-bold text-on-surface mb-1">
-          Điều Khiển Thiết Bị & Robot GrowHub
+          Điều Khiển Vườn Rau
         </h1>
         <p className="font-body-lg text-body-lg text-on-surface-variant">
-          Tích hợp hệ thống điều khiển Arduino, quét sâu bệnh AI Gemini và tự động hóa nhà kính
+          Tại đây có thể thực hiện các thao tác trên hệ thông vườn rau
         </p>
       </div>
 
@@ -313,11 +313,9 @@ export default function ControlsPage() {
           </div>
           <div>
             <h2 className="font-headline-md text-headline-md text-on-surface font-bold">
-              Bộ Điều Khiển Robot AI
+              Bộ Điều Khiển
             </h2>
-            <p className="font-body-sm text-xs text-on-surface-variant">
-              Các nút gửi lệnh trực tiếp xuống mạch điều khiển Arduino
-            </p>
+
           </div>
         </div>
 
@@ -394,21 +392,21 @@ export default function ControlsPage() {
                 bug_report
               </span>
               <span className="font-mono text-xs px-2 py-0.5 bg-emerald-200 text-emerald-800 rounded font-bold">
-                Phím k
+                Tự động
               </span>
             </div>
             <h3 className="font-headline-sm text-body-lg font-bold text-emerald-900">
               Kiểm tra sâu hại
             </h3>
             <p className="font-body-sm text-xs text-emerald-700/90 mt-1">
-              Chụp 6 điểm bằng camera & phân tích hình ảnh qua AI Gemini
+              Hệ thống sẽ kiểm tra toàn bộ vườn rau để phát hiện sâu bệnh.
             </p>
             {taskProgress?.taskId === "k" && (
               <div className="mt-3 pt-2 border-t border-emerald-300/80 w-full space-y-1 animate-fadeIn">
                 <div className="flex items-center justify-between text-[11px] font-bold text-emerald-950">
                   <span className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-emerald-600 animate-ping" />
-                    Đang quét 6 điểm...
+                    Đang thực hiện...
                   </span>
                   <span className="font-mono font-extrabold">{taskProgress.percent}% • Còn ~{Math.max(1, Math.ceil(taskProgress.totalSec - taskProgress.elapsedSec))}s</span>
                 </div>
@@ -433,14 +431,14 @@ export default function ControlsPage() {
               </span>
               <span className="font-mono text-xs px-2.5 py-1 bg-emerald-200 text-emerald-900 rounded-full font-bold flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
-                ESP32
+                Tuỳ chỉnh & tự động
               </span>
             </div>
             <h3 className="font-headline-sm text-body-lg font-bold text-emerald-950">
               Tưới Phân
             </h3>
             <p className="font-body-sm text-xs text-emerald-800/90 mt-1">
-              Kích hoạt Popup tưới phân tự động (Tùy chỉnh ml hoặc Phối trộn AI)
+              Có thể tưới phân theo yêu cầu hoặc dùng AI để phân tích.
             </p>
             {taskProgress?.taskId === "fertilize" && (
               <div className="mt-3 pt-2 border-t border-emerald-300/80 w-full space-y-1 animate-fadeIn">
@@ -472,14 +470,14 @@ export default function ControlsPage() {
                 water_drop
               </span>
               <span className="font-mono text-xs px-2 py-0.5 bg-teal-200 text-teal-800 rounded font-bold">
-                Phím p
+                Tự động
               </span>
             </div>
             <h3 className="font-headline-sm text-body-lg font-bold text-teal-900">
               Phun toàn bộ vườn
             </h3>
             <p className="font-body-sm text-xs text-teal-700/90 mt-1">
-              Kích hoạt hệ thống phun dung dịch sinh học trên toàn bộ các khay
+              Hệ thống sẽ phun thuốc sinh học phổ rộng ở toàn bộ vườn rau.
             </p>
             {taskProgress?.taskId === "p" && (
               <div className="mt-3 pt-2 border-t border-teal-300/80 w-full space-y-1 animate-fadeIn">
@@ -511,7 +509,7 @@ export default function ControlsPage() {
                 stop_circle
               </span>
               <span className="font-mono text-xs px-2 py-0.5 bg-rose-200 text-rose-800 rounded font-bold">
-                Phím s
+                Tự động
               </span>
             </div>
             <h3 className="font-headline-sm text-body-lg font-bold text-rose-900">
@@ -533,14 +531,14 @@ export default function ControlsPage() {
                 restart_alt
               </span>
               <span className="font-mono text-xs px-2 py-0.5 bg-amber-200 text-amber-800 rounded font-bold">
-                Phím r
+                Tự động
               </span>
             </div>
             <h3 className="font-headline-sm text-body-lg font-bold text-amber-900">
-              Xóa trạng thái lỗi
+              Khôi phục
             </h3>
             <p className="font-body-sm text-xs text-amber-700/90 mt-1">
-              Khôi phục Arduino và Robot sau khi gặp sự cố cảnh báo hoặc dừng khẩn
+              Khôi phục hệ thống sau khi gặp sự cố cảnh báo hoặc dừng khẩn
             </p>
           </button>
 
@@ -555,14 +553,14 @@ export default function ControlsPage() {
                 home_pin
               </span>
               <span className="font-mono text-xs px-2 py-0.5 bg-sky-200 text-sky-800 rounded font-bold">
-                Phím h
+                Tự động
               </span>
             </div>
             <h3 className="font-headline-sm text-body-lg font-bold text-sky-900">
-              Về vị trí gốc (Homing)
+              Homing
             </h3>
             <p className="font-body-sm text-xs text-sky-700/90 mt-1">
-              Đưa robot về vị trí homing ban đầu và thiết lập lại điểm chuẩn
+              Đưa bộ phân theo dõi vườn rau về vị trí gốc
             </p>
           </button>
         </div>
@@ -582,7 +580,7 @@ export default function ControlsPage() {
             <div className="flex items-center gap-2">
               <span className="material-symbols-outlined text-emerald-400 text-lg animate-pulse">terminal</span>
               <h3 className="text-zinc-100 font-bold text-sm tracking-wide">
-                KHUNG LOG HỆ THỐNG & NHẬT KÝ LỖI (LIVE CONSOLE)
+                NHẬT KÝ HỆ THỐNG
               </h3>
             </div>
           </div>
@@ -593,33 +591,29 @@ export default function ControlsPage() {
             <div className="bg-zinc-900 p-1 rounded-xl flex items-center border border-zinc-800 flex-wrap gap-1">
               <button
                 onClick={() => setLogFilter("ALL")}
-                className={`px-2.5 py-1 rounded-lg transition-all ${
-                  logFilter === "ALL" ? "bg-zinc-800 text-emerald-400 font-bold" : "text-zinc-400 hover:text-zinc-200"
-                }`}
+                className={`px-2.5 py-1 rounded-lg transition-all ${logFilter === "ALL" ? "bg-zinc-800 text-emerald-400 font-bold" : "text-zinc-400 hover:text-zinc-200"
+                  }`}
               >
                 Tất cả ({logs.length})
               </button>
               <button
                 onClick={() => setLogFilter("ERRORS")}
-                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 ${
-                  logFilter === "ERRORS" ? "bg-rose-950/80 text-rose-400 font-bold border border-rose-800/50" : "text-zinc-400 hover:text-rose-400"
-                }`}
+                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 ${logFilter === "ERRORS" ? "bg-rose-950/80 text-rose-400 font-bold border border-rose-800/50" : "text-zinc-400 hover:text-rose-400"
+                  }`}
               >
                 🚨 Lỗi & Cảnh báo
               </button>
               <button
                 onClick={() => setLogFilter("AI")}
-                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 ${
-                  logFilter === "AI" ? "bg-cyan-950/80 text-cyan-400 font-bold border border-cyan-800/50" : "text-zinc-400 hover:text-cyan-400"
-                }`}
+                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 ${logFilter === "AI" ? "bg-cyan-950/80 text-cyan-400 font-bold border border-cyan-800/50" : "text-zinc-400 hover:text-cyan-400"
+                  }`}
               >
                 🤖 AI Inspection
               </button>
               <button
                 onClick={() => setLogFilter("SERIAL")}
-                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 ${
-                  logFilter === "SERIAL" ? "bg-purple-950/80 text-purple-400 font-bold border border-purple-800/50" : "text-zinc-400 hover:text-purple-400"
-                }`}
+                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 ${logFilter === "SERIAL" ? "bg-purple-950/80 text-purple-400 font-bold border border-purple-800/50" : "text-zinc-400 hover:text-purple-400"
+                  }`}
               >
                 🔌 Serial RX/TX
               </button>
@@ -660,13 +654,12 @@ export default function ControlsPage() {
               return (
                 <div
                   key={index}
-                  className={`p-2.5 rounded-xl border flex flex-col sm:flex-row sm:items-start gap-2 transition-colors ${
-                    isError
-                      ? "bg-rose-950/30 border-rose-900/40 text-rose-200"
-                      : isWarn
+                  className={`p-2.5 rounded-xl border flex flex-col sm:flex-row sm:items-start gap-2 transition-colors ${isError
+                    ? "bg-rose-950/30 border-rose-900/40 text-rose-200"
+                    : isWarn
                       ? "bg-amber-950/20 border-amber-900/30 text-amber-200"
                       : "bg-zinc-900/70 border-zinc-800/80 text-zinc-300 hover:bg-zinc-900"
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="text-zinc-500 font-mono text-[11px]">
@@ -694,7 +687,7 @@ export default function ControlsPage() {
             </span>
           </div>
           <div>
-            Tự động làm mới: <span className="text-emerald-400 font-bold">2s/lần</span> | Tổng log ghi nhận: <span className="text-zinc-300 font-bold">{logs.length}</span>
+            Tổng log ghi nhận: <span className="text-zinc-300 font-bold">{logs.length}</span>
           </div>
         </div>
       </section>
@@ -756,25 +749,7 @@ export default function ControlsPage() {
         </div>
       </section>
 
-      {/* Device Status Banner */}
-      <section className="bg-primary-container/10 border border-primary/20 rounded-2xl p-md flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <span className="material-symbols-outlined text-primary text-3xl">
-            sensors
-          </span>
-          <div>
-            <h4 className="font-body-lg font-bold text-on-surface">
-              Trạng thái kết nối IoT Hub & Arduino
-            </h4>
-            <p className="font-body-sm text-xs text-on-surface-variant">
-              Tất cả 4 cảm biến và robot v2.mjs đang hoạt động ổn định (Baud Rate: 9600)
-            </p>
-          </div>
-        </div>
-        <span className="bg-primary/20 text-primary font-label-caps text-xs px-3 py-1 rounded-full font-bold uppercase hidden sm:inline-block">
-          HOẠT ĐỘNG
-        </span>
-      </section>
+
 
       {/* Shared 2-Tab Irrigation Modal */}
       <IrrigateModal

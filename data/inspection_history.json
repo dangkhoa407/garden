@@ -1,5 +1,45 @@
 [
   {
+    "id": "insp-1786438286978",
+    "type": "PEST",
+    "timestamp": "15:51:26 11/8/2026",
+    "title": "Quet Camera Serial Arduino",
+    "detail": "KẾT QUẢ KIỂM TRA\nTình trạng: KHÔNG CHẮC CHẮN\nMô tả chi tiết: Bức ảnh chụp một góc khu vực làm việc hoặc lắp đặt có cờ lê, dây cáp và ống nhựa, không quan sát thấy lá cây hay bất kỳ dấu hiệu sinh học nào của sâu và bệnh hại rau.\nKhuyến nghị: Cần chụp lại hình ảnh đúng vào phần tán lá hoặc bộ phận của cây rau cần kiểm tra để có cơ sở đánh giá chính xác.\nThời gian kiểm tra: 15:51:26 11/8/2026",
+    "telegramCaption": "DIEM QUET CAMERA KET NOI ARDUINO\n\nKẾT QUẢ KIỂM TRA\nTình trạng: KHÔNG CHẮC CHẮN\nMô tả chi tiết: Bức ảnh chụp một góc khu vực làm việc hoặc lắp đặt có cờ lê, dây cáp và ống nhựa, không quan sát thấy lá cây hay bất kỳ dấu hiệu sinh học nào của sâu và bệnh hại rau.\nKhuyến nghị: Cần chụp lại hình ảnh đúng vào phần tán lá hoặc bộ phận của cây rau cần kiểm tra để có cơ sở đánh giá chính xác.\nThời gian kiểm tra: 15:51:26 11/8/2026",
+    "status": "Suc khoe tot",
+    "image": "/api/camera/image?t=1786438286979"
+  },
+  {
+    "id": "insp-1786438278732",
+    "type": "PEST",
+    "timestamp": "15:51:18 11/8/2026",
+    "title": "Quet Camera Serial Arduino",
+    "detail": "KẾT QUẢ KIỂM TRA\nTình trạng: KHÔNG CHẮC CHẮN\nMô tả chi tiết: Hình ảnh hiển thị các công cụ cơ khí, ống dẫn và dây thép trên nền phẳng, không có cây trồng, lá cây hay bất kỳ dấu hiệu sinh học nào của sâu hoặc bệnh.\nKhuyến nghị: Chụp lại hình ảnh tập trung trực tiếp vào tán lá của cây trồng tại điểm kiểm tra để có cơ sở đánh giá chính xác.\nThời gian kiểm tra: 15:51:18 11/8/2026",
+    "telegramCaption": "DIEM QUET CAMERA KET NOI ARDUINO\n\nKẾT QUẢ KIỂM TRA\nTình trạng: KHÔNG CHẮC CHẮN\nMô tả chi tiết: Hình ảnh hiển thị các công cụ cơ khí, ống dẫn và dây thép trên nền phẳng, không có cây trồng, lá cây hay bất kỳ dấu hiệu sinh học nào của sâu hoặc bệnh.\nKhuyến nghị: Chụp lại hình ảnh tập trung trực tiếp vào tán lá của cây trồng tại điểm kiểm tra để có cơ sở đánh giá chính xác.\nThời gian kiểm tra: 15:51:18 11/8/2026",
+    "status": "Suc khoe tot",
+    "image": "/api/camera/image?t=1786438278732"
+  },
+  {
+    "id": "insp-1786438267560",
+    "type": "PEST",
+    "timestamp": "15:51:07 11/8/2026",
+    "title": "Quet Camera Serial Arduino",
+    "detail": "KẾT QUẢ KIỂM TRA\nTình trạng: KHÔNG CHẮC CHẮN\nMô tả chi tiết: Ảnh chụp không hiển thị cây trồng, lá cây hay bất kỳ dấu hiệu sinh học nào liên quan đến sâu bệnh mà chỉ có dụng cụ cơ khí và dây cáp.\nKhuyến nghị: Cần chụp lại hình ảnh tập trung trực tiếp vào khu vực tán lá của rau ăn lá tại điểm kiểm tra để có cơ sở đánh giá chính xác.\nThời gian kiểm tra: 15:51:07 11/8/2026",
+    "telegramCaption": "DIEM QUET CAMERA KET NOI ARDUINO\n\nKẾT QUẢ KIỂM TRA\nTình trạng: KHÔNG CHẮC CHẮN\nMô tả chi tiết: Ảnh chụp không hiển thị cây trồng, lá cây hay bất kỳ dấu hiệu sinh học nào liên quan đến sâu bệnh mà chỉ có dụng cụ cơ khí và dây cáp.\nKhuyến nghị: Cần chụp lại hình ảnh tập trung trực tiếp vào khu vực tán lá của rau ăn lá tại điểm kiểm tra để có cơ sở đánh giá chính xác.\nThời gian kiểm tra: 15:51:07 11/8/2026",
+    "status": "Suc khoe tot",
+    "image": "/api/camera/image?t=1786438267560"
+  },
+  {
+    "id": "insp-1786438259660",
+    "type": "PEST",
+    "timestamp": "15:50:59 11/8/2026",
+    "title": "Quet Camera Serial Arduino",
+    "detail": "KẾT QUẢ KIỂM TRA\nTình trạng: KHÔNG CHẮC CHẮN\nMô tả chi tiết: Hình ảnh không hiển thị lá cây hoặc bất kỳ bộ phận nào của cây trồng mà chỉ chụp dụng cụ kỹ thuật và bề mặt sàn/vách.\nKhuyến nghị: Cần chụp lại hình ảnh rõ nét tập trung vào phần lá của cây trồng tại điểm kiểm tra để có cơ sở đánh giá chính xác.\nThời gian kiểm tra: 15:50:59 11/8/2026",
+    "telegramCaption": "DIEM QUET CAMERA KET NOI ARDUINO\n\nKẾT QUẢ KIỂM TRA\nTình trạng: KHÔNG CHẮC CHẮN\nMô tả chi tiết: Hình ảnh không hiển thị lá cây hoặc bất kỳ bộ phận nào của cây trồng mà chỉ chụp dụng cụ kỹ thuật và bề mặt sàn/vách.\nKhuyến nghị: Cần chụp lại hình ảnh rõ nét tập trung vào phần lá của cây trồng tại điểm kiểm tra để có cơ sở đánh giá chính xác.\nThời gian kiểm tra: 15:50:59 11/8/2026",
+    "status": "Suc khoe tot",
+    "image": "/api/camera/image?t=1786438259660"
+  },
+  {
     "id": "insp-1786422422616",
     "type": "PEST",
     "timestamp": "11:27:02 11/8/2026",

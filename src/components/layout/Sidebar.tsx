@@ -36,15 +36,15 @@ export function Sidebar({ className, isOpenMobile, onCloseMobile }: SidebarProps
   };
 
   const navItems = [
-    { label: "Dashboard", href: "/", icon: "dashboard" },
-    { label: "Trợ lý AI Garden", href: "/ai-chat", icon: "psychology" },
-    { label: "Cấu hình API Key", href: "/api-key", icon: "vpn_key" },
+    { label: "Trang chủ", href: "/", icon: "dashboard" },
+    { label: "Trợ lý AI", href: "/ai-chat", icon: "psychology" },
+    { label: "Cấu hình API", href: "/api-key", icon: "vpn_key" },
     { label: "Vườn của tôi", href: "/plants", icon: "potted_plant" },
-    { label: "Quản lý bình phân", href: "/fertilizers", icon: "science" },
-    { label: "Điều khiển thiết bị", href: "/controls", icon: "tune" },
+    { label: "Bình phân", href: "/fertilizers", icon: "science" },
+    { label: "Điều khiển", href: "/controls", icon: "tune" },
     { label: "Lịch trình", href: "/schedule", icon: "calendar_today" },
-    { label: "Quan sát Camera", href: "/camera", icon: "videocam" },
-    { label: "Cài đặt thiết bị", href: "/device-settings", icon: "settings_suggest" },
+    { label: "Camera", href: "/camera", icon: "videocam" },
+    { label: "Cấu hình thiết bị", href: "/device-settings", icon: "settings_suggest" },
     ...(!isLoggedIn ? [{ label: "Đăng nhập", href: "/login", icon: "login" }] : []),
   ];
 
@@ -133,10 +133,7 @@ export function Sidebar({ className, isOpenMobile, onCloseMobile }: SidebarProps
               Đăng xuất
             </button>
           )}
-          <button className="w-full bg-primary text-on-primary py-3 px-4 rounded-xl font-body-lg text-body-sm font-semibold hover:bg-primary-container transition-all shadow-sm active:scale-95 flex justify-center items-center gap-2">
-            <span className="material-symbols-outlined text-lg">add</span>
-            Thêm cây mới
-          </button>
+
         </div>
       </aside>
     </>
