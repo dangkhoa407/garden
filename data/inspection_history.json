@@ -1,5 +1,105 @@
 [
   {
+    "id": "insp-1786499121805",
+    "type": "PEST",
+    "timestamp": "08:45:21 12/8/2026",
+    "title": "Quet Camera Serial Arduino",
+    "detail": "KẾT QUẢ KIỂM TRA\nTình trạng: KHÔNG CHẮC CHẮN\nMô tả chi tiết: Hình ảnh hiển thị các ống nước và khung kỹ thuật, không quan sát thấy cây trồng, lá cây hay bất kỳ dấu hiệu sinh học nào của sâu và bệnh.\nKhuyến nghị: Cần chụp cận cảnh vào phần lá hoặc thân cây để có thể kiểm tra chính xác tình trạng sâu bệnh.\nThời gian kiểm tra: 08:45:21 12/8/2026",
+    "telegramCaption": "DIEM QUET CAMERA KET NOI ARDUINO\n\nKẾT QUẢ KIỂM TRA\nTình trạng: KHÔNG CHẮC CHẮN\nMô tả chi tiết: Hình ảnh hiển thị các ống nước và khung kỹ thuật, không quan sát thấy cây trồng, lá cây hay bất kỳ dấu hiệu sinh học nào của sâu và bệnh.\nKhuyến nghị: Cần chụp cận cảnh vào phần lá hoặc thân cây để có thể kiểm tra chính xác tình trạng sâu bệnh.\nThời gian kiểm tra: 08:45:21 12/8/2026",
+    "status": "Suc khoe tot",
+    "image": "/api/camera/image?t=1786499121805"
+  },
+  {
+    "id": "insp-1786499113485",
+    "type": "PEST",
+    "timestamp": "08:45:13 12/8/2026",
+    "title": "Quet Camera Serial Arduino",
+    "detail": "KẾT QUẢ KIỂM TRA\nTình trạng: KHÔNG PHÁT HIỆN SÂU VÀ BỆNH\nMô tả chi tiết: Hình ảnh chụp các ống dẫn nước và khung kim loại, không xuất hiện cây trồng, lá cây hay bất kỳ dấu hiệu nào của sâu và bệnh.\nKhuyến nghị: Tiếp tục theo dõi hệ thống và kiểm tra trực tiếp các luống rau định kỳ để kịp thời phát hiện sâu bệnh nếu có.\nThời gian kiểm tra: 08:45:13 12/8/2026",
+    "telegramCaption": "DIEM QUET CAMERA KET NOI ARDUINO\n\nKẾT QUẢ KIỂM TRA\nTình trạng: KHÔNG PHÁT HIỆN SÂU VÀ BỆNH\nMô tả chi tiết: Hình ảnh chụp các ống dẫn nước và khung kim loại, không xuất hiện cây trồng, lá cây hay bất kỳ dấu hiệu nào của sâu và bệnh.\nKhuyến nghị: Tiếp tục theo dõi hệ thống và kiểm tra trực tiếp các luống rau định kỳ để kịp thời phát hiện sâu bệnh nếu có.\nThời gian kiểm tra: 08:45:13 12/8/2026",
+    "status": "Suc khoe tot",
+    "image": "/api/camera/image?t=1786499113485"
+  },
+  {
+    "id": "insp-1786499102406",
+    "type": "PEST",
+    "timestamp": "08:45:02 12/8/2026",
+    "title": "Quet Camera Serial Arduino",
+    "detail": "KẾT QUẢ KIỂM TRA\nTình trạng: KHÔNG CHẮC CHẮN\nMô tả chi tiết: Hình ảnh hiển thị các ống nhựa, dây điện và khung kim loại, hoàn toàn không có sự xuất hiện của cây trồng, lá cây hay bất kỳ dấu hiệu sinh học nào.\nKhuyến nghị: Chụp lại hình ảnh tập trung vào khu vực trồng rau và các lá cây cần kiểm tra để có thể đánh giá chính xác tình trạng sâu bệnh.\nThời gian kiểm tra: 08:45:02 12/8/2026",
+    "telegramCaption": "DIEM QUET CAMERA KET NOI ARDUINO\n\nKẾT QUẢ KIỂM TRA\nTình trạng: KHÔNG CHẮC CHẮN\nMô tả chi tiết: Hình ảnh hiển thị các ống nhựa, dây điện và khung kim loại, hoàn toàn không có sự xuất hiện của cây trồng, lá cây hay bất kỳ dấu hiệu sinh học nào.\nKhuyến nghị: Chụp lại hình ảnh tập trung vào khu vực trồng rau và các lá cây cần kiểm tra để có thể đánh giá chính xác tình trạng sâu bệnh.\nThời gian kiểm tra: 08:45:02 12/8/2026",
+    "status": "Suc khoe tot",
+    "image": "/api/camera/image?t=1786499102406"
+  },
+  {
+    "id": "insp-1786499094393",
+    "type": "PEST",
+    "timestamp": "08:44:54 12/8/2026",
+    "title": "Quet Camera Serial Arduino",
+    "detail": "KẾT QUẢ KIỂM TRA\nTình trạng: KHÔNG CHẮC CHẮN\nMô tả chi tiết: Hình ảnh chụp các ống dẫn nước và khung kim loại trong hệ thống thủy canh hoặc thiết bị nông nghiệp, không thấy cây trồng, lá hay dấu hiệu của sâu bệnh.\nKhuyến nghị: Kiểm tra lại vị trí đặt camera hoặc chụp góc chụp khác tập trung vào phần lá của cây rau để quan sát chính xác hơn.\nThời gian kiểm tra: 08:44:54 12/8/2026",
+    "telegramCaption": "DIEM QUET CAMERA KET NOI ARDUINO\n\nKẾT QUẢ KIỂM TRA\nTình trạng: KHÔNG CHẮC CHẮN\nMô tả chi tiết: Hình ảnh chụp các ống dẫn nước và khung kim loại trong hệ thống thủy canh hoặc thiết bị nông nghiệp, không thấy cây trồng, lá hay dấu hiệu của sâu bệnh.\nKhuyến nghị: Kiểm tra lại vị trí đặt camera hoặc chụp góc chụp khác tập trung vào phần lá của cây rau để quan sát chính xác hơn.\nThời gian kiểm tra: 08:44:54 12/8/2026",
+    "status": "Suc khoe tot",
+    "image": "/api/camera/image?t=1786499094393"
+  },
+  {
+    "id": "insp-1786499083430",
+    "type": "PEST",
+    "timestamp": "08:44:43 12/8/2026",
+    "title": "Quet Camera Serial Arduino",
+    "detail": "KẾT QUẢ KIỂM TRA\nTình trạng: KHÔNG CHẮC CHẮN\nMô tả chi tiết: Ảnh chụp chỉ hiển thị các ống nước và khung kỹ thuật, không nhìn thấy cây trồng, lá cây hay bất kỳ dấu hiệu sinh học nào.\nKhuyến nghị: Chụp lại hình ảnh tập trung trực tiếp vào bề mặt lá của cây rau để có thể quan sát rõ sâu hại hoặc dấu hiệu bệnh.\nThời gian kiểm tra: 08:44:43 12/8/2026",
+    "telegramCaption": "DIEM QUET CAMERA KET NOI ARDUINO\n\nKẾT QUẢ KIỂM TRA\nTình trạng: KHÔNG CHẮC CHẮN\nMô tả chi tiết: Ảnh chụp chỉ hiển thị các ống nước và khung kỹ thuật, không nhìn thấy cây trồng, lá cây hay bất kỳ dấu hiệu sinh học nào.\nKhuyến nghị: Chụp lại hình ảnh tập trung trực tiếp vào bề mặt lá của cây rau để có thể quan sát rõ sâu hại hoặc dấu hiệu bệnh.\nThời gian kiểm tra: 08:44:43 12/8/2026",
+    "status": "Suc khoe tot",
+    "image": "/api/camera/image?t=1786499083430"
+  },
+  {
+    "id": "insp-1786499075916",
+    "type": "PEST",
+    "timestamp": "08:44:35 12/8/2026",
+    "title": "Quet Camera Serial Arduino",
+    "detail": "KẾT QUẢ KIỂM TRA\nTình trạng: KHÔNG CHẮC CHẮN\nMô tả chi tiết: Ảnh chụp chỉ hiển thị các ống dẫn nước và khung kim loại, không thấy cây trồng, lá cây hay bất kỳ dấu hiệu sinh học nào.\nKhuyến nghị: Chụp lại hình ảnh tập trung vào phần lá của cây trồng tại điểm kiểm tra để có cơ sở đánh giá chính xác.\nThời gian kiểm tra: 08:44:35 12/8/2026",
+    "telegramCaption": "DIEM QUET CAMERA KET NOI ARDUINO\n\nKẾT QUẢ KIỂM TRA\nTình trạng: KHÔNG CHẮC CHẮN\nMô tả chi tiết: Ảnh chụp chỉ hiển thị các ống dẫn nước và khung kim loại, không thấy cây trồng, lá cây hay bất kỳ dấu hiệu sinh học nào.\nKhuyến nghị: Chụp lại hình ảnh tập trung vào phần lá của cây trồng tại điểm kiểm tra để có cơ sở đánh giá chính xác.\nThời gian kiểm tra: 08:44:35 12/8/2026",
+    "status": "Suc khoe tot",
+    "image": "/api/camera/image?t=1786499075916"
+  },
+  {
+    "id": "insp-1786498899974",
+    "type": "PEST",
+    "timestamp": "08:41:39 12/8/2026",
+    "title": "Quet Camera Serial Arduino",
+    "detail": "KẾT QUẢ KIỂM TRA\nTình trạng: KHÔNG CHẮC CHẮN\nMô tả chi tiết: Hình ảnh hiển thị các ống nhựa, dây điện và khung kim loại trong hệ thống, hoàn toàn không có cây trồng, lá cây hay bất kỳ sinh vật nào xuất hiện trong khung hình.\nKhuyến nghị: Chụp lại bức ảnh tập trung vào phần tán lá của cây trồng tại điểm kiểm tra để có cơ sở đánh giá chính xác tình trạng sâu bệnh.\nThời gian kiểm tra: 08:41:39 12/8/2026",
+    "telegramCaption": "DIEM QUET CAMERA KET NOI ARDUINO\n\nKẾT QUẢ KIỂM TRA\nTình trạng: KHÔNG CHẮC CHẮN\nMô tả chi tiết: Hình ảnh hiển thị các ống nhựa, dây điện và khung kim loại trong hệ thống, hoàn toàn không có cây trồng, lá cây hay bất kỳ sinh vật nào xuất hiện trong khung hình.\nKhuyến nghị: Chụp lại bức ảnh tập trung vào phần tán lá của cây trồng tại điểm kiểm tra để có cơ sở đánh giá chính xác tình trạng sâu bệnh.\nThời gian kiểm tra: 08:41:39 12/8/2026",
+    "status": "Suc khoe tot",
+    "image": "/api/camera/image?t=1786498899974"
+  },
+  {
+    "id": "insp-1786498879117",
+    "type": "PEST",
+    "timestamp": "08:41:19 12/8/2026",
+    "title": "Quet Camera Serial Arduino",
+    "detail": "KẾT QUẢ KIỂM TRA\nTình trạng: KHÔNG CHẮC CHẮN\nMô tả chi tiết: Ảnh chụp các đường ống dẫn nước, khung kim loại và tường, không có cây trồng hay lá rau nào xuất hiện trong khung hình để quan sát sâu hoặc bệnh.\nKhuyến nghị: Vui lòng chụp lại hình ảnh tập trung vào phần lá rau tại điểm kiểm tra để có cơ sở đánh giá chính xác.\nThời gian kiểm tra: 08:41:19 12/8/2026",
+    "telegramCaption": "DIEM QUET CAMERA KET NOI ARDUINO\n\nKẾT QUẢ KIỂM TRA\nTình trạng: KHÔNG CHẮC CHẮN\nMô tả chi tiết: Ảnh chụp các đường ống dẫn nước, khung kim loại và tường, không có cây trồng hay lá rau nào xuất hiện trong khung hình để quan sát sâu hoặc bệnh.\nKhuyến nghị: Vui lòng chụp lại hình ảnh tập trung vào phần lá rau tại điểm kiểm tra để có cơ sở đánh giá chính xác.\nThời gian kiểm tra: 08:41:19 12/8/2026",
+    "status": "Suc khoe tot",
+    "image": "/api/camera/image?t=1786498879117"
+  },
+  {
+    "id": "insp-1786498878011",
+    "type": "PEST",
+    "timestamp": "08:41:18 12/8/2026",
+    "title": "Quet Camera Serial Arduino",
+    "detail": "KẾT QUẢ KIỂM TRA\nTình trạng: KHÔNG CHẮC CHẮN\nMô tả chi tiết: Hình ảnh chụp các đường ống dẫn nước và khung kim loại trong nhà kính hoặc hệ thống thủy canh, hoàn toàn không nhìn thấy cây trồng, lá cây hay bất kỳ dấu hiệu sinh học nào của sâu hoặc bệnh.\nKhuyến nghị: Cần chụp lại hình ảnh tập trung vào phần lá của cây trồng để có thể đánh giá chính xác tình trạng sâu bệnh.\nThời gian kiểm tra: 08:41:17 12/8/2026",
+    "telegramCaption": "DIEM QUET CAMERA KET NOI ARDUINO\n\nKẾT QUẢ KIỂM TRA\nTình trạng: KHÔNG CHẮC CHẮN\nMô tả chi tiết: Hình ảnh chụp các đường ống dẫn nước và khung kim loại trong nhà kính hoặc hệ thống thủy canh, hoàn toàn không nhìn thấy cây trồng, lá cây hay bất kỳ dấu hiệu sinh học nào của sâu hoặc bệnh.\nKhuyến nghị: Cần chụp lại hình ảnh tập trung vào phần lá của cây trồng để có thể đánh giá chính xác tình trạng sâu bệnh.\nThời gian kiểm tra: 08:41:17 12/8/2026",
+    "status": "Suc khoe tot",
+    "image": "/api/camera/image?t=1786498878011"
+  },
+  {
+    "id": "insp-1786498832020",
+    "type": "PEST",
+    "timestamp": "08:40:32 12/8/2026",
+    "title": "Quet Camera Serial Arduino",
+    "detail": "KẾT QUẢ KIỂM TRA\nTình trạng: KHÔNG CHẮC CHẮN\nMô tả chi tiết: Hình ảnh chỉ hiển thị các ống nước và khung kỹ thuật, không quan sát thấy cây trồng, lá cây hay bất kỳ dấu hiệu sinh học nào của sâu và bệnh.\nKhuyến nghị: Kiểm tra lại vị trí đặt camera hoặc chụp lại khu vực trồng rau để có hình ảnh rõ ràng về cây trồng.\nThời gian kiểm tra: 08:40:31 12/8/2026",
+    "telegramCaption": "DIEM QUET CAMERA KET NOI ARDUINO\n\nKẾT QUẢ KIỂM TRA\nTình trạng: KHÔNG CHẮC CHẮN\nMô tả chi tiết: Hình ảnh chỉ hiển thị các ống nước và khung kỹ thuật, không quan sát thấy cây trồng, lá cây hay bất kỳ dấu hiệu sinh học nào của sâu và bệnh.\nKhuyến nghị: Kiểm tra lại vị trí đặt camera hoặc chụp lại khu vực trồng rau để có hình ảnh rõ ràng về cây trồng.\nThời gian kiểm tra: 08:40:31 12/8/2026",
+    "status": "Suc khoe tot",
+    "image": "/api/camera/image?t=1786498832021"
+  },
+  {
     "id": "insp-1786438286978",
     "type": "PEST",
     "timestamp": "15:51:26 11/8/2026",

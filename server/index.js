@@ -597,6 +597,15 @@ async function captureFramesCrossPlatform(directory) {
   }
 }
 
+// Đảm bảo thư mục pictures/ tồn tại
+const PICTURES_DIR = path.join(process.cwd(), "pictures");
+if (!fs.existsSync(PICTURES_DIR)) fs.mkdirSync(PICTURES_DIR, { recursive: true });
+
+function makeSnapPath() {
+  const rand = Math.random().toString(36).slice(2, 10);
+  return path.join(PICTURES_DIR, `snap_${Date.now()}_${rand}.jpg`);
+}
+
 async function captureImage(minTimestamp = 0) {
   const liveViewPath = path.join(process.cwd(), "st01.jpg");
   const targetMinTime = minTimestamp > 0 ? minTimestamp : Date.now() - 2000;
@@ -1048,17 +1057,17 @@ async function getOrInitArduinoSerialPort() {
                     pushWebNotification(`Gemini AI phan tich: [${aiStatusText}].`, "SUCCESS");
                   }
 
-                  // Xóa file snapshot random sau khi đã đọc xong (nếu không phải st01.jpg)
-                  if (imagePathToSend && imagePathToSend !== path.join(process.cwd(), "st01.jpg")) {
+                  addSystemLog("GEMINI_RES", `Phan tich hoan tat: [${aiStatusText}]`, "SUCCESS");
+
+                  // 2. Gửi Telegram TRƯỚC (await), sau đó mới xóa file
+                  const telegramCaption = `DIEM QUET CAMERA KET NOI ARDUINO\n\n${formattedResult}`;
+                  try { await sendTelegramPhoto(imagePathToSend, telegramCaption); } catch (tErr) {}
+
+                  // Xóa file snapshot sau khi gửi Telegram xong
+                  if (imagePathToSend && !imagePathToSend.endsWith("st01.jpg")) {
                     try { fs.unlinkSync(imagePathToSend); } catch (e) {}
                     if (latestSnapshotPath === imagePathToSend) latestSnapshotPath = null;
                   }
-
-                  addSystemLog("GEMINI_RES", `Phan tich hoan tat: [${aiStatusText}]`, "SUCCESS");
-
-                  // 2. Gửi Telegram ở background (chạy ngầm không delay)
-                  const telegramCaption = `DIEM QUET CAMERA KET NOI ARDUINO\n\n${formattedResult}`;
-                  sendTelegramPhoto(imagePathToSend, telegramCaption).catch(() => {});
 
                   try {
                     const fullHistory = readJson("inspection_history.json", []);
@@ -1173,23 +1182,23 @@ async function getOrInitArduinoSerialPort() {
                     action2 = hasPest2 ? "SPRAY" : "NO_SPRAY";
                     const aiStatus2 = parsedResult2 ? parsedResult2.status : (hasPest2 ? "CO SAU / BENH" : "KHONG PHAT HIEN SAU VA BENH");
 
-                    // 1. Phản hồi NGAY LẬP TỨC cho Arduino chuyển vị trí tiếp theo - KHÔNG DELAY!
-                    if (cancellationId === currentCancellationId && activeSerialPort && activeSerialPort.isOpen) {
-                      activeSerialPort.write(`POINT_RESULT:${pointIndex}:${action2}\n`);
-                      console.log(`[Server -> Arduino (KHÔNG DELAY)] POINT_RESULT:${pointIndex}:${action2}`);
-                    }
+                    addSystemLog("GEMINI_RES", `Diem ${pointIndex + 1}: [${aiStatus2}]`, "SUCCESS");
 
-                    // Xóa file snapshot random ngay sau khi đã gửi lệnh Arduino (không delay)
-                    if (imagePathToSend2 && imagePathToSend2 !== path.join(process.cwd(), "st01.jpg")) {
+                    // 1. Gửi Telegram TRƯỚC (await) - xong mới chuyển vị trí tiếp theo!
+                    const teleCaption2 = `DIEM KIEM TRA ${pointIndex + 1}\n\n${formattedResult2}`;
+                    try { await sendTelegramPhoto(imagePathToSend2, teleCaption2); } catch (tErr) {}
+
+                    // Xóa file snapshot sau khi gửi Telegram xong
+                    if (imagePathToSend2 && !imagePathToSend2.endsWith("st01.jpg")) {
                       try { fs.unlinkSync(imagePathToSend2); } catch (e) {}
                       if (latestSnapshotPath === imagePathToSend2) latestSnapshotPath = null;
                     }
 
-                    addSystemLog("GEMINI_RES", `Diem ${pointIndex + 1}: [${aiStatus2}] -> Fast Forward Point`, "SUCCESS");
-
-                    // 2. Gửi Telegram & lưu lịch sử ở background (chạy ngầm không làm trễ phần cứng)
-                    const teleCaption2 = `DIEM KIEM TRA ${pointIndex + 1}\n\n${formattedResult2}`;
-                    sendTelegramPhoto(imagePathToSend2, teleCaption2).catch(() => {});
+                    // 2. Gửi POINT_RESULT SAU KHI Telegram done - Arduino chuyển vị trí
+                    if (cancellationId === currentCancellationId && activeSerialPort && activeSerialPort.isOpen) {
+                      activeSerialPort.write(`POINT_RESULT:${pointIndex}:${action2}\n`);
+                      console.log(`[Server -> Arduino] POINT_RESULT:${pointIndex}:${action2} (sau Telegram)`);
+                    }
 
                     try {
                       const hist2 = readJson("inspection_history.json", []);
@@ -1979,9 +1988,8 @@ app.post("/api/camera/upload-snapshot", async (req, res) => {
     const liveViewPath = path.join(process.cwd(), "st01.jpg");
     fs.writeFileSync(liveViewPath, imageBuffer);
 
-    // 2. Lưu thêm file tên random để dùng cho inspection (sẽ bị xóa sau khi xử lý)
-    const snapName = `snap_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.jpg`;
-    const snapPath = path.join(process.cwd(), snapName);
+    // 2. Lưu thêm file tên random vào pictures/ để dùng cho inspection (sẽ bị xóa sau khi xử lý)
+    const snapPath = makeSnapPath();
     fs.writeFileSync(snapPath, imageBuffer);
 
     // Xóa file random cũ nếu còn tồn tại
