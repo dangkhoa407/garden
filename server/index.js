@@ -603,42 +603,53 @@ async function captureFramesCrossPlatform(directory) {
 }
 
 async function captureImage(minTimestamp = 0) {
-  const imagePath = path.join(process.cwd(), "st01.jpg");
+  const liveViewPath = path.join(process.cwd(), "st01.jpg");
   const targetMinTime = minTimestamp > 0 ? minTimestamp : Date.now() - 2000;
 
-  // 1. Kiểm tra & chờ tối đa 2s xem trình duyệt WebRTC có đẩy khung hình MỚI TƯƠI vừa chụp hay không
-  const maxWaitMs = process.platform === "win32" ? 2000 : 800;
-  const pollMs = 100;
-  for (let elapsed = 0; elapsed < maxWaitMs; elapsed += pollMs) {
-    if (fs.existsSync(imagePath)) {
+  // 1. Trên Windows: ưu tiên dùng ảnh random mới nhất từ browser push (không đụng FFmpeg)
+  if (process.platform === "win32") {
+    // Chờ tối đa 2s để browser push ảnh mới
+    for (let elapsed = 0; elapsed < 2000; elapsed += 100) {
+      if (latestSnapshotPath && fs.existsSync(latestSnapshotPath)) {
+        try {
+          const stats = fs.statSync(latestSnapshotPath);
+          if (stats.mtimeMs >= targetMinTime) {
+            console.log(`[Camera Engine] Windows: Dùng ảnh random mới (${(Date.now() - stats.mtimeMs).toFixed(0)}ms): ${path.basename(latestSnapshotPath)}`);
+            return latestSnapshotPath; // Caller sẽ xóa sau khi dùng
+          }
+        } catch (e) {}
+      }
+      await new Promise((r) => setTimeout(r, 100));
+    }
+
+    // Fallback: dùng st01.jpg nếu không có snapshot random
+    if (fs.existsSync(liveViewPath)) {
+      const stats = fs.statSync(liveViewPath);
+      console.log(`[Camera Engine] Windows fallback: Dùng st01.jpg (${(Date.now() - stats.mtimeMs).toFixed(0)}ms tuổi)`);
+      return liveViewPath;
+    }
+
+    throw new Error("Windows: Chưa có ảnh từ camera. Vui lòng mở trang Camera để stream ảnh live.");
+  }
+
+  // 2. Kiểm tra ảnh random mới nhất (cross-platform)
+  for (let elapsed = 0; elapsed < 800; elapsed += 100) {
+    if (latestSnapshotPath && fs.existsSync(latestSnapshotPath)) {
       try {
-        const stats = fs.statSync(imagePath);
+        const stats = fs.statSync(latestSnapshotPath);
         if (stats.mtimeMs >= targetMinTime) {
-          console.log(`[Camera Engine] Sử dụng ảnh webcam MỚI TƯƠI (${(Date.now() - stats.mtimeMs).toFixed(0)}ms vừa chụp từ live stream)`);
-          addSystemLog("CAMERA", `[Camera Engine] Đã lấy ảnh MỚI TƯƠI từ live stream (${(Date.now() - stats.mtimeMs).toFixed(0)}ms)`, "SUCCESS");
-          return imagePath;
+          console.log(`[Camera Engine] Dùng ảnh random mới (${(Date.now() - stats.mtimeMs).toFixed(0)}ms): ${path.basename(latestSnapshotPath)}`);
+          return latestSnapshotPath;
         }
       } catch (e) {}
     }
-    await new Promise((r) => setTimeout(r, pollMs));
-  }
-
-  // 2. Trên Windows: KHÔNG dùng FFmpeg (DirectShow gây lock 30s). Dùng ảnh st01.jpg hiện có nếu có.
-  if (process.platform === "win32") {
-    if (fs.existsSync(imagePath)) {
-      console.log("[Camera Engine] Windows: Dùng ảnh st01.jpg hiện có (browser chưa push kịp ảnh mới).");
-      addSystemLog("CAMERA", "[Camera Engine] Windows: Dùng ảnh st01.jpg hiện có", "SUCCESS");
-      return imagePath;
-    }
-    throw new Error("Windows: Chưa có ảnh st01.jpg. Vui lòng mở trang Camera để stream ảnh live.");
+    await new Promise((r) => setTimeout(r, 100));
   }
 
   // 3. Linux / Raspberry Pi: Chụp trực tiếp qua FFmpeg
   console.log("Dang mo camera CHỤP ẢNH MỚI qua FFmpeg...");
 
-  try {
-    await configureCamera();
-  } catch (e) {}
+  try { await configureCamera(); } catch (e) {}
 
   const directory = await fs.promises.mkdtemp(
     path.join(require("os").tmpdir(), "vuon-rau-camera-")
@@ -654,39 +665,20 @@ async function captureImage(minTimestamp = 0) {
         .sort()
         .slice(WARMUP_FRAMES, WARMUP_FRAMES + CHECK_FRAMES);
 
-      if (frameFiles.length === 0) {
-        throw new Error("Camera khong tao du khung hinh.");
-      }
+      if (frameFiles.length === 0) throw new Error("Camera khong tao du khung hinh.");
 
-      let bestPath = null;
-      let bestInfo = null;
-      let bestScore = Infinity;
-
+      let bestPath = null, bestInfo = null, bestScore = Infinity;
       for (const fileName of frameFiles) {
         const framePath = path.join(directory, fileName);
         const info = await analyzeFrameLight(framePath);
-        const score =
-          Math.abs(info.meanBrightness - TARGET_BRIGHTNESS) +
-          info.overexposedRatio * 300 +
-          info.darkRatio * 60;
-
-        if (score < bestScore) {
-          bestScore = score;
-          bestPath = framePath;
-          bestInfo = info;
-        }
+        const score = Math.abs(info.meanBrightness - TARGET_BRIGHTNESS) + info.overexposedRatio * 300 + info.darkRatio * 60;
+        if (score < bestScore) { bestScore = score; bestPath = framePath; bestInfo = info; }
       }
-
-      if (!bestPath || !bestInfo) {
-        throw new Error("Khong chon duoc anh tot tu camera.");
-      }
+      if (!bestPath || !bestInfo) throw new Error("Khong chon duoc anh tot tu camera.");
 
       const brightness = bestInfo.meanBrightness;
       const overexposedRatio = bestInfo.overexposedRatio;
-
-      let alpha = 1;
-      let beta = 0;
-
+      let alpha = 1, beta = 0;
       if (overexposedRatio > 0.25 || brightness > 200) { alpha = 0.58; beta = -30; }
       else if (overexposedRatio > 0.15 || brightness > 175) { alpha = 0.72; beta = -18; }
       else if (overexposedRatio > 0.07 || brightness > 150) { alpha = 0.84; beta = -8; }
@@ -696,29 +688,27 @@ async function captureImage(minTimestamp = 0) {
       else if (brightness < 90) { alpha = 1.07; beta = 8; }
       else if (brightness < 115) { alpha = 1.03; beta = 4; }
 
+      // Lưu vào file random để caller xóa sau khi dùng
+      const snapName = `snap_${Date.now()}_ffmpeg.jpg`;
+      const snapPath = path.join(process.cwd(), snapName);
       const sharp = require("sharp");
-      await sharp(bestPath).removeAlpha().linear(alpha, beta).jpeg({ quality: JPEG_QUALITY }).toFile(imagePath);
+      await sharp(bestPath).removeAlpha().linear(alpha, beta).jpeg({ quality: JPEG_QUALITY }).toFile(snapPath);
+      // Cũng cập nhật st01.jpg cho live view
+      fs.copyFileSync(snapPath, liveViewPath);
 
-      console.log(`[Camera Engine] Da chup va luu anh thanh cong: ${imagePath}`);
-      addSystemLog("CAMERA", `[Camera USB] Da chup va luu anh thanh cong (${path.basename(imagePath)})`, "SUCCESS");
-      return imagePath;
+      console.log(`[Camera Engine] Da chup va luu anh: ${snapPath}`);
+      return snapPath; // Caller xóa sau khi xử lý xong
     }
   } catch (capErr) {
     ffmpegErr = capErr;
-    const detail = capErr.stderr?.trim() || capErr.message;
-    console.warn(`[Camera Engine Warn] Khong the chup qua FFmpeg (${detail}).`);
+    console.warn(`[Camera Engine Warn] Khong the chup qua FFmpeg (${capErr.message}).`);
   } finally {
-    if (directory) {
-      await fs.promises.rm(directory, { recursive: true, force: true }).catch(() => {});
-    }
+    if (directory) await fs.promises.rm(directory, { recursive: true, force: true }).catch(() => {});
   }
 
-  // Dự phòng nếu FFmpeg không thành công nhưng có sẵn st01.jpg trên đĩa
-  if (fs.existsSync(imagePath)) {
-    return imagePath;
-  }
+  if (fs.existsSync(liveViewPath)) return liveViewPath;
 
-  throw new Error(`Khong the chup anh tu camera: ${ffmpegErr?.message || "FFmpeg capture that bai"}. Kiem tra lai ket noi USB camera.`);
+  throw new Error(`Khong the chup anh tu camera: ${ffmpegErr?.message || "FFmpeg capture that bai"}.`);
 }
 
 
@@ -1063,6 +1053,12 @@ async function getOrInitArduinoSerialPort() {
                     pushWebNotification(`Gemini AI phan tich: [${aiStatusText}].`, "SUCCESS");
                   }
 
+                  // Xóa file snapshot random sau khi đã đọc xong (nếu không phải st01.jpg)
+                  if (imagePathToSend && imagePathToSend !== path.join(process.cwd(), "st01.jpg")) {
+                    try { fs.unlinkSync(imagePathToSend); } catch (e) {}
+                    if (latestSnapshotPath === imagePathToSend) latestSnapshotPath = null;
+                  }
+
                   addSystemLog("GEMINI_RES", `Phan tich hoan tat: [${aiStatusText}]`, "SUCCESS");
 
                   // 2. Gửi Telegram ở background (chạy ngầm không delay)
@@ -1186,6 +1182,12 @@ async function getOrInitArduinoSerialPort() {
                     if (cancellationId === currentCancellationId && activeSerialPort && activeSerialPort.isOpen) {
                       activeSerialPort.write(`POINT_RESULT:${pointIndex}:${action2}\n`);
                       console.log(`[Server -> Arduino (KHÔNG DELAY)] POINT_RESULT:${pointIndex}:${action2}`);
+                    }
+
+                    // Xóa file snapshot random ngay sau khi đã gửi lệnh Arduino (không delay)
+                    if (imagePathToSend2 && imagePathToSend2 !== path.join(process.cwd(), "st01.jpg")) {
+                      try { fs.unlinkSync(imagePathToSend2); } catch (e) {}
+                      if (latestSnapshotPath === imagePathToSend2) latestSnapshotPath = null;
                     }
 
                     addSystemLog("GEMINI_RES", `Diem ${pointIndex + 1}: [${aiStatus2}] -> Fast Forward Point`, "SUCCESS");
@@ -1964,21 +1966,34 @@ app.get("/api/camera/status", async (req, res) => {
 });
 
 
+// Track the latest random-named snapshot for inspection use (volatile – auto-deleted after processing)
+let latestSnapshotPath = null;
+
 // 3b. Endpoint nhan anh WebRTC tu Browser (thay the FFmpeg tren Windows/dev)
 app.post("/api/camera/upload-snapshot", async (req, res) => {
   try {
-    const { imageBase64, mimeType } = req.body;
+    const { imageBase64 } = req.body;
     if (!imageBase64) {
       return res.status(400).json({ success: false, error: "Thieu du lieu anh (imageBase64)" });
     }
 
-    const imagePath = path.join(process.cwd(), "st01.jpg");
     const base64Data = imageBase64.includes(",") ? imageBase64.split(",")[1] : imageBase64;
     const imageBuffer = Buffer.from(base64Data, "base64");
 
-    fs.writeFileSync(imagePath, imageBuffer);
-    console.log(`[Camera Upload] Nhan va luu anh WebRTC tu browser thanh cong: ${imagePath} (${imageBuffer.length} bytes)`);
-    addSystemLog("CAMERA_UPLOAD", `[UPLOAD] Da nhan anh tu webcam browser (${imageBuffer.length} bytes) -> st01.jpg`, "SUCCESS");
+    // 1. Lưu st01.jpg để hiển thị live view trên web (không xóa)
+    const liveViewPath = path.join(process.cwd(), "st01.jpg");
+    fs.writeFileSync(liveViewPath, imageBuffer);
+
+    // 2. Lưu thêm file tên random để dùng cho inspection (sẽ bị xóa sau khi xử lý)
+    const snapName = `snap_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.jpg`;
+    const snapPath = path.join(process.cwd(), snapName);
+    fs.writeFileSync(snapPath, imageBuffer);
+
+    // Xóa file random cũ nếu còn tồn tại
+    if (latestSnapshotPath && latestSnapshotPath !== liveViewPath) {
+      try { fs.unlinkSync(latestSnapshotPath); } catch (e) {}
+    }
+    latestSnapshotPath = snapPath;
 
     res.json({
       success: true,
