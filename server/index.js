@@ -127,14 +127,9 @@ async function getRealSerialStatus() {
   }
 }
 
-// CANDIDATE GEMINI MODELS ORDER TO AUTOMATICALLY RETRY IF NOT FOUND
+// CHỈ DÙNG 1 MODEL DUY NHẤT - không fallback sang model khác
 const MODEL_CANDIDATES = [
-  "gemini-2.5-flash",
-  "gemini-2.0-flash",
-  "gemini-1.5-flash-latest",
-  "gemini-1.5-flash",
   "gemini-3.5-flash-lite",
-  "gemini-pro",
 ];
 
 // KEY ROTATION & AUTOMATIC MODEL FALLBACK EXECUTOR
@@ -2422,7 +2417,7 @@ app.get("/api/settings/gemini", (req, res) => {
   res.json({
     totalKeys: keys.length,
     activeKeyMask: keys.length > 0 ? maskKey(keys[0].key) : "",
-    activeModel: settings.activeModel || "gemini-2.5-flash",
+    activeModel: settings.activeModel || "gemini-3.5-flash-lite",
     keys: maskedKeys,
   });
 });
