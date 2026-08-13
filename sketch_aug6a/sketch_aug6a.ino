@@ -344,8 +344,6 @@ void moveToPoint(int idx) {
   digitalWrite(EN1_PIN, LOW);
   digitalWrite(EN2_PIN, LOW);
 
-  homeAll();
-
   Serial.print("MOVING_TO_POINT:");
   Serial.println(idx);
 

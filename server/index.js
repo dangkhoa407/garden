@@ -261,7 +261,7 @@ let currentCapturePointIndex = null;
 const pendingMoveResolvers = new Map();
 let pendingFullSprayResolver = null;
 
-function waitForArduinoMove(pointIndex, timeoutMs = 25000) {
+function waitForArduinoMove(pointIndex, timeoutMs = 5000) {
   return new Promise((resolve, reject) => {
     const key = Number(pointIndex);
     const timer = setTimeout(() => {
@@ -1750,7 +1750,7 @@ async function runFullGardenInspection() {
     pushWebNotification(`🐛 Đang điều khiển Robot di chuyển tới ${trayName} (Điểm ${pointIdx + 1}) để kiểm tra sâu bệnh trên cây ${plantName || ""}...`, "AI_ANALYSIS");
 
     // 1. Gửi lệnh di chuyển tới điểm tương ứng trên Arduino
-    const moveWait = waitForArduinoMove(pointIdx, 30000);
+    const moveWait = waitForArduinoMove(pointIdx, 5000);
     try {
       await sendDirectCommandToArduino(`P${pointIdx + 1}`);
     } catch (moveErr) {
@@ -4260,7 +4260,7 @@ app.post("/api/plant-inspect", async (req, res) => {
     pushWebNotification(`🐛 Đang điều khiển Robot di chuyển tới ${trayName} (Điểm ${pointIdx + 1}) để kiểm tra sâu bệnh trên cây ${plantName || ""}...`, "AI_ANALYSIS");
 
     // 1. Send command to Arduino to move camera to tray/point
-    const moveWait = waitForArduinoMove(pointIdx, 15000);
+    const moveWait = waitForArduinoMove(pointIdx, 5000);
     try {
       await sendDirectCommandToArduino(`P${pointIdx + 1}`);
     } catch (moveErr) {
