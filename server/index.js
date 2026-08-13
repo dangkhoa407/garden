@@ -1924,6 +1924,7 @@ app.post("/api/arduino/command", async (req, res) => {
 
       try {
         await sendDirectCommandToArduino("STOP");
+        await sendDirectCommandToArduino("S");
       } catch (e) {
         console.warn(`[Emergency Stop Direct Send Warning] ${e.message}`);
       }

@@ -34,6 +34,7 @@ int steps02 = (int)(0.3 * stepsPerCm);   // 0.3 cm
 #define SPRAY_INTERVAL_MS 86400000UL   // ✅ CHỐNG PHUN LẶP 24H
 
 bool systemError = false;
+bool emergencyStopRequested = false;
 
 // ===== Trạng thái phun =====
 bool sprayed[6] = {false, false, false, false, false, false};
@@ -46,21 +47,51 @@ void sprayCycle();
 void sprayPlantedRoute(String payload);
 void runSprayPoints();
 bool homeAll();
+bool checkIncomingEmergencyStop();
+
+// ================== PUMP ==================
+void pumpON()  { digitalWrite(RELAY_PUMP, HIGH); }
+void pumpOFF() { digitalWrite(RELAY_PUMP, LOW); }
+
+// ================== EMERGENCY STOP CHECK ==================
+bool checkIncomingEmergencyStop() {
+  if (emergencyStopRequested) return true;
+  while (Serial.available() > 0) {
+    String cmd = Serial.readStringUntil('\n');
+    cmd.trim();
+    if (cmd.length() == 0) continue;
+    String normalized = cmd;
+    normalized.toUpperCase();
+    if (normalized == "STOP" || normalized == "S") {
+      emergencyStopRequested = true;
+      pumpOFF();
+      digitalWrite(EN1_PIN, HIGH);
+      digitalWrite(EN2_PIN, HIGH);
+      Serial.println("STOP OK: EMERGENCY STOP ACTIVATED");
+      return true;
+    }
+  }
+  return false;
+}
 
 // ================== MOTOR ==================
-void runMotor(int stepPin, int dirPin, int steps, bool direction) {
+bool runMotor(int stepPin, int dirPin, int steps, bool direction) {
+  if (emergencyStopRequested || checkIncomingEmergencyStop()) return false;
   digitalWrite(dirPin, direction ? LOW : HIGH);
   for (int i = 0; i < steps; i++) {
+    if (emergencyStopRequested || (i % 10 == 0 && checkIncomingEmergencyStop())) {
+      pumpOFF();
+      digitalWrite(EN1_PIN, HIGH);
+      digitalWrite(EN2_PIN, HIGH);
+      return false;
+    }
     digitalWrite(stepPin, HIGH);
     delayMicroseconds(2500);
     digitalWrite(stepPin, LOW);
     delayMicroseconds(2500);
   }
+  return true;
 }
-
-// ================== PUMP ==================
-void pumpON()  { digitalWrite(RELAY_PUMP, HIGH); }
-void pumpOFF() { digitalWrite(RELAY_PUMP, LOW); }
 
 // ================== EMERGENCY STOP ==================
 void emergencyStop(const char* msg) {
@@ -68,12 +99,12 @@ void emergencyStop(const char* msg) {
   digitalWrite(EN2_PIN, HIGH);
   pumpOFF();
   systemError = true;
+  emergencyStopRequested = true;
 
   Serial.print("ALERT: ");
   Serial.println(msg);
   
   delay(100);   // ✅ cho PC kịp nhận ALERT
-  while (1);
 }
 
 // ================== HOMING ==================
@@ -81,7 +112,15 @@ bool homeAxis(int stepPin, int dirPin, int limitPin, const char* errMsg) {
   unsigned long startTime = millis();
   digitalWrite(dirPin, HIGH);
 
+  int stepCount = 0;
   while (digitalRead(limitPin) == HIGH) {
+    stepCount++;
+    if (emergencyStopRequested || (stepCount % 10 == 0 && checkIncomingEmergencyStop())) {
+      pumpOFF();
+      digitalWrite(EN1_PIN, HIGH);
+      digitalWrite(EN2_PIN, HIGH);
+      return false;
+    }
     if (millis() - startTime > HOMING_TIMEOUT_MS) {
       emergencyStop(errMsg);
       return false;
@@ -93,8 +132,7 @@ bool homeAxis(int stepPin, int dirPin, int limitPin, const char* errMsg) {
   }
 
   delay(100);
-  runMotor(stepPin, dirPin, steps02, true);
-  return true;
+  return runMotor(stepPin, dirPin, steps02, true);
 }
 
 bool homeAll() {
@@ -121,33 +159,34 @@ void sprayCycle() {
 
   pumpON();
 
-  runMotor(STEP1_PIN, DIR1_PIN, steps7, true);
-  runMotor(STEP1_PIN, DIR1_PIN, steps7, false);
-  runMotor(STEP2_PIN, DIR2_PIN, steps7, true);
+  if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, true)) return;
+  if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, false)) return;
+  if (!runMotor(STEP2_PIN, DIR2_PIN, steps7, true)) return;
 
-  runMotor(STEP1_PIN, DIR1_PIN, steps7, true);
-  runMotor(STEP1_PIN, DIR1_PIN, steps7, false);
-  runMotor(STEP2_PIN, DIR2_PIN, steps7, true);
+  if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, true)) return;
+  if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, false)) return;
+  if (!runMotor(STEP2_PIN, DIR2_PIN, steps7, true)) return;
 
-  runMotor(STEP1_PIN, DIR1_PIN, steps7, true);
-  runMotor(STEP1_PIN, DIR1_PIN, steps7, false);
+  if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, true)) return;
+  if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, false)) return;
 
   pumpOFF();
   runMotor(STEP2_PIN, DIR2_PIN, steps14, false);
 }
 
-void moveGridTo(int &currentX, int &currentY, int targetX, int targetY) {
+bool moveGridTo(int &currentX, int &currentY, int targetX, int targetY) {
   int deltaX = targetX - currentX;
   if (deltaX != 0) {
-    runMotor(STEP1_PIN, DIR1_PIN, abs(deltaX) * steps7, deltaX > 0);
+    if (!runMotor(STEP1_PIN, DIR1_PIN, abs(deltaX) * steps7, deltaX > 0)) return false;
     currentX = targetX;
   }
 
   int deltaY = targetY - currentY;
   if (deltaY != 0) {
-    runMotor(STEP2_PIN, DIR2_PIN, abs(deltaY) * steps7, deltaY > 0);
+    if (!runMotor(STEP2_PIN, DIR2_PIN, abs(deltaY) * steps7, deltaY > 0)) return false;
     currentY = targetY;
   }
+  return true;
 }
 
 void sprayPlantedRoute(String payload) {
@@ -184,8 +223,14 @@ void sprayPlantedRoute(String payload) {
   Serial.println("SPRAY_ON OK");
 
   for (int idx = 0; idx < 6; idx++) {
+    if (emergencyStopRequested || checkIncomingEmergencyStop()) {
+      pumpOFF();
+      digitalWrite(EN1_PIN, HIGH);
+      digitalWrite(EN2_PIN, HIGH);
+      return;
+    }
     if (!selected[idx]) continue;
-    moveGridTo(currentX, currentY, pointX[idx], pointY[idx]);
+    if (!moveGridTo(currentX, currentY, pointX[idx], pointY[idx])) return;
     Serial.print("SPRAYING_PLANTED:");
     Serial.println(idx);
     delay(SPRAY_TIME_MS);
@@ -203,13 +248,27 @@ void waitSprayOrSkip(int idx) {
   String cmd = "";
 
   while (millis() - start < WAIT_SPRAY_MS) {
+    if (emergencyStopRequested || checkIncomingEmergencyStop()) {
+      pumpOFF();
+      digitalWrite(EN1_PIN, HIGH);
+      digitalWrite(EN2_PIN, HIGH);
+      return;
+    }
     while (Serial.available()) {
       char c = Serial.read();
       if (c == '\n') {
         cmd.trim();
         cmd.toUpperCase();
 
-        if (cmd == "SPRAY" || cmd.endsWith(":SPRAY")) {
+        if (cmd == "STOP" || cmd == "S" || cmd.endsWith(":STOP")) {
+          emergencyStopRequested = true;
+          pumpOFF();
+          digitalWrite(EN1_PIN, HIGH);
+          digitalWrite(EN2_PIN, HIGH);
+          Serial.println("STOP OK: EMERGENCY STOP ACTIVATED");
+          return;
+        }
+        else if (cmd == "SPRAY" || cmd.endsWith(":SPRAY")) {
           // ✅ KIỂM TRA CHỐNG PHUN LẶP 24H
           if (!sprayed[idx] || millis() - lastSprayTime[idx] > SPRAY_INTERVAL_MS) {
             pumpON();
@@ -243,34 +302,34 @@ void runSprayPoints() {
   // Điểm 0
   captureFromPC(0); 
   waitSprayOrSkip(0); // PHUN NGAY TẠI VỊ TRÍ HIỆN TẠI
-  runMotor(STEP1_PIN, DIR1_PIN, steps7, true);
+  if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, true)) return;
 
   // Điểm 1
   captureFromPC(1); 
   waitSprayOrSkip(1);
-  runMotor(STEP1_PIN, DIR1_PIN, steps7, false);
+  if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, false)) return;
 
   // Điểm 2
-  runMotor(STEP2_PIN, DIR2_PIN, steps7, true);
+  if (!runMotor(STEP2_PIN, DIR2_PIN, steps7, true)) return;
   captureFromPC(2); 
   waitSprayOrSkip(2);
 
   // Điểm 3
-  runMotor(STEP1_PIN, DIR1_PIN, steps7, true);
+  if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, true)) return;
   captureFromPC(3); 
   waitSprayOrSkip(3);
-  runMotor(STEP1_PIN, DIR1_PIN, steps7, false);
+  if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, false)) return;
 
   // Điểm 4
-  runMotor(STEP2_PIN, DIR2_PIN, steps7, true);
+  if (!runMotor(STEP2_PIN, DIR2_PIN, steps7, true)) return;
   captureFromPC(4); 
   waitSprayOrSkip(4);
 
   // Điểm 5
-  runMotor(STEP1_PIN, DIR1_PIN, steps7, true);
+  if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, true)) return;
   captureFromPC(5); 
   waitSprayOrSkip(5);
-  runMotor(STEP1_PIN, DIR1_PIN, steps7, false);
+  if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, false)) return;
 
   // Kết thúc
   runMotor(STEP2_PIN, DIR2_PIN, steps14, false);
@@ -287,26 +346,19 @@ void moveToPoint(int idx) {
     Serial.println("MOVED:0");
   } else if (idx == 1) {
     // Điểm 1 (Khay 02): X = 7cm
-    runMotor(STEP1_PIN, DIR1_PIN, steps7, true);
-    Serial.println("MOVED:1");
+    if (runMotor(STEP1_PIN, DIR1_PIN, steps7, true)) Serial.println("MOVED:1");
   } else if (idx == 2) {
     // Điểm 2 (Khay 03): Y = 7cm
-    runMotor(STEP2_PIN, DIR2_PIN, steps7, true);
-    Serial.println("MOVED:2");
+    if (runMotor(STEP2_PIN, DIR2_PIN, steps7, true)) Serial.println("MOVED:2");
   } else if (idx == 3) {
     // Điểm 3 (Khay 04): X = 7cm, Y = 7cm
-    runMotor(STEP1_PIN, DIR1_PIN, steps7, true);
-    runMotor(STEP2_PIN, DIR2_PIN, steps7, true);
-    Serial.println("MOVED:3");
+    if (runMotor(STEP1_PIN, DIR1_PIN, steps7, true) && runMotor(STEP2_PIN, DIR2_PIN, steps7, true)) Serial.println("MOVED:3");
   } else if (idx == 4) {
     // Điểm 4 (Khay 05): Y = 14cm
-    runMotor(STEP2_PIN, DIR2_PIN, steps14, true);
-    Serial.println("MOVED:4");
+    if (runMotor(STEP2_PIN, DIR2_PIN, steps14, true)) Serial.println("MOVED:4");
   } else if (idx == 5) {
     // Điểm 5 (Khay 06): X = 7cm, Y = 14cm
-    runMotor(STEP1_PIN, DIR1_PIN, steps7, true);
-    runMotor(STEP2_PIN, DIR2_PIN, steps14, true);
-    Serial.println("MOVED:5");
+    if (runMotor(STEP1_PIN, DIR1_PIN, steps7, true) && runMotor(STEP2_PIN, DIR2_PIN, steps14, true)) Serial.println("MOVED:5");
   }
 }
 
