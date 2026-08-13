@@ -257,6 +257,31 @@ let activeSerialPort = null;
 let nodeConnected = false;
 let captureBusy = false;
 let currentCancellationId = 0;
+let currentCapturePointIndex = null;
+const pendingMoveResolvers = new Map();
+
+function waitForArduinoMove(pointIndex, timeoutMs = 25000) {
+  return new Promise((resolve, reject) => {
+    const key = Number(pointIndex);
+    const timer = setTimeout(() => {
+      pendingMoveResolvers.delete(key);
+      reject(new Error(`Arduino khong xac nhan di chuyen den diem ${key + 1} trong thoi gian cho.`));
+    }, timeoutMs);
+
+    pendingMoveResolvers.set(key, {
+      resolve: () => {
+        clearTimeout(timer);
+        pendingMoveResolvers.delete(key);
+        resolve(true);
+      },
+      reject: (err) => {
+        clearTimeout(timer);
+        pendingMoveResolvers.delete(key);
+        reject(err);
+      },
+    });
+  });
+}
 
 // =========================================================
 // GEMINI PROMPT & RESPONSE SCHEMA (ĐỒNG BỘ 100% V2.MJS)
@@ -369,14 +394,37 @@ function formatGeminiResult(data) {
   ].join("\n");
 }
 
-// Quyet dinh phun - theo dung v2.mjs (chi SPRAY khi co SAU, khong SPRAY khi chi BENH)
+function normalizeVietnameseForMatch(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[Đđ]/g, "D")
+    .toUpperCase();
+}
+
+function extractInspectionStatus(resultText) {
+  const text = normalizeVietnameseForMatch(resultText);
+
+  try {
+    const parsed = JSON.parse(String(resultText));
+    const status = normalizeVietnameseForMatch(parsed?.status).trim();
+    if (status) return status;
+  } catch (e) {}
+
+  const statusMatch = /TINH TRANG\s*:\s*([^\r\n]+)/i.exec(text);
+  if (statusMatch) return statusMatch[1].trim();
+
+  return text;
+}
+
+// Quyet dinh phun: chi SPRAY khi status la SAU / LA BI SAU AN / SAU VA BENH.
 function needSpray(resultText) {
-  const text = String(resultText).normalize("NFC").toUpperCase();
-  return (
-    text.includes("TINH TRANG: SAU VA BENH") ||
-    text.includes("TINH TRANG: LA BI SAU AN") ||
-    text.includes("TINH TRANG: SAU")
-  );
+  const status = extractInspectionStatus(resultText);
+  return [
+    "SAU",
+    "LA BI SAU AN",
+    "SAU VA BENH",
+  ].includes(status);
 }
 
 // =========================================================
@@ -519,10 +567,21 @@ function getFfmpegBinary() {
 }
 
 let cachedWindowsCameraDevice = null;
+let latestBrowserCaptureRequest = null;
+const browserCaptureWaiters = new Map();
+
+function rankWindowsCameraDevice(name) {
+  const normalized = String(name || "").toLowerCase();
+  let score = 0;
+
+  if (/(obs|virtual|ndi|xsplit|screen|capture)/.test(normalized)) score += 1000;
+  if (/(usb|webcam|integrated|hd camera|camera)/.test(normalized)) score -= 100;
+
+  return score;
+}
 
 // Lay ten camera Windows qua DirectShow listing (co cache de phan hoi tuc thi)
-async function getWindowsCameraDevice() {
-  if (cachedWindowsCameraDevice) return cachedWindowsCameraDevice;
+async function getWindowsCameraDevices() {
   try {
     const ffmpegBin = getFfmpegBinary();
     const { stderr } = await execFileAsync(
@@ -531,22 +590,189 @@ async function getWindowsCameraDevice() {
       { timeout: 8000 }
     ).catch((e) => ({ stderr: e.stderr || "" }));
 
-    // Tim dong dau tien co "(video)" - la camera thuc
+    const devices = [];
     const lines = String(stderr).split("\n");
     for (const line of lines) {
       if (line.includes("(video)") && !line.includes("none")) {
         const match = line.match(/"([^"]+)"/);
-        if (match) {
-          cachedWindowsCameraDevice = match[1];
-          console.log(`[Camera Engine] Phat hien camera Windows: "${match[1]}"`);
-          return match[1];
-        }
+        if (match && !devices.includes(match[1])) devices.push(match[1]);
       }
     }
+
+    const realDevices = devices.filter((name) => !/(obs|virtual|ndi|xsplit|screen|capture)/i.test(name));
+    const preferred = realDevices.length > 0 ? realDevices : devices;
+    return preferred.sort((a, b) => rankWindowsCameraDevice(a) - rankWindowsCameraDevice(b));
   } catch (e) {
     console.warn(`[Camera Engine] Khong lay duoc danh sach camera Windows: ${e.message}`);
   }
-  return null;
+  return [];
+}
+
+// Camera device được chọn bởi user (lưu trong settings.json)
+function getSavedCameraDevice() {
+  try {
+    const settings = readJson("settings.json", {});
+    return settings.selectedCameraDevice || null;
+  } catch (e) { return null; }
+}
+
+function saveCameraDevice(deviceName) {
+  try {
+    const settings = readJson("settings.json", {});
+    settings.selectedCameraDevice = deviceName;
+    writeJson("settings.json", settings);
+    cachedWindowsCameraDevice = deviceName;
+    console.log(`[Camera Engine] Đã lưu camera device: "${deviceName}"`);
+  } catch (e) {}
+}
+
+async function getWindowsCameraDevice() {
+  // Ưu tiên: device đã được user chọn và lưu trong settings
+  const saved = getSavedCameraDevice();
+  if (saved) return saved;
+
+  // Fallback: auto-detect
+  if (cachedWindowsCameraDevice) return cachedWindowsCameraDevice;
+
+  const devices = await getWindowsCameraDevices();
+  const cameraDevice = devices[0] || null;
+  if (cameraDevice) {
+    cachedWindowsCameraDevice = cameraDevice;
+    console.log(`[Camera Engine] Phat hien camera Windows: "${cameraDevice}"`);
+  }
+
+  return cameraDevice;
+}
+
+function isCameraBusyError(error) {
+  const detail = String(error?.stderr || error?.message || "").toLowerCase();
+  return (
+    detail.includes("device already in use") ||
+    detail.includes("could not run graph") ||
+    detail.includes("error opening input") ||
+    detail.includes("i/o error")
+  );
+}
+
+async function releaseCameraBeforeCapture() {
+  cachedWindowsCameraDevice = null;
+
+  try {
+    if (typeof ffmpegStreamProcess !== "undefined" && ffmpegStreamProcess) {
+      console.warn("[Camera Engine] Dang dung stream noi bo de gianh quyen camera...");
+      try { ffmpegStreamProcess.kill("SIGKILL"); } catch (e) {}
+      ffmpegStreamProcess = null;
+    }
+  } catch (e) {}
+
+  await new Promise((resolve) => setTimeout(resolve, 1200));
+}
+
+function requestFreshBrowserSnapshot(timeoutMs = 3500) {
+  const requestId = `capture-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  latestBrowserCaptureRequest = {
+    id: requestId,
+    createdAt: Date.now(),
+  };
+
+  return new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      browserCaptureWaiters.delete(requestId);
+      resolve(null);
+    }, timeoutMs);
+
+    browserCaptureWaiters.set(requestId, {
+      resolve: (imagePath) => {
+        clearTimeout(timeout);
+        browserCaptureWaiters.delete(requestId);
+        resolve(imagePath);
+      },
+    });
+  });
+}
+
+async function captureWindowsFrames(ffmpegBin, directory) {
+  const framePattern = path.join(directory, "frame-%03d.jpg");
+  const totalFrames = WARMUP_FRAMES + CHECK_FRAMES;
+  const availableDevices = await getWindowsCameraDevices();
+  const devices = cachedWindowsCameraDevice && availableDevices.includes(cachedWindowsCameraDevice)
+    ? [cachedWindowsCameraDevice, ...availableDevices.filter((name) => name !== cachedWindowsCameraDevice)]
+    : availableDevices;
+
+  if (devices.length === 0) {
+    throw new Error("Khong phat hien camera nao tren Windows qua DirectShow. Vui long cam USB camera.");
+  }
+
+  let lastError = null;
+  let releasedForBusyCamera = false;
+
+  for (const cameraDevice of devices) {
+    const attempts = [
+      {
+        label: "640x480@30",
+        args: ["-framerate", String(CAMERA_FPS), "-video_size", `${CAMERA_WIDTH}x${CAMERA_HEIGHT}`],
+      },
+      {
+        label: "default options",
+        args: [],
+      },
+    ];
+
+    for (const attempt of attempts) {
+      try {
+        console.log(`[Camera Engine] Windows DirectShow: "${cameraDevice}" (${attempt.label})`);
+        await execFileAsync(
+          ffmpegBin,
+          [
+            "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "dshow",
+            ...attempt.args,
+            "-i", `video=${cameraDevice}`,
+            "-frames:v", String(totalFrames),
+            "-q:v", "2",
+            framePattern,
+          ],
+          { timeout: 30000, maxBuffer: 4 * 1024 * 1024 }
+        );
+        cachedWindowsCameraDevice = cameraDevice;
+        return;
+      } catch (error) {
+        lastError = error;
+        console.warn(`[Camera Engine] Khong chup duoc tu "${cameraDevice}" (${attempt.label}): ${error.stderr?.trim() || error.message}`);
+
+        if (!releasedForBusyCamera && isCameraBusyError(error)) {
+          releasedForBusyCamera = true;
+          await releaseCameraBeforeCapture();
+
+          try {
+            console.log(`[Camera Engine] Thu lai sau khi gianh quyen: "${cameraDevice}" (${attempt.label})`);
+            await execFileAsync(
+              ffmpegBin,
+              [
+                "-hide_banner", "-loglevel", "error", "-y",
+                "-f", "dshow",
+                ...attempt.args,
+                "-i", `video=${cameraDevice}`,
+                "-frames:v", String(totalFrames),
+                "-q:v", "2",
+                framePattern,
+              ],
+              { timeout: 30000, maxBuffer: 4 * 1024 * 1024 }
+            );
+            cachedWindowsCameraDevice = cameraDevice;
+            return;
+          } catch (retryError) {
+            lastError = retryError;
+            console.warn(`[Camera Engine] Van khong gianh duoc camera "${cameraDevice}": ${retryError.stderr?.trim() || retryError.message}`);
+          }
+        }
+      }
+    }
+  }
+
+  const detail = lastError?.stderr?.trim() || lastError?.message || "DirectShow khong mo duoc camera.";
+  cachedWindowsCameraDevice = null;
+  throw new Error(detail);
 }
 
 // Chup frames theo platform: Windows dung dshow, Linux dung v4l2
@@ -556,27 +782,7 @@ async function captureFramesCrossPlatform(directory) {
   const totalFrames = WARMUP_FRAMES + CHECK_FRAMES;
 
   if (process.platform === "win32") {
-    // Windows: dung DirectShow (timeout 1.5s de tranh treo phan cung)
-    const cameraDevice = await getWindowsCameraDevice();
-    if (!cameraDevice) {
-      throw new Error("Khong phat hien camera nao tren Windows qua DirectShow. Vui long cam USB camera.");
-    }
-
-    console.log(`[Camera Engine] Windows: Chup ${totalFrames} frames tu "${cameraDevice}" qua DirectShow...`);
-    await execFileAsync(
-      ffmpegBin,
-      [
-        "-hide_banner", "-loglevel", "error", "-y",
-        "-f", "dshow",
-        "-framerate", String(CAMERA_FPS),
-        "-video_size", `${CAMERA_WIDTH}x${CAMERA_HEIGHT}`,
-        "-i", `video=${cameraDevice}`,
-        "-frames:v", String(totalFrames),
-        "-q:v", "2",
-        framePattern
-      ],
-      { timeout: 1500, maxBuffer: 2 * 1024 * 1024 }
-    );
+    await captureWindowsFrames(ffmpegBin, directory);
   } else {
     // Linux / Raspberry Pi: dung V4L2 (nhu v2.mjs)
     console.log(`[Camera Engine] Linux: Chup ${totalFrames} frames tu ${CAMERA_DEVICE} qua V4L2...`);
@@ -606,45 +812,39 @@ function makeSnapPath() {
   return path.join(PICTURES_DIR, `snap_${Date.now()}_${rand}.jpg`);
 }
 
-async function captureImage(minTimestamp = 0) {
-  const liveViewPath = path.join(process.cwd(), "st01.jpg");
-  const targetMinTime = minTimestamp > 0 ? minTimestamp : Date.now() - 1500;
+function persistSnapshotForHistory(imagePath, idPrefix = "insp") {
+  const inspId = `${idPrefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  let snapshotUrl = "/api/camera/image?t=" + Date.now();
 
-  // 1. Nếu browser vừa push ảnh mới (< 1.5s) thì dùng ngay - nhanh nhất
-  if (latestSnapshotPath && fs.existsSync(latestSnapshotPath)) {
+  if (imagePath && fs.existsSync(imagePath)) {
     try {
-      const stats = fs.statSync(latestSnapshotPath);
-      if (stats.mtimeMs >= targetMinTime) {
-        console.log(`[Camera Engine] Dùng ảnh browser push mới (${(Date.now() - stats.mtimeMs).toFixed(0)}ms): ${path.basename(latestSnapshotPath)}`);
-        return latestSnapshotPath;
-      }
-    } catch (e) {}
+      const snapFileName = `${inspId}.jpg`;
+      const snapDest = path.join(snapshotsDir, snapFileName);
+      fs.copyFileSync(imagePath, snapDest);
+      snapshotUrl = `/api/snapshots/${snapFileName}`;
+    } catch (error) {
+      console.warn(`[Snapshot History] Khong luu duoc anh lich su: ${error.message}`);
+    }
   }
 
-  // 2. Chụp trực tiếp qua FFmpeg (Windows: DirectShow, Linux: V4L2)
-  console.log(`[Camera Engine] Chụp ảnh trực tiếp qua FFmpeg DirectShow...`);
+  return { inspId, snapshotUrl };
+}
+
+async function captureImage() {
+  const ffmpegBin = getFfmpegBinary();
   const snapPath = makeSnapPath();
+  const liveViewPath = path.join(process.cwd(), "st01.jpg");
+
+  const totalFrames = WARMUP_FRAMES + CHECK_FRAMES;
+  const directory = await fs.promises.mkdtemp(
+    path.join(require("os").tmpdir(), "vuon-rau-camera-")
+  );
 
   try {
-    if (process.platform === "win32") {
-      const cameraDevice = await getWindowsCameraDevice();
-      if (!cameraDevice) throw new Error("Không phát hiện camera USB nào. Vui lòng cắm cáp USB camera.");
+    const framePattern = path.join(directory, "frame-%03d.jpg");
 
-      console.log(`[Camera Engine] Windows DirectShow: "${cameraDevice}"`);
-      await execFileAsync(
-        ffmpegBin,
-        [
-          "-hide_banner", "-loglevel", "error", "-y",
-          "-f", "dshow",
-          "-framerate", String(CAMERA_FPS),
-          "-video_size", `${CAMERA_WIDTH}x${CAMERA_HEIGHT}`,
-          "-i", `video=${cameraDevice}`,
-          "-frames:v", "1",
-          "-q:v", "2",
-          snapPath,
-        ],
-        { timeout: 8000, maxBuffer: 4 * 1024 * 1024 }
-      );
+    if (process.platform === "win32") {
+      await captureWindowsFrames(ffmpegBin, directory);
     } else {
       // Linux / Raspberry Pi
       try { await configureCamera(); } catch (e) {}
@@ -656,38 +856,81 @@ async function captureImage(minTimestamp = 0) {
           "-framerate", String(CAMERA_FPS),
           "-video_size", `${CAMERA_WIDTH}x${CAMERA_HEIGHT}`,
           "-i", CAMERA_DEVICE,
-          "-frames:v", "1",
+          "-frames:v", String(totalFrames),
           "-q:v", "2",
-          snapPath,
+          framePattern,
         ],
-        { timeout: 5000, maxBuffer: 4 * 1024 * 1024 }
+        { timeout: 30000, maxBuffer: 2 * 1024 * 1024 }
       );
     }
 
-    if (!fs.existsSync(snapPath)) throw new Error("FFmpeg không tạo được file ảnh.");
+    // Lấy các frame check (bỏ warmup frames đầu)
+    const frameFiles = (await fs.promises.readdir(directory))
+      .filter((name) => name.toLowerCase().endsWith(".jpg"))
+      .sort()
+      .slice(WARMUP_FRAMES, WARMUP_FRAMES + CHECK_FRAMES);
+
+    if (frameFiles.length === 0) throw new Error("Camera không tạo đủ khung hình.");
+
+    // Chọn frame tốt nhất theo điểm sáng
+    let bestPath = null, bestInfo = null, bestScore = Infinity;
+    for (const fileName of frameFiles) {
+      const framePath = path.join(directory, fileName);
+      const info = await analyzeFrameLight(framePath);
+      const score = Math.abs(info.meanBrightness - TARGET_BRIGHTNESS)
+        + info.overexposedRatio * 300
+        + info.darkRatio * 60;
+      console.log(`[Camera] ${fileName}: sáng ${info.meanBrightness.toFixed(1)}, cháy ${(info.overexposedRatio * 100).toFixed(1)}%`);
+      if (score < bestScore) { bestScore = score; bestPath = framePath; bestInfo = info; }
+    }
+
+    if (!bestPath || !bestInfo) throw new Error("Không chọn được ảnh tốt từ camera.");
+
+    const brightness = bestInfo.meanBrightness;
+    const overexposedRatio = bestInfo.overexposedRatio;
+    console.log(`[Camera] Ảnh chọn: sáng ${brightness.toFixed(1)}, cháy ${(overexposedRatio * 100).toFixed(1)}%`);
+
+    // Tính hệ số điều chỉnh độ sáng
+    let alpha = 1, beta = 0;
+    if      (overexposedRatio > 0.25 || brightness > 200) { alpha = 0.58; beta = -30; }
+    else if (overexposedRatio > 0.15 || brightness > 175) { alpha = 0.72; beta = -18; }
+    else if (overexposedRatio > 0.07 || brightness > 150) { alpha = 0.84; beta = -8;  }
+    else if (overexposedRatio > 0.03 || brightness > 130) { alpha = 0.94; beta = -2;  }
+    else if (brightness < 35)  { alpha = 1.30; beta = 30; }
+    else if (brightness < 65)  { alpha = 1.15; beta = 15; }
+    else if (brightness < 90)  { alpha = 1.07; beta = 8;  }
+    else if (brightness < 115) { alpha = 1.03; beta = 4;  }
+
+    const sharp = require("sharp");
+    await sharp(bestPath)
+      .removeAlpha()
+      .linear(alpha, beta)
+      .jpeg({ quality: JPEG_QUALITY })
+      .toFile(snapPath);
 
     // Cập nhật st01.jpg cho live view
     fs.copyFileSync(snapPath, liveViewPath);
+
     console.log(`[Camera Engine] Đã chụp và lưu: ${path.basename(snapPath)}`);
-    return snapPath;
+    return snapPath; // Caller xóa sau khi Telegram gửi xong
 
-  } catch (capErr) {
-    console.warn(`[Camera Engine Warn] FFmpeg thất bại (${capErr.message}). Thử dùng ảnh cũ nhất...`);
-    // Cleanup file lỗi
+  } catch (error) {
+    if (process.platform === "win32") {
+      console.warn("[Camera Engine] DirectShow van bi chiem quyen, yeu cau browser chup frame moi...");
+      const freshBrowserSnapshot = await requestFreshBrowserSnapshot(3500);
+      if (freshBrowserSnapshot && fs.existsSync(freshBrowserSnapshot)) {
+        console.log(`[Camera Engine] Da nhan frame moi tu browser: ${path.basename(freshBrowserSnapshot)}`);
+        fs.copyFileSync(freshBrowserSnapshot, liveViewPath);
+        return freshBrowserSnapshot;
+      }
+    }
+    // Cleanup file lỗi nếu có
     try { if (fs.existsSync(snapPath)) fs.unlinkSync(snapPath); } catch (e) {}
+    const detail = error.stderr?.trim() || error.message;
+    throw new Error(`Không chụp được ảnh: ${detail}`);
+  } finally {
+    await fs.promises.rm(directory, { recursive: true, force: true }).catch(() => {});
   }
-
-  // 3. Fallback cuối: dùng st01.jpg hoặc latestSnapshotPath nếu có
-  if (latestSnapshotPath && fs.existsSync(latestSnapshotPath)) {
-    console.log(`[Camera Engine] Fallback: dùng ảnh browser cũ ${path.basename(latestSnapshotPath)}`);
-    return latestSnapshotPath;
-  }
-  if (fs.existsSync(liveViewPath)) {
-    console.log(`[Camera Engine] Fallback cuối: dùng st01.jpg`);
-    return liveViewPath;
-  }
-
-  throw new Error("Không thể chụp ảnh: camera USB chưa được cắm hoặc đang bị chiếm bởi ứng dụng khác.");
 }
 
 
@@ -945,13 +1188,32 @@ async function getOrInitArduinoSerialPort() {
                 return;
               }
 
+              const movedMatch = /^MOVED:(\d+)$/i.exec(line);
+              if (movedMatch) {
+                const movedIndex = Number(movedMatch[1]);
+                const waiter = pendingMoveResolvers.get(movedIndex);
+                if (waiter) waiter.resolve();
+                return;
+              }
+
               // CAPTURE event triggered by Arduino
-              if (normalized === "CAPTURE" || normalized.includes("CAPTURE")) {
+              const captureMatch = /^CAPTURE(?::(\d+))?$/i.exec(line);
+              if (captureMatch || normalized.includes("CAPTURE")) {
                 captureBusy = true;
                 const cancellationId = currentCancellationId;
+                if (captureMatch && captureMatch[1] !== undefined) {
+                  currentCapturePointIndex = Number(captureMatch[1]);
+                }
+                const capturePointIndex = Number.isInteger(currentCapturePointIndex) ? currentCapturePointIndex : null;
+                const capturePointLabel = capturePointIndex !== null ? capturePointIndex + 1 : "CAMERA";
 
                 try {
-                  pushWebNotification("Nhan tin hieu CAPTURE tu Arduino! Dang chup anh & phan tich Gemini AI...", "AI_ANALYSIS");
+                  pushWebNotification(
+                    capturePointIndex !== null
+                      ? `Nhan tin hieu CAPTURE tu Arduino tai Vi tri ${capturePointLabel}! Dang chup anh & phan tich Gemini AI...`
+                      : "Nhan tin hieu CAPTURE tu Arduino! Dang chup anh & phan tich Gemini AI...",
+                    "AI_ANALYSIS"
+                  );
 
                   let imagePathToSend = null;
                   try {
@@ -1023,8 +1285,12 @@ async function getOrInitArduinoSerialPort() {
                   const aiStatusText = parsedResult ? parsedResult.status : (hasPest ? "CO SAU / BENH" : "KHONG PHAT HIEN SAU VA BENH");
 
                   // 1. Phản hồi NGAY LẬP TỨC tới Arduino
-                  if (action === "SPRAY" && activeSerialPort && activeSerialPort.isOpen) {
-                    activeSerialPort.write("SPRAY\n");
+                  if (activeSerialPort && activeSerialPort.isOpen) {
+                    activeSerialPort.write(`${action}\n`);
+                    console.log(`[Server -> Arduino] ${action} (CAPTURE)`);
+                  }
+
+                  if (action === "SPRAY") {
                     addSystemLog("ACTUATE", `Lenh Arduino: SPRAY (Phat hien [${aiStatusText}])`, "WARNING");
                     pushWebNotification(`Gemini AI phan tich: [${aiStatusText}]! Da gui lenh SPRAY toi Arduino.`, "WARNING");
                   } else {
@@ -1035,7 +1301,8 @@ async function getOrInitArduinoSerialPort() {
                   addSystemLog("GEMINI_RES", `Phan tich hoan tat: [${aiStatusText}]`, "SUCCESS");
 
                   // 2. Gửi Telegram TRƯỚC (await), sau đó mới xóa file
-                  const telegramCaption = `DIEM QUET CAMERA KET NOI ARDUINO\n\n${formattedResult}`;
+                  const telegramCaption = `KIỂM TRA Ở VỊ TRÍ (${capturePointLabel})\n\n${formattedResult}`;
+                  const savedCaptureSnapshot = persistSnapshotForHistory(imagePathToSend, "serial-insp");
                   try { await sendTelegramPhoto(imagePathToSend, telegramCaption); } catch (tErr) {}
 
                   // Xóa file snapshot sau khi gửi Telegram xong
@@ -1047,15 +1314,26 @@ async function getOrInitArduinoSerialPort() {
                   try {
                     const fullHistory = readJson("inspection_history.json", []);
                     fullHistory.unshift({
-                      id: `insp-${Date.now()}`,
+                      id: savedCaptureSnapshot.inspId,
                       type: "PEST",
                       timestamp: new Date().toLocaleString("vi-VN"),
                       title: "Quet Camera Serial Arduino",
                       detail: formattedResult,
                       telegramCaption: telegramCaption,
                       status: action === "SPRAY" ? "Phat hien sau hai" : "Suc khoe tot",
-                      image: "/api/camera/image?t=" + Date.now(),
+                      image: savedCaptureSnapshot.snapshotUrl,
                     });
+                    if (action === "SPRAY") {
+                      fullHistory.unshift({
+                        id: `spray-${Date.now()}`,
+                        type: "SPRAY",
+                        timestamp: new Date().toLocaleString("vi-VN"),
+                        title: `Phun sinh hoc - Vi tri ${capturePointLabel}`,
+                        detail: `Arduino da phun thuoc sinh hoc tai vi tri ${capturePointLabel} sau khi AI phat hien sau hai.`,
+                        status: "Da phun sinh hoc",
+                        image: savedCaptureSnapshot.snapshotUrl,
+                      });
+                    }
                     writeJson("inspection_history.json", fullHistory);
                   } catch (hErr) {}
 
@@ -1114,7 +1392,11 @@ async function getOrInitArduinoSerialPort() {
                   if (keys2.length === 0) {
                     formattedResult2 = "Chua thiet lap Gemini API Key!";
                     pushWebNotification(formattedResult2, "WARNING");
-                    try { await sendTelegramPhoto(imagePathToSend2, `DIEM KIEM TRA ${pointIndex + 1}\n\n${formattedResult2}`); } catch (tErr) {}
+                    if (cancellationId === currentCancellationId && activeSerialPort && activeSerialPort.isOpen) {
+                      activeSerialPort.write(`POINT_RESULT:${pointIndex}:ERROR\n`);
+                      console.log(`[Server -> Arduino] POINT_RESULT:${pointIndex}:ERROR (missing Gemini key)`);
+                    }
+                    try { await sendTelegramPhoto(imagePathToSend2, `KIỂM TRA Ở VỊ TRÍ (${pointIndex + 1})\n\n${formattedResult2}`); } catch (tErr) {}
                   } else {
                     let imageBase642 = null;
                     if (fs.existsSync(imagePathToSend2)) {
@@ -1159,8 +1441,14 @@ async function getOrInitArduinoSerialPort() {
 
                     addSystemLog("GEMINI_RES", `Diem ${pointIndex + 1}: [${aiStatus2}]`, "SUCCESS");
 
+                    if (cancellationId === currentCancellationId && activeSerialPort && activeSerialPort.isOpen) {
+                      activeSerialPort.write(`POINT_RESULT:${pointIndex}:${action2}\n`);
+                      console.log(`[Server -> Arduino] POINT_RESULT:${pointIndex}:${action2}`);
+                    }
+
                     // 1. Gửi Telegram TRƯỚC (await) - xong mới chuyển vị trí tiếp theo!
-                    const teleCaption2 = `DIEM KIEM TRA ${pointIndex + 1}\n\n${formattedResult2}`;
+                    const teleCaption2 = `KIỂM TRA Ở VỊ TRÍ (${pointIndex + 1})\n\n${formattedResult2}`;
+                    const savedPointSnapshot = persistSnapshotForHistory(imagePathToSend2, `point-${pointIndex + 1}`);
                     try { await sendTelegramPhoto(imagePathToSend2, teleCaption2); } catch (tErr) {}
 
                     // Xóa file snapshot sau khi gửi Telegram xong
@@ -1170,22 +1458,28 @@ async function getOrInitArduinoSerialPort() {
                     }
 
                     // 2. Gửi POINT_RESULT SAU KHI Telegram done - Arduino chuyển vị trí
-                    if (cancellationId === currentCancellationId && activeSerialPort && activeSerialPort.isOpen) {
-                      activeSerialPort.write(`POINT_RESULT:${pointIndex}:${action2}\n`);
-                      console.log(`[Server -> Arduino] POINT_RESULT:${pointIndex}:${action2} (sau Telegram)`);
-                    }
-
                     try {
                       const hist2 = readJson("inspection_history.json", []);
                       hist2.unshift({
-                        id: `insp-${Date.now()}-${pointIndex}`,
+                        id: savedPointSnapshot.inspId,
                         type: "PEST",
                         timestamp: new Date().toLocaleString("vi-VN"),
                         title: `Diem ${pointIndex + 1} - Kiem tra sau hai`,
                         detail: formattedResult2,
                         status: hasPest2 ? "Phat hien sau hai" : "Suc khoe tot",
-                        image: "/api/camera/image?t=" + Date.now(),
+                        image: savedPointSnapshot.snapshotUrl,
                       });
+                      if (hasPest2) {
+                        hist2.unshift({
+                          id: `spray-${Date.now()}`,
+                          type: "SPRAY",
+                          timestamp: new Date().toLocaleString("vi-VN"),
+                          title: `Phun sinh hoc - Diem ${pointIndex + 1}`,
+                          detail: `Arduino da phun thuoc sinh hoc tai diem ${pointIndex + 1} sau khi AI phat hien sau hai.`,
+                          status: "Da phun sinh hoc",
+                          image: savedPointSnapshot.snapshotUrl,
+                        });
+                      }
                       writeJson("inspection_history.json", hist2);
                     } catch (hErr) {}
                   }
@@ -1944,6 +2238,37 @@ app.get("/api/camera/status", async (req, res) => {
   });
 });
 
+// API: Lấy danh sách thiết bị camera (Windows DirectShow / Linux)
+app.get("/api/camera/devices", async (req, res) => {
+  try {
+    let devices = [];
+    if (process.platform === "win32") {
+      devices = await getWindowsCameraDevices();
+    } else {
+      try {
+        const { execFile: ef } = require("child_process");
+        const { promisify: pf } = require("util");
+        const efAsync = pf(ef);
+        const { stdout } = await efAsync("bash", ["-c", "ls /dev/video* 2>/dev/null"]).catch(() => ({ stdout: "" }));
+        devices = stdout.split("\n").map(s => s.trim()).filter(Boolean);
+      } catch (e) {}
+    }
+    const savedDevice = getSavedCameraDevice();
+    res.json({ success: true, devices, selectedDevice: savedDevice });
+  } catch (err) {
+    res.json({ success: false, devices: [], selectedDevice: null, error: err.message });
+  }
+});
+
+// API: Lưu thiết bị camera được chọn bởi user
+app.post("/api/camera/set-device", (req, res) => {
+  const { device } = req.body;
+  if (!device || !device.trim()) {
+    return res.status(400).json({ success: false, error: "Thiếu tên thiết bị camera" });
+  }
+  saveCameraDevice(device.trim());
+  res.json({ success: true, message: `Đã lưu camera: "${device.trim()}"`, selectedDevice: device.trim() });
+});
 
 // Track the latest random-named snapshot for inspection use (volatile – auto-deleted after processing)
 let latestSnapshotPath = null;
@@ -3286,11 +3611,16 @@ app.post("/api/plant-move", async (req, res) => {
 
     pushWebNotification(`🤖 Đang điều khiển Robot di chuyển tới ${trayName} (Điểm ${pointIdx + 1}) để quan sát...`, "PROCESS");
 
-    // Send movement command to Arduino Serial: MOVE:n, GOTO:n, POINT:n, Pn
-    await sendDirectCommandToArduino(`MOVE:${pointIdx}`).catch(() => {});
-    await sendDirectCommandToArduino(`GOTO:${pointIdx}`).catch(() => {});
-    await sendDirectCommandToArduino(`POINT:${pointIdx}`).catch(() => {});
-    await sendDirectCommandToArduino(`P${pointIdx + 1}`).catch(() => {});
+    // Send movement command to Arduino Serial and wait for the robot to arrive.
+    const moveWait = waitForArduinoMove(pointIdx, 30000);
+    try {
+      await sendDirectCommandToArduino(`P${pointIdx + 1}`);
+    } catch (moveErr) {
+      const waiter = pendingMoveResolvers.get(pointIdx);
+      if (waiter) waiter.reject(moveErr);
+      throw moveErr;
+    }
+    await moveWait;
 
     // Try capturing fresh image from USB camera
     try {
@@ -3315,10 +3645,9 @@ app.post("/api/plant-water", async (req, res) => {
     const trayName = location || "Khay 01";
     const pointIdx = getPointIndexFromLocation(trayName);
 
-    const espStatus = await getRealEsp32Status();
     const ardStatus = await getRealSerialStatus();
 
-    if (!espStatus.connected && !ardStatus.connected && process.platform === "linux") {
+    if (!ardStatus.connected && process.platform === "linux") {
       return res.status(400).json({
         success: false,
         error: "Chưa kết nối mạch ESP32 hoặc Arduino! Vui lòng kiểm tra cổng USB/Serial.",
@@ -3328,43 +3657,38 @@ app.post("/api/plant-water", async (req, res) => {
     pushWebNotification(`🤖 Robot đang di chuyển tới ${trayName} (Điểm ${pointIdx + 1}) để tiến hành tưới phân...`, "PROCESS");
 
     // 1. Move robot to tray position
-    await sendDirectCommandToArduino(`MOVE:${pointIdx}`).catch(() => {});
-    await sendDirectCommandToArduino(`GOTO:${pointIdx}`).catch(() => {});
-    await sendDirectCommandToArduino(`POINT:${pointIdx}`).catch(() => {});
-    await sendDirectCommandToArduino(`P${pointIdx + 1}`).catch(() => {});
+    const moveWait = waitForArduinoMove(pointIdx, 30000);
+    try {
+      await sendDirectCommandToArduino(`P${pointIdx + 1}`);
+    } catch (moveErr) {
+      const waiter = pendingMoveResolvers.get(pointIdx);
+      if (waiter) waiter.reject(moveErr);
+      throw moveErr;
+    }
+    await moveWait;
 
-    // 2. Trigger Arduino relay pump (SPRAY command)
-    await sendDirectCommandToArduino("SPRAY").catch(() => {});
+    await sendDirectCommandToArduino("SPRAY");
 
-    // 3. Trigger ESP32 fertilizer pump (WATER ON)
-    await sendDirectCommandToEsp32("WATER ON").catch(() => {});
-
-    // 4. Save fertilize entry in data/inspection_history.json
+    // 4. Save spray entry in data/inspection_history.json
     try {
       const history = readJson("inspection_history.json", []);
       history.unshift({
         id: `insp-${Date.now()}`,
         plantId: plantId || "",
-        type: "FERTILIZE",
+        type: "SPRAY",
         timestamp: new Date().toLocaleString("vi-VN"),
-        title: `Tưới phân bón - ${plantName || trayName}`,
-        detail: `Đã hoàn tất tưới phân sinh học/vi lượng thực tế tại ${trayName} (Điểm ${pointIdx + 1}).`,
-        dosage: "4.0 ml (Bình A+B)",
-        status: "Đã tưới phân",
+        title: `Phun sinh hoc - ${plantName || trayName}`,
+        detail: `Da hoan tat phun thuoc sinh hoc tai ${trayName} (Diem ${pointIdx + 1}) qua Arduino.`,
+        status: "Da phun sinh hoc",
       });
       writeJson("inspection_history.json", history);
     } catch (e) {}
 
-    pushWebNotification(`🌱 Robot đã tưới phân thành công cho ${plantName || trayName}!`, "SUCCESS");
-
-    // Stop pump after 5s
-    setTimeout(async () => {
-      await sendDirectCommandToEsp32("WATER OFF").catch(() => {});
-    }, 5000);
+    pushWebNotification(`Robot da phun thuoc sinh hoc thanh cong cho ${plantName || trayName}!`, "SUCCESS");
 
     res.json({
       success: true,
-      message: `Đã di chuyển tới ${trayName} và bật bơm tưới phân!`,
+      message: `Da di chuyen toi ${trayName} va phun thuoc sinh hoc thanh cong!`,
     });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -3401,10 +3725,15 @@ app.post("/api/plant-inspect", async (req, res) => {
     pushWebNotification(`🐛 Đang điều khiển Robot di chuyển tới ${trayName} (Điểm ${pointIdx + 1}) để kiểm tra sâu bệnh trên cây ${plantName || ""}...`, "AI_ANALYSIS");
 
     // 1. Send command to Arduino to move camera to tray/point
-    await sendDirectCommandToArduino(`MOVE:${pointIdx}`).catch(() => {});
-    await sendDirectCommandToArduino(`GOTO:${pointIdx}`).catch(() => {});
-    await sendDirectCommandToArduino(`POINT:${pointIdx}`).catch(() => {});
-    await sendDirectCommandToArduino(`P${pointIdx + 1}`).catch(() => {});
+    const moveWait = waitForArduinoMove(pointIdx, 30000);
+    try {
+      await sendDirectCommandToArduino(`P${pointIdx + 1}`);
+    } catch (moveErr) {
+      const waiter = pendingMoveResolvers.get(pointIdx);
+      if (waiter) waiter.reject(moveErr);
+      throw moveErr;
+    }
+    await moveWait;
 
     // 2. Capture actual USB camera image
     // Priority: dung anh tu browser (snapshotBase64) neu co, else dung FFmpeg (Linux only)
@@ -3534,16 +3863,7 @@ app.post("/api/plant-inspect", async (req, res) => {
     } catch (tErr) {}
 
     // 6. Save persistent snapshot file for history log
-    const inspId = `insp-${Date.now()}`;
-    let snapshotUrl = "/api/camera/image?t=" + Date.now();
-    if (imagePathToSend && fs.existsSync(imagePathToSend)) {
-      try {
-        const snapFileName = `${inspId}.jpg`;
-        const snapDest = path.join(snapshotsDir, snapFileName);
-        fs.copyFileSync(imagePathToSend, snapDest);
-        snapshotUrl = `/api/snapshots/${snapFileName}`;
-      } catch (e) {}
-    }
+    const { inspId, snapshotUrl } = persistSnapshotForHistory(imagePathToSend, "plant-insp");
 
     // 7. Save to data/inspection_history.json
     const historyEntry = {
@@ -3560,6 +3880,18 @@ app.post("/api/plant-inspect", async (req, res) => {
 
     const history = readJson("inspection_history.json", []);
     history.unshift(historyEntry);
+    if (hasPest) {
+      history.unshift({
+        id: `spray-${Date.now()}`,
+        plantId: plantId || "",
+        type: "SPRAY",
+        timestamp: new Date().toLocaleString("vi-VN"),
+        title: `Phun sinh hoc - ${plantName || trayName}`,
+        detail: `Arduino da phun thuoc sinh hoc tai ${trayName} sau khi AI phat hien sau hai.`,
+        status: "Da phun sinh hoc",
+        image: snapshotUrl,
+      });
+    }
     writeJson("inspection_history.json", history);
 
     res.json({

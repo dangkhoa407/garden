@@ -105,6 +105,10 @@ export default function DeviceSettingsPage() {
     streamUrl: "/api/camera/image",
   });
   const [testingCamera, setTestingCamera] = useState(false);
+  const [cameraDevices, setCameraDevices] = useState<string[]>([]);
+  const [selectedCameraDevice, setSelectedCameraDevice] = useState<string>("");
+  const [savingCameraDevice, setSavingCameraDevice] = useState(false);
+  const [loadingDevices, setLoadingDevices] = useState(false);
 
   // WiFi state
   const [wifiStatus, setWifiStatus] = useState<WifiStatus>({
@@ -234,6 +238,36 @@ export default function DeviceSettingsPage() {
         streamUrl: `/api/camera/image?t=${Date.now()}`,
       });
     }
+  };
+
+  // Fetch Camera Devices
+  const fetchCameraDevices = async () => {
+    setLoadingDevices(true);
+    try {
+      const data = await safeFetchJson("/api/camera/devices");
+      if (data?.success) {
+        setCameraDevices(data.devices || []);
+        if (data.selectedDevice) setSelectedCameraDevice(data.selectedDevice);
+        else if (data.devices?.length > 0 && !selectedCameraDevice) setSelectedCameraDevice(data.devices[0]);
+      }
+    } catch (e) {}
+    setLoadingDevices(false);
+  };
+
+  // Save Camera Device
+  const handleSaveCameraDevice = async () => {
+    if (!selectedCameraDevice) return;
+    setSavingCameraDevice(true);
+    try {
+      const data = await safeFetchJson("/api/camera/set-device", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ device: selectedCameraDevice }),
+      });
+      if (data?.success) showToast(`Đã lưu camera: "${selectedCameraDevice}"`, "success");
+      else showToast(data?.error || "Lưu thất bại", "error");
+    } catch (e) { showToast("Lỗi kết nối server", "error"); }
+    setSavingCameraDevice(false);
   };
 
   // Test Camera
@@ -519,6 +553,13 @@ export default function DeviceSettingsPage() {
         localStream.getTracks().forEach((track) => track.stop());
       }
     };
+  }, [activeTab]);
+
+  // Load camera devices khi vào tab diagnostics
+  useEffect(() => {
+    if (activeTab === "diagnostics") {
+      fetchCameraDevices();
+    }
   }, [activeTab]);
 
   return (
@@ -916,6 +957,54 @@ export default function DeviceSettingsPage() {
                   <span className={`font-bold block ${cameraStatus.connected ? "text-emerald-600" : "text-rose-500"}`}>
                     {cameraStatus.connected ? `${cameraStatus.fps || 30} FPS (Mượt mà)` : "OFFLINE"}
                   </span>
+                </div>
+
+                {/* Camera Source Selector */}
+                <div className="p-md bg-primary/5 rounded-xl border border-primary/20">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-on-surface-variant block font-label-caps text-[10px] font-semibold uppercase">
+                      NGUỒN CAMERA (DirectShow)
+                    </span>
+                    <button
+                      onClick={fetchCameraDevices}
+                      disabled={loadingDevices}
+                      className="text-primary hover:text-primary/70 transition-colors"
+                      title="Làm mới danh sách camera"
+                    >
+                      <span className={`material-symbols-outlined text-base ${loadingDevices ? "animate-spin" : ""}`}>
+                        refresh
+                      </span>
+                    </button>
+                  </div>
+
+                  {cameraDevices.length === 0 ? (
+                    <p className="text-xs text-on-surface-variant italic">
+                      {loadingDevices ? "Đang tìm camera..." : "Không phát hiện camera USB nào"}
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      <select
+                        value={selectedCameraDevice}
+                        onChange={(e) => setSelectedCameraDevice(e.target.value)}
+                        className="w-full px-2.5 py-2 bg-surface-container-low border border-outline-variant/30 rounded-lg text-xs font-medium focus:ring-1 focus:ring-primary transition-colors"
+                      >
+                        {cameraDevices.map((dev, i) => (
+                          <option key={i} value={dev}>{dev}</option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={handleSaveCameraDevice}
+                        disabled={savingCameraDevice || !selectedCameraDevice}
+                        className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 bg-primary text-on-primary rounded-lg text-xs font-bold hover:bg-primary/90 transition-all active:scale-95 disabled:opacity-50"
+                      >
+                        {savingCameraDevice ? (
+                          <><span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>Đang lưu...</>
+                        ) : (
+                          <><span className="material-symbols-outlined text-sm">save</span>Lưu Nguồn Camera</>
+                        )}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

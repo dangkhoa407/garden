@@ -2,6 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useGarden } from "@/context/GardenContext";
+import {
+  CAMERA_INPUT_CHANGED_EVENT,
+  getCameraStreamWithSavedInput,
+} from "@/lib/cameraInput";
 
 interface CameraViewProps {
   nightVision?: boolean;
@@ -11,6 +15,7 @@ export function CameraView({ nightVision = false }: CameraViewProps) {
   const { controls } = useGarden();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [timeStr, setTimeStr] = useState("");
+  const [cameraInputVersion, setCameraInputVersion] = useState(0);
   const [camStatus, setCamStatus] = useState<{
     connected: boolean;
     device: string;
@@ -60,18 +65,23 @@ export function CameraView({ nightVision = false }: CameraViewProps) {
     return () => clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    const handleCameraInputChanged = () => setCameraInputVersion((version) => version + 1);
+    window.addEventListener(CAMERA_INPUT_CHANGED_EVENT, handleCameraInputChanged);
+    return () => window.removeEventListener(CAMERA_INPUT_CHANGED_EVENT, handleCameraInputChanged);
+  }, []);
+
   // Native HTML5 WebRTC Video Stream - 60 FPS Direct Camera App Experience
   useEffect(() => {
     let localStream: MediaStream | null = null;
+    let pageHidden = false;
 
     const startDirectCameraStream = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-            frameRate: { ideal: 60 },
-          },
+        const { stream, requestedInput, usedSavedInput } = await getCameraStreamWithSavedInput({
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          frameRate: { ideal: 60 },
         });
 
         localStream = stream;
@@ -139,15 +149,36 @@ export function CameraView({ nightVision = false }: CameraViewProps) {
       }
     };
 
-    startDirectCameraStream();
-
-    return () => {
+    const stopLocalStream = () => {
       if (localStream) {
         if ((localStream as any)._syncTimer) clearInterval((localStream as any)._syncTimer);
         localStream.getTracks().forEach((track) => track.stop());
+        localStream = null;
       }
     };
-  }, []);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        pageHidden = true;
+        stopLocalStream();
+      } else if (pageHidden) {
+        pageHidden = false;
+        void startDirectCameraStream();
+      }
+    };
+
+    const handlePageHide = () => stopLocalStream();
+
+    startDirectCameraStream();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("pagehide", handlePageHide);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("pagehide", handlePageHide);
+      stopLocalStream();
+    };
+  }, [cameraInputVersion]);
 
   return (
     <div className="relative w-full h-[380px] sm:h-[480px] lg:h-full bg-zinc-950 rounded-2xl overflow-hidden shadow-2xl flex flex-col group border border-zinc-800">

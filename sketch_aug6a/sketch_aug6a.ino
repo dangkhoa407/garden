@@ -26,7 +26,7 @@ int steps14 = 14 * stepsPerCm;
 int steps02 = (int)(0.3 * stepsPerCm);   // 0.3 cm
 
 // ==== Thời gian ====
-#define WAIT_SPRAY_MS      5000UL
+#define WAIT_SPRAY_MS     45000UL
 #define SPRAY_TIME_MS     1500UL
 #define REST_AFTER_MS        0UL
 #define LOOP_DELAY_MS     90000UL
@@ -41,7 +41,7 @@ unsigned long lastSprayTime[6] = {0,0,0,0,0,0};
 
 // ================== PROTOTYPE ==================
 void waitSprayOrSkip(int idx);
-void captureFromPC();
+void captureFromPC(int idx);
 void sprayCycle();
 void runSprayPoints();
 bool homeAll();
@@ -105,10 +105,11 @@ bool homeAll() {
 }
 
 // ================== CAMERA ==================
-void captureFromPC() {
+void captureFromPC(int idx) {
   digitalWrite(RELAY_LED, HIGH);
   delay(200);
-  Serial.println("CAPTURE");
+  Serial.print("CAPTURE:");
+  Serial.println(idx);
   delay(200);
   digitalWrite(RELAY_LED, LOW);
 }
@@ -178,34 +179,34 @@ void runSprayPoints() {
   if (!homeAll()) return;
 
   // Điểm 0
-  captureFromPC(); 
+  captureFromPC(0); 
   waitSprayOrSkip(0); // PHUN NGAY TẠI VỊ TRÍ HIỆN TẠI
   runMotor(STEP1_PIN, DIR1_PIN, steps7, true);
 
   // Điểm 1
-  captureFromPC(); 
+  captureFromPC(1); 
   waitSprayOrSkip(1);
   runMotor(STEP1_PIN, DIR1_PIN, steps7, false);
 
   // Điểm 2
   runMotor(STEP2_PIN, DIR2_PIN, steps7, true);
-  captureFromPC(); 
+  captureFromPC(2); 
   waitSprayOrSkip(2);
 
   // Điểm 3
   runMotor(STEP1_PIN, DIR1_PIN, steps7, true);
-  captureFromPC(); 
+  captureFromPC(3); 
   waitSprayOrSkip(3);
   runMotor(STEP1_PIN, DIR1_PIN, steps7, false);
 
   // Điểm 4
   runMotor(STEP2_PIN, DIR2_PIN, steps7, true);
-  captureFromPC(); 
+  captureFromPC(4); 
   waitSprayOrSkip(4);
 
   // Điểm 5
   runMotor(STEP1_PIN, DIR1_PIN, steps7, true);
-  captureFromPC(); 
+  captureFromPC(5); 
   waitSprayOrSkip(5);
   runMotor(STEP1_PIN, DIR1_PIN, steps7, false);
 

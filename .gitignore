@@ -26,3 +26,7 @@ lerna-debug.log*
 
 # typescript
 *.tsbuildinfo
+
+pictures/
+data/snapshots/
+st01.jpg
