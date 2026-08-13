@@ -4,7 +4,6 @@ import { useState } from "react";
 import { Plant } from "@/lib/data";
 import { useGarden } from "@/context/GardenContext";
 import { InspectionHistoryModal } from "@/components/dashboard/InspectionHistoryModal";
-import { CameraObserveModal } from "@/components/dashboard/CameraObserveModal";
 
 interface PlantCardProps {
   plant: Plant;
@@ -26,56 +25,15 @@ function cleanLocation(loc?: string): string {
   );
 }
 
-export function PlantCard({ plant, onObserve, onWater, onHistory }: PlantCardProps) {
+export function PlantCard({ plant, onWater, onHistory }: PlantCardProps) {
   const { triggerQuickAction, updateControls, controls } = useGarden();
-  const [actionLoading, setActionLoading] = useState<"observe" | "inspect" | "water" | null>(null);
+  const [actionLoading, setActionLoading] = useState<"inspect" | "water" | null>(null);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
-  const [showObserveModal, setShowObserveModal] = useState(false);
 
   const now = new Date();
   const defaultDateStr = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`;
   const displayDate = plant.createdDate || defaultDateStr;
   const displayLocation = cleanLocation(plant.location);
-
-  const handleObserveClick = async () => {
-    setActionLoading("observe");
-    try {
-      const [arduinoRes, cameraRes] = await Promise.all([
-        fetch("/api/arduino/status").then((r) => r.json()).catch(() => ({ connected: false })),
-        fetch("/api/camera/status").then((r) => r.json()).catch(() => ({ connected: false })),
-      ]);
-
-      if (!arduinoRes?.connected || !cameraRes?.connected) {
-        const missing = [];
-        if (!arduinoRes?.connected) missing.push("Arduino");
-        if (!cameraRes?.connected) missing.push("USB Camera");
-        triggerQuickAction(
-          `❌ Lỗi kết nối phần cứng (${missing.join(" & ")} chưa kết nối). Không thể mở quan sát cho ${plant.name}.`
-        );
-        return;
-      }
-
-      if (onObserve) {
-        onObserve(plant);
-      } else {
-        setShowObserveModal(true);
-        triggerQuickAction(`🔍 Đang điều khiển robot tới ${displayLocation} để quan sát cây ${plant.name}...`);
-        fetch("/api/plant-move", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            plantId: plant.id,
-            plantName: plant.name,
-            location: displayLocation,
-          }),
-        }).catch(() => {});
-      }
-    } catch (e) {
-      triggerQuickAction(`❌ Lỗi hệ thống khi mở quan sát tại ${displayLocation}`);
-    } finally {
-      setTimeout(() => setActionLoading(null), 800);
-    }
-  };
 
   const handleInspectClick = async () => {
     setActionLoading("inspect");
@@ -189,27 +147,12 @@ export function PlantCard({ plant, onObserve, onWater, onHistory }: PlantCardPro
           </div>
         </div>
 
-        <div className="pt-3 border-t border-outline-variant/15 grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={handleObserveClick}
-            disabled={actionLoading === "observe"}
-            className="py-2 px-2.5 bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/40 dark:hover:bg-sky-900/60 text-sky-700 dark:text-sky-300 border border-sky-200/80 dark:border-sky-800/80 rounded-xl font-bold text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
-            title="Di chuyển robot tới khay này và mở camera quan sát trực tiếp"
-          >
-            {actionLoading === "observe" ? (
-              <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
-            ) : (
-              <span className="material-symbols-outlined text-sm">visibility</span>
-            )}
-            Quan sát
-          </button>
-
+        <div className="pt-3 border-t border-outline-variant/15 grid grid-cols-3 gap-2">
           <button
             type="button"
             onClick={handleInspectClick}
             disabled={actionLoading === "inspect"}
-            className="py-2 px-2.5 bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/40 dark:hover:bg-teal-900/60 text-teal-700 dark:text-teal-300 border border-teal-200/80 dark:border-teal-800/80 rounded-xl font-bold text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
+            className="py-2 px-2 hover:bg-teal-100 dark:bg-teal-950/40 dark:hover:bg-teal-900/60 text-teal-700 dark:text-teal-300 border border-teal-200/80 dark:border-teal-800/80 rounded-xl font-bold text-xs transition-all active:scale-95 flex items-center justify-center gap-1 disabled:opacity-50"
             title="Di chuyển robot tới khay này, chụp ảnh và quét sâu bệnh qua AI Gemini"
           >
             {actionLoading === "inspect" ? (
@@ -224,7 +167,7 @@ export function PlantCard({ plant, onObserve, onWater, onHistory }: PlantCardPro
             type="button"
             onClick={handleFertilizeClick}
             disabled={actionLoading === "water"}
-            className="py-2 px-2.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/80 rounded-xl font-bold text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
+            className="py-2 px-2 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/80 rounded-xl font-bold text-xs transition-all active:scale-95 flex items-center justify-center gap-1 disabled:opacity-50"
             title="Di chuyển robot tới khay này và kích hoạt phun thuốc bằng Arduino"
           >
             {actionLoading === "water" ? (
@@ -238,8 +181,8 @@ export function PlantCard({ plant, onObserve, onWater, onHistory }: PlantCardPro
           <button
             type="button"
             onClick={handleHistoryClick}
-            className="py-2 px-2.5 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:hover:bg-purple-900/60 text-purple-700 dark:text-purple-300 border border-purple-200/80 dark:border-purple-800/80 rounded-xl font-bold text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5"
-            title="Xem nhật ký kiểm tra sâu, phun thuốc và quan sát của cây này"
+            className="py-2 px-2 hover:bg-purple-100 dark:bg-purple-950/40 dark:hover:bg-purple-900/60 text-purple-700 dark:text-purple-300 border border-purple-200/80 dark:border-purple-800/80 rounded-xl font-bold text-xs transition-all active:scale-95 flex items-center justify-center gap-1"
+            title="Xem nhật ký kiểm tra sâu, phun thuốc của cây này"
           >
             <span className="material-symbols-outlined text-sm">history</span>
             Lịch sử
@@ -248,7 +191,6 @@ export function PlantCard({ plant, onObserve, onWater, onHistory }: PlantCardPro
       </div>
 
       <InspectionHistoryModal plant={plant} isOpen={showHistoryModal} onClose={() => setShowHistoryModal(false)} />
-      <CameraObserveModal plant={plant} isOpen={showObserveModal} onClose={() => setShowObserveModal(false)} />
     </>
   );
 }

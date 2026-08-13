@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { usePathname } from "next/navigation";
+import { useState, useEffect } from "react";
 import { IrrigateModal } from "@/components/fertilizers/IrrigateModal";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
@@ -26,15 +25,6 @@ interface Esp32Status {
   allPorts?: string[];
 }
 
-interface CameraStatus {
-  connected: boolean;
-  model: string;
-  resolution: string;
-  fps: number;
-  statusMessage: string;
-  streamUrl: string;
-  lastSnapshotTime?: string;
-}
 
 interface WifiStatus {
   connected: boolean;
@@ -95,23 +85,6 @@ export default function DeviceSettingsPage() {
   const [checkingEsp32, setCheckingEsp32] = useState(false);
   const [showIrrigateModal, setShowIrrigateModal] = useState(false);
 
-  // Camera state
-  const diagVideoRef = useRef<HTMLVideoElement | null>(null);
-  const diagStreamRef = useRef<MediaStream | null>(null); // lưu stream để stop khi navigate
-  const pathname = usePathname();
-  const [cameraStatus, setCameraStatus] = useState<CameraStatus>({
-    connected: false,
-    model: "Đang kiểm tra...",
-    resolution: "640x480 (30 fps)",
-    fps: 30,
-    statusMessage: "Đang kiểm tra kết nối USB Camera...",
-    streamUrl: "/api/camera/image",
-  });
-  const [testingCamera, setTestingCamera] = useState(false);
-  const [cameraDevices, setCameraDevices] = useState<string[]>([]);
-  const [selectedCameraDevice, setSelectedCameraDevice] = useState<string>("");
-  const [savingCameraDevice, setSavingCameraDevice] = useState(false);
-  const [loadingDevices, setLoadingDevices] = useState(false);
 
   // WiFi state
   const [wifiStatus, setWifiStatus] = useState<WifiStatus>({
@@ -232,92 +205,6 @@ export default function DeviceSettingsPage() {
     }
   };
 
-  // Fetch Camera Status
-  const fetchCameraStatus = async () => {
-    const data = await safeFetchJson("/api/camera/status");
-    if (data) {
-      setCameraStatus({
-        ...data,
-        streamUrl: `/api/camera/image?t=${Date.now()}`,
-      });
-    }
-  };
-
-  // Fetch Camera Devices
-  const fetchCameraDevices = async () => {
-    setLoadingDevices(true);
-    try {
-      const data = await safeFetchJson("/api/camera/devices");
-      if (data?.success) {
-        setCameraDevices(data.devices || []);
-        if (data.selectedDevice) setSelectedCameraDevice(data.selectedDevice);
-        else if (data.devices?.length > 0 && !selectedCameraDevice) setSelectedCameraDevice(data.devices[0]);
-      }
-    } catch (e) {}
-    setLoadingDevices(false);
-  };
-
-  // Save Camera Device
-  const handleSaveCameraDevice = async () => {
-    if (!selectedCameraDevice) return;
-    setSavingCameraDevice(true);
-    try {
-      const data = await safeFetchJson("/api/camera/set-device", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ device: selectedCameraDevice }),
-      });
-      if (data?.success) showToast(`Đã lưu camera: "${selectedCameraDevice}"`, "success");
-      else showToast(data?.error || "Lưu thất bại", "error");
-    } catch (e) { showToast("Lỗi kết nối server", "error"); }
-    setSavingCameraDevice(false);
-  };
-
-  // Test Camera
-  const handleTestCamera = async () => {
-    setTestingCamera(true);
-    try {
-      // Đẩy frame tươi mới từ video đang phát sang server nếu đang bật WebRTC stream
-      if (diagVideoRef.current && diagVideoRef.current.readyState >= 2 && diagVideoRef.current.videoWidth > 0) {
-        try {
-          const canvas = document.createElement("canvas");
-          canvas.width = diagVideoRef.current.videoWidth;
-          canvas.height = diagVideoRef.current.videoHeight;
-          const ctx = canvas.getContext("2d");
-          if (ctx) {
-            ctx.drawImage(diagVideoRef.current, 0, 0, canvas.width, canvas.height);
-            const imageBase64 = canvas.toDataURL("image/jpeg", 0.9);
-            await fetch("/api/camera/upload-snapshot", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ imageBase64 }),
-            }).catch(() => {});
-          }
-        } catch (e) {}
-      }
-
-      const data = await safeFetchJson("/api/camera/test", { method: "POST" });
-      if (data) {
-        if (data.success) {
-          if (data.status) {
-            setCameraStatus({
-              ...data.status,
-              streamUrl: `/api/camera/image?t=${Date.now()}`,
-            });
-          }
-          showToast(data.message || "Chụp thử nghiệm camera USB thành công!", "success");
-        } else {
-          showToast(data.error || "Chụp thử nghiệm camera thất bại! Kiểm tra cáp USB.", "error");
-        }
-      } else {
-        showToast("Chụp thử camera thất bại: Máy chủ không phản hồi", "error");
-      }
-    } catch (err) {
-      showToast("Lỗi kiểm tra camera: Không có phản hồi từ máy chủ", "error");
-    } finally {
-      setTestingCamera(false);
-    }
-  };
 
   // Fetch WiFi Status
   const fetchWifiStatus = async () => {
@@ -489,17 +376,10 @@ export default function DeviceSettingsPage() {
   useEffect(() => {
     fetchArduinoStatus();
     fetchEsp32Status();
-    fetchCameraStatus();
     fetchWifiStatus();
     fetchSavedWifiNetworks();
     fetchTelegramSettings();
     handleScanWifi();
-
-    // Auto refresh camera status & image feed every 3 seconds for true real-time monitoring
-    const cameraInterval = setInterval(() => {
-      fetchCameraStatus();
-      fetchWifiStatus();
-    }, 3000);
 
     // Auto scan Wi-Fi every 15 seconds silently
     const wifiInterval = setInterval(() => {
@@ -507,78 +387,9 @@ export default function DeviceSettingsPage() {
     }, 15000);
 
     return () => {
-      clearInterval(cameraInterval);
       clearInterval(wifiInterval);
     };
   }, []);
-
-  // WebRTC direct USB camera stream for Diagnostics tab (Local App Camera Mode)
-  useEffect(() => {
-    let localStream: MediaStream | null = null;
-
-    if (activeTab === "diagnostics") {
-      navigator.mediaDevices
-        .getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } } })
-        .then((stream) => {
-          localStream = stream;
-          diagStreamRef.current = stream;
-          if (diagVideoRef.current) {
-            diagVideoRef.current.srcObject = stream;
-          }
-          const track = stream.getVideoTracks()[0];
-          setCameraStatus((prev) => ({
-            ...prev,
-            connected: true,
-            model: track.label || "USB Web Camera 1080P",
-            statusMessage: `Đang phát trực tiếp từ ${track.label || "Camera USB"}`,
-          }));
-
-          track.onended = () => {
-            setCameraStatus((prev) => ({
-              ...prev,
-              connected: false,
-              model: "Không tìm thấy",
-              statusMessage: "Chưa kết nối: Vui lòng cắm lại cáp USB Camera!",
-            }));
-          };
-        })
-        .catch((err) => {
-          setCameraStatus((prev) => ({
-            ...prev,
-            connected: false,
-            model: "Mất kết nối",
-            statusMessage: "Không thể phát hiện Camera USB! Vui lòng kiểm tra lại dây cáp.",
-          }));
-        });
-    }
-
-    return () => {
-      if (localStream) {
-        localStream.getTracks().forEach((track) => track.stop());
-        diagStreamRef.current = null;
-        if (diagVideoRef.current) diagVideoRef.current.srcObject = null;
-      }
-    };
-  }, [activeTab]);
-
-  // Tắt camera NGAY KHI navigate khỏi trang device-settings
-  useEffect(() => {
-    if (pathname !== "/device-settings") {
-      const stream = diagStreamRef.current;
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
-        diagStreamRef.current = null;
-        if (diagVideoRef.current) diagVideoRef.current.srcObject = null;
-      }
-    }
-  }, [pathname]);
-
-  // Load camera devices khi vào tab diagnostics
-  useEffect(() => {
-    if (activeTab === "diagnostics") {
-      fetchCameraDevices();
-    }
-  }, [activeTab]);
 
   return (
     <div className="space-y-xl max-w-5xl mx-auto pb-16">
@@ -590,7 +401,7 @@ export default function DeviceSettingsPage() {
             Cài Đặt & Chẩn Đoán Thiết Bị
           </h1>
           <p className="font-body-lg text-body-lg text-on-surface-variant">
-            Quản lý kết nối phần cứng Arduino, kiểm tra Camera AI và cấu hình Wi-Fi mạng nội bộ
+            Quản lý kết nối phần cứng Arduino, ESP32 và cấu hình Wi-Fi mạng nội bộ
           </p>
         </div>
       </div>
@@ -627,7 +438,7 @@ export default function DeviceSettingsPage() {
           }`}
         >
           <span className="material-symbols-outlined text-2xl">sensors</span>
-          Chẩn Đoán Phần Cứng (Arduino & Camera)
+          Chẩn Đoán Phần Cứng (Arduino & ESP32)
         </button>
 
         <button
@@ -859,174 +670,7 @@ export default function DeviceSettingsPage() {
             </div>
           </section>
 
-          {/* SECTION 3: CAMERA CONNECTION DIAGNOSTICS */}
-          <section className="bg-surface-container-lowest rounded-2xl p-lg border border-primary/20 shadow-md space-y-md">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-md border-b border-outline-variant/15">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-secondary/10 flex items-center justify-center text-secondary">
-                  <span className="material-symbols-outlined text-3xl">videocam</span>
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <h2 className="font-headline-md text-headline-md text-on-surface font-bold">
-                      3. Kiểm Tra Kết Nối Camera AI Vision
-                    </h2>
-                    {cameraStatus.connected ? (
-                      <span className="px-3 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                        CAMERA HOẠT ĐỘNG
-                      </span>
-                    ) : (
-                      <span className="px-3 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-300 flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-rose-500" />
-                        MẤT KẾT NỐI CAMERA
-                      </span>
-                    )}
-                  </div>
-                  <p className="font-body-sm text-xs text-on-surface-variant">
-                    {cameraStatus.statusMessage}
-                  </p>
-                </div>
-              </div>
 
-              <button
-                onClick={handleTestCamera}
-                disabled={testingCamera}
-                className="flex items-center gap-2 px-4 py-2.5 bg-secondary text-on-secondary rounded-xl font-semibold text-body-sm hover:bg-secondary/90 transition-all active:scale-95 disabled:opacity-50"
-              >
-                {testingCamera ? (
-                  <>
-                    <span className="material-symbols-outlined text-lg animate-spin">
-                      progress_activity
-                    </span>
-                    Đang chụp thử...
-                  </>
-                ) : (
-                  <>
-                    <span className="material-symbols-outlined text-lg">photo_camera</span>
-                    Chụp thử nghiệm (Snapshot Test)
-                  </>
-                )}
-              </button>
-            </div>
-
-            {/* Camera Preview Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-lg items-center">
-              {/* Live Preview Image/Video Container */}
-              <div className="md:col-span-2 relative bg-zinc-950 rounded-2xl overflow-hidden aspect-video border border-outline-variant/30 group flex flex-col justify-center items-center">
-                {cameraStatus.connected ? (
-                  <video
-                    ref={diagVideoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="flex flex-col items-center justify-center p-6 text-center space-y-2 text-zinc-400">
-                    <span className="material-symbols-outlined text-5xl text-rose-500 animate-bounce">
-                      videocam_off
-                    </span>
-                    <p className="font-bold text-white text-base">KHÔNG PHÁT HIỆN CAMERA USB</p>
-                    <p className="text-xs text-zinc-400 max-w-sm">{cameraStatus.statusMessage}</p>
-                  </div>
-                )}
-                <div className="absolute top-3 left-3 bg-black/70 backdrop-blur-md px-3 py-1 rounded-full text-xs font-mono text-emerald-400 flex items-center gap-2 border border-emerald-500/30">
-                  <span
-                    className={`w-2 h-2 rounded-full ${
-                      cameraStatus.connected ? "bg-emerald-500 animate-ping" : "bg-rose-500"
-                    }`}
-                  />
-                  <span>
-                    {cameraStatus.connected
-                      ? "APP CAMERA FEED (LIVE 60FPS)"
-                      : "CAMERA CHƯA KẾT NỐI (OFFLINE)"}
-                  </span>
-                </div>
-                <div className="absolute bottom-3 left-3 bg-black/70 backdrop-blur-md px-3 py-1 rounded-xl text-xs text-zinc-300">
-                  Chụp gần nhất: {cameraStatus.lastSnapshotTime || "Chưa có ảnh chụp mới"}
-                </div>
-              </div>
-
-              {/* Camera Tech Specs */}
-              <div className="space-y-md">
-                <div className="p-md bg-surface-container-low rounded-xl border border-outline-variant/20">
-                  <span className="text-on-surface-variant block font-label-caps text-[10px] font-semibold uppercase mb-1">
-                    MODEL CAMERA
-                  </span>
-                  <span className="font-bold text-on-surface text-body-sm block">
-                    {cameraStatus.model}
-                  </span>
-                </div>
-
-                <div className="p-md bg-surface-container-low rounded-xl border border-outline-variant/20">
-                  <span className="text-on-surface-variant block font-label-caps text-[10px] font-semibold uppercase mb-1">
-                    ĐỘ PHÂN GIẢI
-                  </span>
-                  <span className="font-bold text-on-surface text-body-sm block">
-                    {cameraStatus.resolution}
-                  </span>
-                </div>
-
-                <div className="p-md bg-surface-container-low rounded-xl border border-outline-variant/20">
-                  <span className="text-on-surface-variant block font-label-caps text-[10px] font-semibold uppercase mb-1">
-                    TỐC ĐỘ KHUNG HÌNH (FPS)
-                  </span>
-                  <span className={`font-bold block ${cameraStatus.connected ? "text-emerald-600" : "text-rose-500"}`}>
-                    {cameraStatus.connected ? `${cameraStatus.fps || 30} FPS (Mượt mà)` : "OFFLINE"}
-                  </span>
-                </div>
-
-                {/* Camera Source Selector */}
-                <div className="p-md bg-primary/5 rounded-xl border border-primary/20">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-on-surface-variant block font-label-caps text-[10px] font-semibold uppercase">
-                      NGUỒN CAMERA (DirectShow)
-                    </span>
-                    <button
-                      onClick={fetchCameraDevices}
-                      disabled={loadingDevices}
-                      className="text-primary hover:text-primary/70 transition-colors"
-                      title="Làm mới danh sách camera"
-                    >
-                      <span className={`material-symbols-outlined text-base ${loadingDevices ? "animate-spin" : ""}`}>
-                        refresh
-                      </span>
-                    </button>
-                  </div>
-
-                  {cameraDevices.length === 0 ? (
-                    <p className="text-xs text-on-surface-variant italic">
-                      {loadingDevices ? "Đang tìm camera..." : "Không phát hiện camera USB nào"}
-                    </p>
-                  ) : (
-                    <div className="space-y-2">
-                      <select
-                        value={selectedCameraDevice}
-                        onChange={(e) => setSelectedCameraDevice(e.target.value)}
-                        className="w-full px-2.5 py-2 bg-surface-container-low border border-outline-variant/30 rounded-lg text-xs font-medium focus:ring-1 focus:ring-primary transition-colors"
-                      >
-                        {cameraDevices.map((dev, i) => (
-                          <option key={i} value={dev}>{dev}</option>
-                        ))}
-                      </select>
-                      <button
-                        onClick={handleSaveCameraDevice}
-                        disabled={savingCameraDevice || !selectedCameraDevice}
-                        className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 bg-primary text-on-primary rounded-lg text-xs font-bold hover:bg-primary/90 transition-all active:scale-95 disabled:opacity-50"
-                      >
-                        {savingCameraDevice ? (
-                          <><span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>Đang lưu...</>
-                        ) : (
-                          <><span className="material-symbols-outlined text-sm">save</span>Lưu Nguồn Camera</>
-                        )}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </section>
         </div>
       )}
 

@@ -43,7 +43,6 @@ export function Sidebar({ className, isOpenMobile, onCloseMobile }: SidebarProps
     { label: "Bình phân", href: "/fertilizers", icon: "science" },
     { label: "Điều khiển", href: "/controls", icon: "tune" },
     { label: "Lịch trình", href: "/schedule", icon: "calendar_today" },
-    { label: "Camera", href: "/camera", icon: "videocam" },
     { label: "Cấu hình thiết bị", href: "/device-settings", icon: "settings_suggest" },
     ...(!isLoggedIn ? [{ label: "Đăng nhập", href: "/login", icon: "login" }] : []),
   ];

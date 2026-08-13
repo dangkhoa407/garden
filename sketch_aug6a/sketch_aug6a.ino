@@ -43,6 +43,7 @@ unsigned long lastSprayTime[6] = {0,0,0,0,0,0};
 void waitSprayOrSkip(int idx);
 void captureFromPC(int idx);
 void sprayCycle();
+void sprayPlantedRoute(String payload);
 void runSprayPoints();
 bool homeAll();
 
@@ -133,6 +134,67 @@ void sprayCycle() {
 
   pumpOFF();
   runMotor(STEP2_PIN, DIR2_PIN, steps14, false);
+}
+
+void moveGridTo(int &currentX, int &currentY, int targetX, int targetY) {
+  int deltaX = targetX - currentX;
+  if (deltaX != 0) {
+    runMotor(STEP1_PIN, DIR1_PIN, abs(deltaX) * steps7, deltaX > 0);
+    currentX = targetX;
+  }
+
+  int deltaY = targetY - currentY;
+  if (deltaY != 0) {
+    runMotor(STEP2_PIN, DIR2_PIN, abs(deltaY) * steps7, deltaY > 0);
+    currentY = targetY;
+  }
+}
+
+void sprayPlantedRoute(String payload) {
+  bool selected[6] = {false, false, false, false, false, false};
+  int count = 0;
+
+  int start = 0;
+  while (start < payload.length()) {
+    int comma = payload.indexOf(',', start);
+    String token = comma == -1 ? payload.substring(start) : payload.substring(start, comma);
+    token.trim();
+    int idx = token.toInt();
+    if (idx >= 0 && idx <= 5 && !selected[idx]) {
+      selected[idx] = true;
+      count++;
+    }
+    if (comma == -1) break;
+    start = comma + 1;
+  }
+
+  if (count == 0) {
+    Serial.println("FULL_SPRAY_PLANTED SKIP");
+    return;
+  }
+
+  if (!homeAll()) return;
+
+  int currentX = 0;
+  int currentY = 0;
+  const int pointX[6] = {0, 1, 0, 1, 0, 1};
+  const int pointY[6] = {0, 0, 1, 1, 2, 2};
+
+  pumpON();
+  Serial.println("SPRAY_ON OK");
+
+  for (int idx = 0; idx < 6; idx++) {
+    if (!selected[idx]) continue;
+    moveGridTo(currentX, currentY, pointX[idx], pointY[idx]);
+    Serial.print("SPRAYING_PLANTED:");
+    Serial.println(idx);
+    delay(SPRAY_TIME_MS);
+  }
+
+  pumpOFF();
+  Serial.println("SPRAY_OFF OK");
+  homeAll();
+  Serial.println("FULL_SPRAY_PLANTED DONE");
 }
 
 // ================== PHUN ĐIỂM (CÓ CHỐNG LẶP & KHÔNG DELAY) ==================
@@ -264,8 +326,10 @@ void checkSerialCommands() {
       homeAll();
     } else if (normalized == "CHECK_PESTS" || normalized == "RUN") {
       runSprayPoints();
+    } else if (normalized.startsWith("FULL_SPRAY_PLANTED:")) {
+      sprayPlantedRoute(normalized.substring(normalized.indexOf(':') + 1));
     } else if (normalized == "FULL_SPRAY" || normalized == "P") {
-      sprayCycle();
+      sprayPlantedRoute("0,1,2,3,4,5");
     } else if (normalized == "SPRAY_ON") {
       pumpON();
       Serial.println("SPRAY_ON OK");

@@ -12,7 +12,7 @@ export function MobileNav() {
     { label: "Trợ lý AI", href: "/ai-chat", icon: "psychology" },
     { label: "Cây trồng", href: "/plants", icon: "potted_plant" },
     { label: "Điều khiển", href: "/controls", icon: "tune" },
-    { label: "Camera", href: "/camera", icon: "videocam" },
+    { label: "Cấu hình", href: "/device-settings", icon: "settings_suggest" },
   ];
 
   return (

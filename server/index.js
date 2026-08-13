@@ -259,6 +259,7 @@ let captureBusy = false;
 let currentCancellationId = 0;
 let currentCapturePointIndex = null;
 const pendingMoveResolvers = new Map();
+let pendingFullSprayResolver = null;
 
 function waitForArduinoMove(pointIndex, timeoutMs = 25000) {
   return new Promise((resolve, reject) => {
@@ -280,6 +281,32 @@ function waitForArduinoMove(pointIndex, timeoutMs = 25000) {
         reject(err);
       },
     });
+  });
+}
+
+function waitForFullSprayDone(timeoutMs = 120000) {
+  return new Promise((resolve, reject) => {
+    if (pendingFullSprayResolver) {
+      pendingFullSprayResolver.reject(new Error("Da co chu trinh phun toan vuon dang chay."));
+    }
+
+    const timer = setTimeout(() => {
+      pendingFullSprayResolver = null;
+      reject(new Error("Arduino khong xac nhan hoan tat phun toan vuon trong thoi gian cho."));
+    }, timeoutMs);
+
+    pendingFullSprayResolver = {
+      resolve: () => {
+        clearTimeout(timer);
+        pendingFullSprayResolver = null;
+        resolve(true);
+      },
+      reject: (err) => {
+        clearTimeout(timer);
+        pendingFullSprayResolver = null;
+        reject(err);
+      },
+    };
   });
 }
 
@@ -1183,6 +1210,33 @@ async function getOrInitArduinoSerialPort() {
                 return;
               }
 
+              if (normalized.includes("SPRAY_ON OK")) {
+                pushWebNotification("Arduino: Da bat bom phun lien tuc.", "PROCESS");
+                return;
+              }
+
+              if (normalized.includes("SPRAY_OFF OK")) {
+                pushWebNotification("Arduino: Da tat bom phun.", "SUCCESS");
+                return;
+              }
+
+              if (normalized.includes("FULL_SPRAY_PLANTED DONE")) {
+                if (pendingFullSprayResolver) pendingFullSprayResolver.resolve();
+                pushWebNotification("Arduino: Da hoan tat phun cac khay co cay va ve home.", "SUCCESS");
+                return;
+              }
+
+              if (normalized.includes("FULL_SPRAY_PLANTED SKIP")) {
+                if (pendingFullSprayResolver) pendingFullSprayResolver.resolve();
+                pushWebNotification("Arduino: Khong co khay co cay de phun.", "WARNING");
+                return;
+              }
+
+              if (normalized.includes("ALERT") && pendingFullSprayResolver) {
+                pendingFullSprayResolver.reject(new Error(line));
+                return;
+              }
+
               if (normalized.includes("BO QUA")) {
                 pushWebNotification("Arduino: Da phun trong 24h gan nhat. Bo qua phun lap.", "WARNING");
                 return;
@@ -1582,28 +1636,12 @@ async function runFullGardenSpray() {
 
   const plantedLabels = plantedPointIndexes.map((pointIdx) => `Khay ${String(pointIdx + 1).padStart(2, "0")}`);
   addSystemLog("FULL_SPRAY", `Bat dau phun cac khay co cay: ${plantedLabels.join(", ")}`, "PROCESS");
-  pushWebNotification(`Dang phun cac khay co cay: ${plantedLabels.join(", ")}...`, "PROCESS");
+  pushWebNotification(`Dang homing, bat phun va di qua cac khay co cay: ${plantedLabels.join(", ")}...`, "PROCESS");
 
-  for (const pointIdx of plantedPointIndexes) {
-    const pointLabel = `Khay ${String(pointIdx + 1).padStart(2, "0")}`;
-    addSystemLog("FULL_SPRAY", `Di chuyen robot toi ${pointLabel}`, "PROCESS");
-
-    const moveWait = waitForArduinoMove(pointIdx, 30000);
-    try {
-      await sendDirectCommandToArduino(`P${pointIdx + 1}`);
-    } catch (moveErr) {
-      const waiter = pendingMoveResolvers.get(pointIdx);
-      if (waiter) waiter.reject(moveErr);
-      throw moveErr;
-    }
-    await moveWait;
-
-    addSystemLog("FULL_SPRAY", `Bat phun lien tuc tai ${pointLabel}`, "PROCESS");
-    for (let sprayCycle = 0; sprayCycle < 4; sprayCycle++) {
-      await sendDirectCommandToArduino("SPRAY");
-      await new Promise((resolve) => setTimeout(resolve, 1700));
-    }
-  }
+  const routeCommand = `FULL_SPRAY_PLANTED:${plantedPointIndexes.join(",")}`;
+  const doneWait = waitForFullSprayDone(120000);
+  await sendDirectCommandToArduino(routeCommand);
+  await doneWait;
 
   const skippedPoints = [0, 1, 2, 3, 4, 5].filter((pointIdx) => !plantedPointIndexes.includes(pointIdx));
   addSystemLog("FULL_SPRAY", `Hoan tat phun ${plantedPointIndexes.length} khay co cay, bo qua ${skippedPoints.length} khay trong`, "SUCCESS");
