@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { usePathname } from "next/navigation";
 import { IrrigateModal } from "@/components/fertilizers/IrrigateModal";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
@@ -96,6 +97,8 @@ export default function DeviceSettingsPage() {
 
   // Camera state
   const diagVideoRef = useRef<HTMLVideoElement | null>(null);
+  const diagStreamRef = useRef<MediaStream | null>(null); // lưu stream để stop khi navigate
+  const pathname = usePathname();
   const [cameraStatus, setCameraStatus] = useState<CameraStatus>({
     connected: false,
     model: "Đang kiểm tra...",
@@ -518,6 +521,7 @@ export default function DeviceSettingsPage() {
         .getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } } })
         .then((stream) => {
           localStream = stream;
+          diagStreamRef.current = stream;
           if (diagVideoRef.current) {
             diagVideoRef.current.srcObject = stream;
           }
@@ -551,9 +555,23 @@ export default function DeviceSettingsPage() {
     return () => {
       if (localStream) {
         localStream.getTracks().forEach((track) => track.stop());
+        diagStreamRef.current = null;
+        if (diagVideoRef.current) diagVideoRef.current.srcObject = null;
       }
     };
   }, [activeTab]);
+
+  // Tắt camera NGAY KHI navigate khỏi trang device-settings
+  useEffect(() => {
+    if (pathname !== "/device-settings") {
+      const stream = diagStreamRef.current;
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+        diagStreamRef.current = null;
+        if (diagVideoRef.current) diagVideoRef.current.srcObject = null;
+      }
+    }
+  }, [pathname]);
 
   // Load camera devices khi vào tab diagnostics
   useEffect(() => {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { useGarden } from "@/context/GardenContext";
 import {
   CAMERA_INPUT_CHANGED_EVENT,
@@ -13,7 +14,9 @@ interface CameraViewProps {
 
 export function CameraView({ nightVision = false }: CameraViewProps) {
   const { controls } = useGarden();
+  const pathname = usePathname();
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null); // giữ ref để stop từ bên ngoài useEffect
   const [timeStr, setTimeStr] = useState("");
   const [cameraInputVersion, setCameraInputVersion] = useState(0);
   const [camStatus, setCamStatus] = useState<{
@@ -85,6 +88,7 @@ export function CameraView({ nightVision = false }: CameraViewProps) {
         });
 
         localStream = stream;
+        streamRef.current = stream; // lưu vào ref để có thể stop khi navigate
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
         }
@@ -154,7 +158,10 @@ export function CameraView({ nightVision = false }: CameraViewProps) {
         if ((localStream as any)._syncTimer) clearInterval((localStream as any)._syncTimer);
         localStream.getTracks().forEach((track) => track.stop());
         localStream = null;
+        streamRef.current = null;
       }
+      // Cũng xóa srcObject khỏi video element
+      if (videoRef.current) videoRef.current.srcObject = null;
     };
 
     const handleVisibilityChange = () => {
@@ -179,6 +186,21 @@ export function CameraView({ nightVision = false }: CameraViewProps) {
       stopLocalStream();
     };
   }, [cameraInputVersion]);
+
+  // Tắt camera NGAY KHI navigate sang trang khác (Next.js App Router)
+  useEffect(() => {
+    if (pathname !== "/camera") {
+      // Không còn ở trang Camera → tắt stream ngay lập tức
+      const stream = streamRef.current;
+      if (stream) {
+        if ((stream as any)._syncTimer) clearInterval((stream as any)._syncTimer);
+        stream.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+        if (videoRef.current) videoRef.current.srcObject = null;
+        setCamStatus((prev) => ({ ...prev, connected: false, message: "Camera đã tắt" }));
+      }
+    }
+  }, [pathname]);
 
   return (
     <div className="relative w-full h-[380px] sm:h-[480px] lg:h-full bg-zinc-950 rounded-2xl overflow-hidden shadow-2xl flex flex-col group border border-zinc-800">
