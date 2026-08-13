@@ -245,25 +245,27 @@ export default function FertilizersPage() {
 
     try {
       // 1. TRÍCH XUẤT PHÂN BÓN (DOSE)
-      const expectedSec = Math.round(t.ml * 60);
-      setIrrigateLog((prev) => [
-        ...prev,
-        `🧪 Gửi lệnh DOSE: Đang bơm ${t.ml} ml từ ${t.tankCode} (Tốc độ 1 ml/phút => Bơm chạy trong ${expectedSec} giây)...`,
-      ]);
-      const res = await fetch("/api/esp32/dose", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tankCode: t.tankCode, ml: t.ml }),
-      });
-      const data = await res.json();
-      const actualSec = data.durationSec || expectedSec;
-      setIrrigateLog((prev) => [
-        ...prev,
-        `✅ Đã trích xuất thành công ${t.ml} ml từ ${t.tankCode}! (Lệnh: ${data.command || "DOSE"}, Thời gian: ${actualSec}s)`,
-      ]);
+      for (const t of tanksToDose) {
+        const expectedSec = Math.round(t.ml * 60);
+        setIrrigateLog((prev) => [
+          ...prev,
+          `🧪 Gửi lệnh DOSE: Đang bơm ${t.ml} ml từ ${t.tankCode} (Tốc độ 1 ml/phút => Bơm chạy trong ${expectedSec} giây)...`,
+        ]);
+        const res = await fetch("/api/esp32/dose", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tankCode: t.tankCode, ml: t.ml }),
+        });
+        const data = await res.json();
+        const actualSec = data.durationSec || expectedSec;
+        setIrrigateLog((prev) => [
+          ...prev,
+          `✅ Đã trích xuất thành công ${t.ml} ml từ ${t.tankCode}! (Lệnh: ${data.command || "DOSE"}, Thời gian: ${actualSec}s)`,
+        ]);
 
-      // Đợi thời gian bơm phân
-      await new Promise((r) => setTimeout(r, actualSec * 1000 + 500));
+        // Đợi thời gian bơm phân
+        await new Promise((r) => setTimeout(r, actualSec * 1000 + 500));
+      }
 
       // 2. BƠM NƯỚC VÀO BỒN TRỘN (WELL ON - ĐỢI PHAO CAO BẬT)
       setIrrigateStep("well");
