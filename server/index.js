@@ -1716,12 +1716,25 @@ async function runFullGardenInspection() {
     }
     await moveWait.catch(() => {});
 
-    // 2. Chụp ảnh từ Camera
+    // 2. Chụp ảnh từ Camera với đèn LED Flash trợ sáng
     let imagePathToSend = null;
     try {
+      try {
+        await sendDirectCommandToArduino("LED_ON");
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      } catch (ledErr) {}
+
       imagePathToSend = await captureImage();
-      addSystemLog("CAM_CAPTURE", `[Camera Log] Đã chụp ảnh thành công tại ${trayName}!`, "SUCCESS");
+
+      try {
+        await sendDirectCommandToArduino("LED_OFF");
+      } catch (ledErr) {}
+
+      addSystemLog("CAM_CAPTURE", `[Camera Log] Đã bật Flash & chụp ảnh thành công tại ${trayName}!`, "SUCCESS");
     } catch (capErr) {
+      try {
+        await sendDirectCommandToArduino("LED_OFF");
+      } catch (ledErr) {}
       console.error(`[Inspect Capture Error] ${capErr.message}`);
       addSystemLog("CAM_CAPTURE", `❌ Chụp ảnh không thành công tại ${trayName}: ${capErr.message}`, "ALERT");
       continue;
@@ -4232,9 +4245,22 @@ app.post("/api/plant-inspect", async (req, res) => {
     }
     if (!imagePathToSend) {
       try {
+        try {
+          await sendDirectCommandToArduino("LED_ON");
+          await new Promise((resolve) => setTimeout(resolve, 250));
+        } catch (ledErr) {}
+
         imagePathToSend = await captureImage();
-        addSystemLog("CAM_CAPTURE", `[Camera Log] Da chup anh thanh cong tu USB Camera (${trayName} / st01.jpg)!`, "SUCCESS");
+
+        try {
+          await sendDirectCommandToArduino("LED_OFF");
+        } catch (ledErr) {}
+
+        addSystemLog("CAM_CAPTURE", `[Camera Log] Đã bật Flash & chụp ảnh thành công từ USB Camera (${trayName} / st01.jpg)!`, "SUCCESS");
       } catch (capErr) {
+        try {
+          await sendDirectCommandToArduino("LED_OFF");
+        } catch (ledErr) {}
         console.error(`[Inspect Capture Error] ${capErr.message}`);
         addSystemLog("CAM_CAPTURE", `❌ Chụp ảnh không thành công: ${capErr.message}`, "ALERT");
         pushWebNotification(`❌ Lỗi chụp ảnh camera: ${capErr.message}`, "ALERT");

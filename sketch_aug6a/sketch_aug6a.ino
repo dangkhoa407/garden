@@ -49,9 +49,11 @@ void runSprayPoints();
 bool homeAll();
 bool checkIncomingEmergencyStop();
 
-// ================== PUMP ==================
+// ================== PUMP & LED ==================
 void pumpON()  { digitalWrite(RELAY_PUMP, HIGH); }
 void pumpOFF() { digitalWrite(RELAY_PUMP, LOW); }
+void ledON()   { digitalWrite(RELAY_LED, HIGH); }
+void ledOFF()  { digitalWrite(RELAY_LED, LOW); }
 
 // ================== EMERGENCY STOP CHECK ==================
 bool checkIncomingEmergencyStop() {
@@ -411,6 +413,12 @@ void checkSerialCommands() {
       digitalWrite(EN1_PIN, LOW);
       digitalWrite(EN2_PIN, LOW);
       sprayPlantedRoute("0,1,2,3,4,5");
+    } else if (normalized == "LED_ON" || normalized == "LIGHT_ON" || normalized == "FLASH_ON") {
+      ledON();
+      Serial.println("LED_ON OK");
+    } else if (normalized == "LED_OFF" || normalized == "LIGHT_OFF" || normalized == "FLASH_OFF") {
+      ledOFF();
+      Serial.println("LED_OFF OK");
     } else if (normalized == "SPRAY_ON") {
       pumpON();
       Serial.println("SPRAY_ON OK");
