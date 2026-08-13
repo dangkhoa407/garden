@@ -264,6 +264,8 @@ void checkSerialCommands() {
       homeAll();
     } else if (normalized == "CHECK_PESTS" || normalized == "RUN") {
       runSprayPoints();
+    } else if (normalized == "FULL_SPRAY" || normalized == "P") {
+      sprayCycle();
     } else if (normalized == "SPRAY") {
       pumpON();
       delay(SPRAY_TIME_MS);

@@ -241,7 +241,7 @@ const ARDUINO_COMMAND_MAP = {
   CHECK_PESTS: { cmd: "CHECK_PESTS", label: "Kiểm tra sâu hại (CHECK_PESTS)", desc: "Quét 6 điểm bằng camera và AI Gemini" },
   h: { cmd: "HOME", label: "Về vị trí gốc (HOME)", desc: "Đưa robot về vị trí homing mặc định" },
   HOME: { cmd: "HOME", label: "Về vị trí gốc (HOME)", desc: "Đưa robot về vị trí homing mặc định" },
-  p: { cmd: "FULL_SPRAY", label: "Phun toàn bộ (FULL_SPRAY)", desc: "Phun dung dịch sinh học toàn khu vực" },
+  p: { cmd: "FULL_SPRAY", label: "Phun toàn bộ vườn", desc: "Di chuyển qua 6 điểm và phun dung dịch sinh học" },
   FULL_SPRAY: { cmd: "FULL_SPRAY", label: "Phun toàn bộ (FULL_SPRAY)", desc: "Phun dung dịch sinh học toàn khu vực" },
   s: { cmd: "STOP", label: "Dừng ngay khẩn cấp (STOP)", desc: "Hủy chu trình và dừng động cơ lập tức" },
   STOP: { cmd: "STOP", label: "Dừng ngay khẩn cấp (STOP)", desc: "Hủy chu trình và dừng động cơ lập tức" },
@@ -1560,6 +1560,38 @@ async function sendDirectCommandToArduino(cmdString) {
   }
 }
 
+async function runFullGardenSpray() {
+  const ardStatus = await getRealSerialStatus();
+  if (!ardStatus.connected && process.platform === "linux") {
+    throw new Error("Mach Arduino chua duoc ket noi! Vui long cam cap USB Arduino.");
+  }
+
+  addSystemLog("FULL_SPRAY", "Bat dau phun toan bo vuon qua 6 diem", "PROCESS");
+  pushWebNotification("Dang kich hoat phun toan bo vuon qua 6 diem...", "PROCESS");
+
+  for (let pointIdx = 0; pointIdx < 6; pointIdx++) {
+    const pointLabel = `Diem ${pointIdx + 1}`;
+    addSystemLog("FULL_SPRAY", `Di chuyen robot toi ${pointLabel}`, "PROCESS");
+
+    const moveWait = waitForArduinoMove(pointIdx, 30000);
+    try {
+      await sendDirectCommandToArduino(`P${pointIdx + 1}`);
+    } catch (moveErr) {
+      const waiter = pendingMoveResolvers.get(pointIdx);
+      if (waiter) waiter.reject(moveErr);
+      throw moveErr;
+    }
+    await moveWait;
+
+    addSystemLog("FULL_SPRAY", `Phun thuoc sinh hoc tai ${pointLabel}`, "PROCESS");
+    await sendDirectCommandToArduino("SPRAY");
+    await new Promise((resolve) => setTimeout(resolve, 1800));
+  }
+
+  addSystemLog("FULL_SPRAY", "Hoan tat phun toan bo vuon", "SUCCESS");
+  pushWebNotification("Da hoan tat phun thuoc sinh hoc toan bo vuon!", "SUCCESS");
+}
+
 // Cleanup khi process exit
 process.on("exit", () => {
   if (activeSerialPort && activeSerialPort.isOpen) {
@@ -1579,6 +1611,27 @@ app.post("/api/arduino/command", async (req, res) => {
   const timestamp = new Date().toLocaleTimeString("vi-VN");
 
   try {
+    if (mapped.cmd === "FULL_SPRAY") {
+      await runFullGardenSpray();
+
+      const logEntry = {
+        timestamp,
+        command: mapped.cmd,
+        label: mapped.label,
+        status: "SENT_TO_ARDUINO",
+      };
+
+      lastArduinoLogs.unshift(logEntry);
+      if (lastArduinoLogs.length > 25) lastArduinoLogs.pop();
+
+      return res.json({
+        success: true,
+        message: `Đã kích hoạt "${mapped.label}" qua 6 điểm trong vườn!`,
+        command: mapped.cmd,
+        timestamp: logEntry.timestamp,
+      });
+    }
+
     // Send command directly to SerialPort
     await sendDirectCommandToArduino(mapped.cmd);
 
@@ -3990,7 +4043,7 @@ function initScheduleRunner() {
                 } else if (act === "SPRAY_ALL") {
                   pushWebNotification(`⏰ Lịch [Bước ${stepNum}/${totalSteps}]: Kích hoạt Phun toàn bộ vườn ("${item.title}")`, "PROCESS");
                   await sendTelegramText(`⏰ LỊCH TỰ ĐỘNG [Bước ${stepNum}/${totalSteps}]:\n📌 Tên: ${item.title}\n🚿 Hành động: Phun toàn bộ vườn (Phím p)\n⏱ Thời gian: ${currentTimeStr}`);
-                  await sendDirectCommandToArduino("p").catch((e) => console.warn(`[Sched p Err] ${e.message}`));
+                  await runFullGardenSpray().catch((e) => console.warn(`[Sched p Err] ${e.message}`));
                 }
 
                 if (idx < totalSteps - 1) {
