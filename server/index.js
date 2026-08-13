@@ -1566,11 +1566,26 @@ async function runFullGardenSpray() {
     throw new Error("Mach Arduino chua duoc ket noi! Vui long cam cap USB Arduino.");
   }
 
-  addSystemLog("FULL_SPRAY", "Bat dau phun toan bo vuon qua 6 diem", "PROCESS");
-  pushWebNotification("Dang kich hoat phun toan bo vuon qua 6 diem...", "PROCESS");
+  const plants = readJson("plants.json", []);
+  const plantedPointIndexes = [...new Set(
+    plants
+      .filter((plant) => plant && plant.location)
+      .map((plant) => getPointIndexFromLocation(plant.location))
+      .filter((pointIdx) => Number.isInteger(pointIdx) && pointIdx >= 0 && pointIdx <= 5)
+  )].sort((a, b) => a - b);
 
-  for (let pointIdx = 0; pointIdx < 6; pointIdx++) {
-    const pointLabel = `Diem ${pointIdx + 1}`;
+  if (plantedPointIndexes.length === 0) {
+    addSystemLog("FULL_SPRAY", "Khong co khay nao dang co cay, bo qua phun", "WARNING");
+    pushWebNotification("Khong co khay nao dang co cay nen da bo qua lenh phun.", "WARNING");
+    return { sprayedPoints: [], skippedPoints: [0, 1, 2, 3, 4, 5] };
+  }
+
+  const plantedLabels = plantedPointIndexes.map((pointIdx) => `Khay ${String(pointIdx + 1).padStart(2, "0")}`);
+  addSystemLog("FULL_SPRAY", `Bat dau phun cac khay co cay: ${plantedLabels.join(", ")}`, "PROCESS");
+  pushWebNotification(`Dang phun cac khay co cay: ${plantedLabels.join(", ")}...`, "PROCESS");
+
+  for (const pointIdx of plantedPointIndexes) {
+    const pointLabel = `Khay ${String(pointIdx + 1).padStart(2, "0")}`;
     addSystemLog("FULL_SPRAY", `Di chuyen robot toi ${pointLabel}`, "PROCESS");
 
     const moveWait = waitForArduinoMove(pointIdx, 30000);
@@ -1583,13 +1598,18 @@ async function runFullGardenSpray() {
     }
     await moveWait;
 
-    addSystemLog("FULL_SPRAY", `Phun thuoc sinh hoc tai ${pointLabel}`, "PROCESS");
-    await sendDirectCommandToArduino("SPRAY");
-    await new Promise((resolve) => setTimeout(resolve, 1800));
+    addSystemLog("FULL_SPRAY", `Bat phun lien tuc tai ${pointLabel}`, "PROCESS");
+    for (let sprayCycle = 0; sprayCycle < 4; sprayCycle++) {
+      await sendDirectCommandToArduino("SPRAY");
+      await new Promise((resolve) => setTimeout(resolve, 1700));
+    }
   }
 
-  addSystemLog("FULL_SPRAY", "Hoan tat phun toan bo vuon", "SUCCESS");
-  pushWebNotification("Da hoan tat phun thuoc sinh hoc toan bo vuon!", "SUCCESS");
+  const skippedPoints = [0, 1, 2, 3, 4, 5].filter((pointIdx) => !plantedPointIndexes.includes(pointIdx));
+  addSystemLog("FULL_SPRAY", `Hoan tat phun ${plantedPointIndexes.length} khay co cay, bo qua ${skippedPoints.length} khay trong`, "SUCCESS");
+  pushWebNotification(`Da phun xong ${plantedPointIndexes.length} khay co cay va bo qua cac khay trong.`, "SUCCESS");
+
+  return { sprayedPoints: plantedPointIndexes, skippedPoints };
 }
 
 // Cleanup khi process exit
@@ -1612,7 +1632,7 @@ app.post("/api/arduino/command", async (req, res) => {
 
   try {
     if (mapped.cmd === "FULL_SPRAY") {
-      await runFullGardenSpray();
+      const sprayResult = await runFullGardenSpray();
 
       const logEntry = {
         timestamp,
@@ -1626,9 +1646,13 @@ app.post("/api/arduino/command", async (req, res) => {
 
       return res.json({
         success: true,
-        message: `Đã kích hoạt "${mapped.label}" qua 6 điểm trong vườn!`,
+        message: sprayResult.sprayedPoints.length > 0
+          ? `Đã phun ${sprayResult.sprayedPoints.length} khay có cây và bỏ qua ${sprayResult.skippedPoints.length} khay trống.`
+          : "Không có khay nào đang có cây nên đã bỏ qua lệnh phun.",
         command: mapped.cmd,
         timestamp: logEntry.timestamp,
+        sprayedPoints: sprayResult.sprayedPoints,
+        skippedPoints: sprayResult.skippedPoints,
       });
     }
 

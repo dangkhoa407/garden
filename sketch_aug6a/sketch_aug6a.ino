@@ -266,6 +266,12 @@ void checkSerialCommands() {
       runSprayPoints();
     } else if (normalized == "FULL_SPRAY" || normalized == "P") {
       sprayCycle();
+    } else if (normalized == "SPRAY_ON") {
+      pumpON();
+      Serial.println("SPRAY_ON OK");
+    } else if (normalized == "SPRAY_OFF") {
+      pumpOFF();
+      Serial.println("SPRAY_OFF OK");
     } else if (normalized == "SPRAY") {
       pumpON();
       delay(SPRAY_TIME_MS);
