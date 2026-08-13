@@ -375,18 +375,41 @@ void checkSerialCommands() {
     if (normalized == "PING") {
       Serial.println("PONG:NODE_CONNECTED");
     } else if (normalized == "HOME" || normalized == "H") {
+      emergencyStopRequested = false;
+      systemError = false;
+      digitalWrite(EN1_PIN, LOW);
+      digitalWrite(EN2_PIN, LOW);
       homeAll();
     } else if (normalized == "STOP" || normalized == "S") {
+      emergencyStopRequested = true;
       pumpOFF();
+      digitalWrite(EN1_PIN, HIGH);
+      digitalWrite(EN2_PIN, HIGH);
       Serial.println("STOP OK: EMERGENCY STOP ACTIVATED");
     } else if (normalized == "RESET_ERROR" || normalized == "R") {
+      emergencyStopRequested = false;
+      systemError = false;
+      digitalWrite(EN1_PIN, LOW);
+      digitalWrite(EN2_PIN, LOW);
       pumpOFF();
       Serial.println("RESET_ERROR OK: SYSTEM RESTORED");
     } else if (normalized == "CHECK_PESTS" || normalized == "RUN" || normalized == "K") {
+      emergencyStopRequested = false;
+      systemError = false;
+      digitalWrite(EN1_PIN, LOW);
+      digitalWrite(EN2_PIN, LOW);
       runSprayPoints();
     } else if (normalized.startsWith("FULL_SPRAY_PLANTED:")) {
+      emergencyStopRequested = false;
+      systemError = false;
+      digitalWrite(EN1_PIN, LOW);
+      digitalWrite(EN2_PIN, LOW);
       sprayPlantedRoute(normalized.substring(normalized.indexOf(':') + 1));
     } else if (normalized == "FULL_SPRAY" || normalized == "P") {
+      emergencyStopRequested = false;
+      systemError = false;
+      digitalWrite(EN1_PIN, LOW);
+      digitalWrite(EN2_PIN, LOW);
       sprayPlantedRoute("0,1,2,3,4,5");
     } else if (normalized == "SPRAY_ON") {
       pumpON();

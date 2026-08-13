@@ -1994,6 +1994,35 @@ app.post("/api/arduino/command", async (req, res) => {
       });
     }
 
+    if (mapped.cmd === "HOME" || command === "h" || command === "HOME") {
+      captureBusy = false;
+      try {
+        await sendDirectCommandToArduino("HOME");
+      } catch (e) {
+        console.warn(`[Homing Direct Send Warning] ${e.message}`);
+      }
+
+      addSystemLog("HOMING", "Đang đưa robot về vị trí gốc (Homing)...", "PROCESS");
+      pushWebNotification("🏠 Đang kích hoạt đưa robot về vị trí gốc (Homing)...", "PROCESS");
+
+      const logEntry = {
+        timestamp,
+        command: "HOME",
+        label: "Về vị trí gốc (h)",
+        status: "COMPLETED",
+      };
+
+      lastArduinoLogs.unshift(logEntry);
+      if (lastArduinoLogs.length > 25) lastArduinoLogs.pop();
+
+      return res.json({
+        success: true,
+        message: "🏠 Đã gửi lệnh đưa robot về vị trí gốc (Homing)!",
+        command: "HOME",
+        timestamp: logEntry.timestamp,
+      });
+    }
+
     // Send command directly to SerialPort
     try {
       await sendDirectCommandToArduino(mapped.cmd);
