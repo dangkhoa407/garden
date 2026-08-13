@@ -686,13 +686,19 @@ async function releaseCameraBeforeCapture() {
 
   try {
     if (typeof ffmpegStreamProcess !== "undefined" && ffmpegStreamProcess) {
-      console.warn("[Camera Engine] Dang dung stream noi bo de gianh quyen camera...");
+      console.warn("[Camera Engine] Dừng stream nội bộ để giành quyền camera /dev/video0...");
       try { ffmpegStreamProcess.kill("SIGKILL"); } catch (e) {}
       ffmpegStreamProcess = null;
     }
   } catch (e) {}
 
-  await new Promise((resolve) => setTimeout(resolve, 1200));
+  if (process.platform === "linux") {
+    try {
+      await execAsync("fuser -k /dev/video0 || true").catch(() => {});
+    } catch (e) {}
+  }
+
+  await new Promise((resolve) => setTimeout(resolve, 800));
 }
 
 function requestFreshBrowserSnapshot(timeoutMs = 3500) {
@@ -858,10 +864,25 @@ function persistSnapshotForHistory(imagePath, idPrefix = "insp") {
 }
 
 async function captureImage() {
+  // 1. Kiểm tra xem có ảnh tươi từ Live Persistent Stream (dưới 3s) thì dùng ngay để không bị Device busy
+  const liveViewPath = path.join(process.cwd(), "st01.jpg");
+  if (fs.existsSync(liveViewPath)) {
+    try {
+      const stats = fs.statSync(liveViewPath);
+      if (Date.now() - stats.mtimeMs < 3500 && stats.size > 5000) {
+        console.log(`[Camera Engine] Sử dụng ảnh trực tiếp vừa chụp từ Persistent Stream (${stats.size} bytes)`);
+        const snapPath = makeSnapPath();
+        fs.copyFileSync(liveViewPath, snapPath);
+        return snapPath;
+      }
+    } catch (e) {}
+  }
+
+  // 2. Giải phóng /dev/video0 tuyệt đối trước khi chụp mới
+  await releaseCameraBeforeCapture();
+
   const ffmpegBin = getFfmpegBinary();
   const snapPath = makeSnapPath();
-  const liveViewPath = path.join(process.cwd(), "st01.jpg");
-
   const totalFrames = WARMUP_FRAMES + CHECK_FRAMES;
   const directory = await fs.promises.mkdtemp(
     path.join(require("os").tmpdir(), "vuon-rau-camera-")
@@ -875,20 +896,43 @@ async function captureImage() {
     } else {
       // Linux / Raspberry Pi
       try { await configureCamera(); } catch (e) {}
-      await execFileAsync(
-        ffmpegBin,
-        [
-          "-hide_banner", "-loglevel", "error", "-y",
-          "-f", "v4l2",
-          "-framerate", String(CAMERA_FPS),
-          "-video_size", `${CAMERA_WIDTH}x${CAMERA_HEIGHT}`,
-          "-i", CAMERA_DEVICE,
-          "-frames:v", String(totalFrames),
-          "-q:v", "2",
-          framePattern,
-        ],
-        { timeout: 30000, maxBuffer: 2 * 1024 * 1024 }
-      );
+      try {
+        await execFileAsync(
+          ffmpegBin,
+          [
+            "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "v4l2",
+            "-framerate", String(CAMERA_FPS),
+            "-video_size", `${CAMERA_WIDTH}x${CAMERA_HEIGHT}`,
+            "-i", CAMERA_DEVICE,
+            "-frames:v", String(totalFrames),
+            "-q:v", "2",
+            framePattern,
+          ],
+          { timeout: 30000, maxBuffer: 2 * 1024 * 1024 }
+        );
+      } catch (firstErr) {
+        if (firstErr.message && (firstErr.message.includes("busy") || firstErr.message.includes("Error opening input"))) {
+          console.warn("[Camera Engine] /dev/video0 bận trên Raspberry Pi, đang ép buộc giải phóng thiết bị và chụp lại...");
+          await releaseCameraBeforeCapture();
+          await execFileAsync(
+            ffmpegBin,
+            [
+              "-hide_banner", "-loglevel", "error", "-y",
+              "-f", "v4l2",
+              "-framerate", String(CAMERA_FPS),
+              "-video_size", `${CAMERA_WIDTH}x${CAMERA_HEIGHT}`,
+              "-i", CAMERA_DEVICE,
+              "-frames:v", String(totalFrames),
+              "-q:v", "2",
+              framePattern,
+            ],
+            { timeout: 30000, maxBuffer: 2 * 1024 * 1024 }
+          );
+        } else {
+          throw firstErr;
+        }
+      }
     }
 
     // Lấy các frame check (bỏ warmup frames đầu)
