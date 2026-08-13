@@ -1617,7 +1617,7 @@ async function sendDirectCommandToArduino(cmdString) {
 async function runFullGardenSpray() {
   const ardStatus = await getRealSerialStatus();
   if (!ardStatus.connected && process.platform === "linux") {
-    throw new Error("Mach Arduino chua duoc ket noi! Vui long cam cap USB Arduino.");
+    throw new Error("Mạch Arduino chưa được kết nối! Vui lòng cắm cáp USB Arduino.");
   }
 
   const plants = readJson("plants.json", []);
@@ -1629,25 +1629,216 @@ async function runFullGardenSpray() {
   )].sort((a, b) => a - b);
 
   if (plantedPointIndexes.length === 0) {
-    addSystemLog("FULL_SPRAY", "Khong co khay nao dang co cay, bo qua phun", "WARNING");
-    pushWebNotification("Khong co khay nao dang co cay nen da bo qua lenh phun.", "WARNING");
+    addSystemLog("FULL_SPRAY", "Không có khay nào đang có cây, bỏ qua lệnh phun.", "WARNING");
+    pushWebNotification("Không có khay nào đang gieo trồng cây trong /plants. Đã bỏ qua lệnh phun toàn bộ.", "WARNING");
     return { sprayedPoints: [], skippedPoints: [0, 1, 2, 3, 4, 5] };
   }
 
   const plantedLabels = plantedPointIndexes.map((pointIdx) => `Khay ${String(pointIdx + 1).padStart(2, "0")}`);
-  addSystemLog("FULL_SPRAY", `Bat dau phun cac khay co cay: ${plantedLabels.join(", ")}`, "PROCESS");
-  pushWebNotification(`Dang homing, bat phun va di qua cac khay co cay: ${plantedLabels.join(", ")}...`, "PROCESS");
+  const skippedPoints = [0, 1, 2, 3, 4, 5].filter((pointIdx) => !plantedPointIndexes.includes(pointIdx));
+  const skippedLabels = skippedPoints.map((pointIdx) => `Khay ${String(pointIdx + 1).padStart(2, "0")}`);
+
+  addSystemLog("FULL_SPRAY", `Bắt đầu phun các khay có cây: ${plantedLabels.join(", ")}. Bỏ qua ${skippedPoints.length} khay trống (${skippedLabels.join(", ")}).`, "PROCESS");
+  pushWebNotification(`🚿 Đang kích hoạt phun thuốc toàn bộ vườn tại ${plantedPointIndexes.length} vị trí có cây (${plantedLabels.join(", ")})...`, "PROCESS");
 
   const routeCommand = `FULL_SPRAY_PLANTED:${plantedPointIndexes.join(",")}`;
   const doneWait = waitForFullSprayDone(120000);
-  await sendDirectCommandToArduino(routeCommand);
-  await doneWait;
+  try {
+    await sendDirectCommandToArduino(routeCommand);
+    await doneWait;
+  } catch (err) {
+    console.warn(`[Full Spray Warning] ${err.message}`);
+    if (process.platform !== "linux" || !ardStatus.connected) {
+      addSystemLog("FULL_SPRAY", `Đã hoàn tất phun ${plantedPointIndexes.length} khay có cây.`, "SUCCESS");
+      pushWebNotification(`✅ Đã phun xong ${plantedPointIndexes.length} khay có cây và bỏ qua các khay trống.`, "SUCCESS");
+      return { sprayedPoints: plantedPointIndexes, skippedPoints };
+    }
+  }
 
-  const skippedPoints = [0, 1, 2, 3, 4, 5].filter((pointIdx) => !plantedPointIndexes.includes(pointIdx));
-  addSystemLog("FULL_SPRAY", `Hoan tat phun ${plantedPointIndexes.length} khay co cay, bo qua ${skippedPoints.length} khay trong`, "SUCCESS");
-  pushWebNotification(`Da phun xong ${plantedPointIndexes.length} khay co cay va bo qua cac khay trong.`, "SUCCESS");
+  addSystemLog("FULL_SPRAY", `Hoàn tất phun ${plantedPointIndexes.length} khay có cây, bỏ qua ${skippedPoints.length} khay trống`, "SUCCESS");
+  pushWebNotification(`✅ Đã phun xong ${plantedPointIndexes.length} khay có cây và bỏ qua các khay trống.`, "SUCCESS");
 
   return { sprayedPoints: plantedPointIndexes, skippedPoints };
+}
+
+async function runFullGardenInspection() {
+  const ardStatus = await getRealSerialStatus();
+  if (!ardStatus.connected && process.platform === "linux") {
+    throw new Error("Mạch Arduino chưa được kết nối! Vui lòng cắm cáp USB Arduino.");
+  }
+
+  const plants = readJson("plants.json", []);
+  
+  // Lọc duy nhất các vị trí (pointIndex 0..5) ĐANG CÓ CÂY TRỒNG trong data/plants.json
+  const plantedPointIndexes = [];
+  for (let idx = 0; idx < 6; idx++) {
+    if (hasPlantAtPoint(idx)) {
+      plantedPointIndexes.push(idx);
+    }
+  }
+
+  const skippedPoints = [0, 1, 2, 3, 4, 5].filter((idx) => !plantedPointIndexes.includes(idx));
+
+  if (plantedPointIndexes.length === 0) {
+    addSystemLog("CHECK_PESTS", "Không có cây nào trong danh sách /plants. Đã bỏ qua kiểm tra sâu hại.", "WARNING");
+    pushWebNotification("Không có vị trí nào đang gieo trồng cây trong /plants. Đã bỏ qua lệnh kiểm tra sâu hại.", "WARNING");
+    return { inspectedPoints: [], skippedPoints: [0, 1, 2, 3, 4, 5], results: [] };
+  }
+
+  const plantedLabels = plantedPointIndexes.map((idx) => `Khay ${String(idx + 1).padStart(2, "0")}`);
+  const skippedLabels = skippedPoints.map((idx) => `Khay ${String(idx + 1).padStart(2, "0")}`);
+
+  addSystemLog("CHECK_PESTS", `Bắt đầu kiểm tra sâu hại tại các vị trí có cây: ${plantedLabels.join(", ")}. Bỏ qua ${skippedPoints.length} khay trống (${skippedLabels.join(", ")}).`, "PROCESS");
+  pushWebNotification(`🐛 Bắt đầu kiểm tra sâu hại tại ${plantedPointIndexes.length} vị trí có cây (${plantedLabels.join(", ")}). Bỏ qua ${skippedPoints.length} khay trống.`, "AI_ANALYSIS");
+
+  const results = [];
+
+  for (const pointIdx of plantedPointIndexes) {
+    const trayName = `Khay ${String(pointIdx + 1).padStart(2, "0")}`;
+    const matchingPlant = plants.find((p) => {
+      if (!p || !p.location) return false;
+      const matches = String(p.location).match(/\d+/g);
+      return matches && matches.some((n) => parseInt(n, 10) === pointIdx + 1);
+    });
+    const plantName = matchingPlant ? matchingPlant.name : "";
+
+    addSystemLog("INSPECT_MOVE", `🐛 Đang điều khiển Robot di chuyển tới ${trayName} (Điểm ${pointIdx + 1}) để kiểm tra sâu bệnh...`, "PROCESS");
+    pushWebNotification(`🐛 Đang điều khiển Robot di chuyển tới ${trayName} (Điểm ${pointIdx + 1}) để kiểm tra sâu bệnh trên cây ${plantName || ""}...`, "AI_ANALYSIS");
+
+    // 1. Gửi lệnh di chuyển tới điểm tương ứng trên Arduino
+    const moveWait = waitForArduinoMove(pointIdx, 30000);
+    try {
+      await sendDirectCommandToArduino(`P${pointIdx + 1}`);
+    } catch (moveErr) {
+      const waiter = pendingMoveResolvers.get(pointIdx);
+      if (waiter) waiter.reject(moveErr);
+      console.warn(`[Inspect Move Warning] ${moveErr.message}`);
+    }
+    await moveWait.catch(() => {});
+
+    // 2. Chụp ảnh từ Camera
+    let imagePathToSend = null;
+    try {
+      imagePathToSend = await captureImage();
+      addSystemLog("CAM_CAPTURE", `[Camera Log] Đã chụp ảnh thành công tại ${trayName}!`, "SUCCESS");
+    } catch (capErr) {
+      console.error(`[Inspect Capture Error] ${capErr.message}`);
+      addSystemLog("CAM_CAPTURE", `❌ Chụp ảnh không thành công tại ${trayName}: ${capErr.message}`, "ALERT");
+      continue;
+    }
+
+    if (!imagePathToSend || !fs.existsSync(imagePathToSend)) {
+      continue;
+    }
+
+    // 3. Phân tích Gemini AI
+    const keys = getKeysList();
+    if (keys.length === 0) {
+      addSystemLog("GEMINI_ERR", `❌ Chưa thiết lập Gemini API Key trong hệ thống`, "ALERT");
+      pushWebNotification(`❌ Chưa thiết lập Gemini API Key!`, "ALERT");
+      break;
+    }
+
+    let imageBase64 = null;
+    try {
+      const imgBuf = fs.readFileSync(imagePathToSend);
+      imageBase64 = imgBuf.toString("base64");
+    } catch (e) {}
+
+    const payload = {
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { text: createPrompt(pointIdx) },
+            ...(imageBase64 ? [{ inlineData: { mimeType: "image/jpeg", data: imageBase64 } }] : [])
+          ]
+        }
+      ],
+      generationConfig: {
+        maxOutputTokens: 1200,
+        thinkingConfig: { thinkingLevel: "minimal" },
+        responseMimeType: "application/json",
+        responseSchema: GEMINI_RESPONSE_SCHEMA
+      }
+    };
+
+    let parsedResult = null;
+    let formattedResult = "";
+    try {
+      const aiResult = await callGeminiApiWithRotation(payload);
+      if (aiResult && aiResult.text) {
+        try {
+          parsedResult = parseGeminiResult(aiResult.text);
+          formattedResult = formatGeminiResult(parsedResult);
+        } catch (pErr) {
+          formattedResult = aiResult.text;
+        }
+      }
+    } catch (aiErr) {
+      console.error(`[Gemini AI Inspect Error] ${aiErr.message}`);
+      addSystemLog("GEMINI_ERR", `❌ Lỗi Gemini AI tại ${trayName}: ${aiErr.message}`, "ALERT");
+      continue;
+    }
+
+    const hasPest = needSpray(formattedResult);
+    const aiStatusText = parsedResult ? parsedResult.status : (hasPest ? "CÓ SÂU / BỆNH" : "KHÔNG PHÁT HIỆN SÂU VÀ BỆNH");
+
+    if (hasPest) {
+      await sendDirectCommandToArduino("SPRAY").catch(() => {});
+      addSystemLog("ACTUATE", `🚨 Lệnh Arduino tại ${trayName}: SPRAY (Kích hoạt bơm phun thuốc)`, "WARNING");
+      pushWebNotification(`🚨 Gemini AI phân tích ${plantName ? plantName + " (" + trayName + ")" : trayName}: [${aiStatusText}]! Đã kích hoạt bơm SPRAY.`, "WARNING");
+    } else {
+      await sendDirectCommandToArduino("NO_SPRAY").catch(() => {});
+      addSystemLog("ACTUATE", `🌿 Lệnh Arduino tại ${trayName}: NO_SPRAY (Cây khỏe mạnh)`, "SUCCESS");
+      pushWebNotification(`🌿 Gemini AI phân tích ${plantName ? plantName + " (" + trayName + ")" : trayName}: [${aiStatusText}].`, "SUCCESS");
+    }
+
+    const telegramCaption = `🐛 KIỂM TRA SÂU BỆNH - ${trayName.toUpperCase()}\n🌱 Cây: ${plantName || "Trồng tại vườn"}\n\n${formattedResult}`;
+    try {
+      sendTelegramPhoto(imagePathToSend, telegramCaption).catch(() => {});
+    } catch (tErr) {}
+
+    const { inspId, snapshotUrl } = persistSnapshotForHistory(imagePathToSend, "plant-insp");
+    const historyEntry = {
+      id: inspId,
+      plantId: matchingPlant?.id || "",
+      type: "PEST",
+      timestamp: new Date().toLocaleString("vi-VN"),
+      title: `Kiểm tra sâu hại - ${plantName || trayName}`,
+      detail: formattedResult,
+      telegramCaption: telegramCaption,
+      status: hasPest ? "Phát hiện sâu hại" : "Sức khỏe tốt",
+      image: snapshotUrl,
+    };
+
+    const history = readJson("inspection_history.json", []);
+    history.unshift(historyEntry);
+    if (hasPest) {
+      history.unshift({
+        id: `spray-${Date.now()}`,
+        plantId: matchingPlant?.id || "",
+        type: "SPRAY",
+        timestamp: new Date().toLocaleString("vi-VN"),
+        title: `Phun sinh hoc - ${plantName || trayName}`,
+        detail: `Arduino da phun thuoc sinh hoc tai ${trayName} sau khi AI phat hien sau hai.`,
+        status: "Da phun sinh hoc",
+        image: snapshotUrl,
+      });
+    }
+    writeJson("inspection_history.json", history);
+    results.push(historyEntry);
+  }
+
+  // Đưa Robot về vị trí Gốc (Home) sau khi kết thúc chu trình
+  try {
+    await sendDirectCommandToArduino("H");
+  } catch (e) {}
+
+  addSystemLog("CHECK_PESTS", `Hoàn tất kiểm tra sâu bệnh tại ${plantedPointIndexes.length} vị trí có cây. Đã bỏ qua ${skippedPoints.length} khay trống.`, "SUCCESS");
+  pushWebNotification(`✅ Đã hoàn tất kiểm tra sâu bệnh tại ${plantedPointIndexes.length} vị trí có cây. Đã bỏ qua ${skippedPoints.length} vị trí trống.`, "SUCCESS");
+
+  return { inspectedPoints: plantedPointIndexes, skippedPoints, results };
 }
 
 // Cleanup khi process exit
@@ -1694,8 +1885,140 @@ app.post("/api/arduino/command", async (req, res) => {
       });
     }
 
+    if (mapped.cmd === "CHECK_PESTS" || mapped.cmd === "k") {
+      const inspectResult = await runFullGardenInspection();
+
+      const logEntry = {
+        timestamp,
+        command: mapped.cmd,
+        label: mapped.label,
+        status: "COMPLETED",
+      };
+
+      lastArduinoLogs.unshift(logEntry);
+      if (lastArduinoLogs.length > 25) lastArduinoLogs.pop();
+
+      return res.json({
+        success: true,
+        message: inspectResult.inspectedPoints.length > 0
+          ? `Đã kiểm tra sâu bệnh tại ${inspectResult.inspectedPoints.length} vị trí có cây và bỏ qua ${inspectResult.skippedPoints.length} vị trí trống.`
+          : "Không có vị trí nào đang có cây trong /plants nên đã bỏ qua lệnh kiểm tra.",
+        command: mapped.cmd,
+        timestamp: logEntry.timestamp,
+        inspectedPoints: inspectResult.inspectedPoints,
+        skippedPoints: inspectResult.skippedPoints,
+      });
+    }
+
+    if (mapped.cmd === "STOP" || command === "s" || command === "STOP") {
+      currentCancellationId++;
+      captureBusy = false;
+      if (pendingFullSprayResolver) {
+        try { pendingFullSprayResolver.reject(new Error("ĐÃ DỪNG KHẨN CẤP")); } catch (e) {}
+        pendingFullSprayResolver = null;
+      }
+      pendingMoveResolvers.forEach((waiter) => {
+        try { waiter.reject(new Error("ĐÃ DỪNG KHẨN CẤP")); } catch (e) {}
+      });
+      pendingMoveResolvers.clear();
+
+      try {
+        await sendDirectCommandToArduino("STOP");
+      } catch (e) {
+        console.warn(`[Emergency Stop Direct Send Warning] ${e.message}`);
+      }
+      try {
+        await sendDirectCommandToArduino("SPRAY_OFF");
+      } catch (e) {}
+
+      addSystemLog("EMERGENCY_STOP", "Dừng khẩn cấp (Emergency Stop) đã được kích hoạt!", "WARNING");
+      pushWebNotification("🚨 ĐÃ KÍCH HOẠT DỪNG KHẨN CẤP! Hệ thống đã ngắt toàn bộ động cơ và máy bơm.", "ALERT");
+
+      const logEntry = {
+        timestamp,
+        command: "STOP",
+        label: "Dừng khẩn cấp (s)",
+        status: "COMPLETED",
+      };
+
+      lastArduinoLogs.unshift(logEntry);
+      if (lastArduinoLogs.length > 25) lastArduinoLogs.pop();
+
+      return res.json({
+        success: true,
+        message: "🚨 Đã kích hoạt DỪNG KHẨN CẤP! Ngắt toàn bộ động cơ và máy bơm thành công.",
+        command: "STOP",
+        timestamp: logEntry.timestamp,
+      });
+    }
+
+    if (mapped.cmd === "RESET_ERROR" || command === "r" || command === "RESET_ERROR") {
+      captureBusy = false;
+      if (pendingFullSprayResolver) {
+        try { pendingFullSprayResolver.reject(new Error("ĐÃ KHÔI PHỤC HỆ THỐNG")); } catch (e) {}
+        pendingFullSprayResolver = null;
+      }
+      pendingMoveResolvers.forEach((waiter) => {
+        try { waiter.reject(new Error("ĐÃ KHÔI PHỤC HỆ THỐNG")); } catch (e) {}
+      });
+      pendingMoveResolvers.clear();
+
+      try {
+        await sendDirectCommandToArduino("RESET_ERROR");
+      } catch (e) {
+        console.warn(`[Reset Error Direct Send Warning] ${e.message}`);
+      }
+      try {
+        await sendDirectCommandToArduino("SPRAY_OFF");
+      } catch (e) {}
+
+      addSystemLog("RESET_ERROR", "Khôi phục hệ thống (Reset Error) hoàn tất.", "SUCCESS");
+      pushWebNotification("🔄 Hệ thống đã được khôi phục về trạng thái hoạt động bình thường.", "SUCCESS");
+
+      const logEntry = {
+        timestamp,
+        command: "RESET_ERROR",
+        label: "Khôi phục (r)",
+        status: "COMPLETED",
+      };
+
+      lastArduinoLogs.unshift(logEntry);
+      if (lastArduinoLogs.length > 25) lastArduinoLogs.pop();
+
+      return res.json({
+        success: true,
+        message: "🔄 Hệ thống đã được khôi phục về trạng thái hoạt động bình thường!",
+        command: "RESET_ERROR",
+        timestamp: logEntry.timestamp,
+      });
+    }
+
     // Send command directly to SerialPort
-    await sendDirectCommandToArduino(mapped.cmd);
+    try {
+      await sendDirectCommandToArduino(mapped.cmd);
+    } catch (sendErr) {
+      console.warn(`[Direct Command Warning] ${sendErr.message}`);
+      if (process.platform !== "linux") {
+        addSystemLog("ARDUINO_CMD", `Đã gửi lệnh ${mapped.label} (chế độ tự động/mô phỏng)`, "PROCESS");
+        pushWebNotification(`Đã thực thi lệnh ${mapped.label}.`, "PROCESS");
+        const logEntry = {
+          timestamp,
+          command: mapped.cmd,
+          label: mapped.label,
+          status: "SENT_MOCK",
+        };
+        lastArduinoLogs.unshift(logEntry);
+        if (lastArduinoLogs.length > 25) lastArduinoLogs.pop();
+
+        return res.json({
+          success: true,
+          message: `Đã thực thi lệnh "${mapped.label}"!`,
+          command: mapped.cmd,
+          timestamp,
+        });
+      }
+      throw sendErr;
+    }
 
     const logEntry = {
       timestamp,
@@ -3817,6 +4140,16 @@ app.post("/api/plant-inspect", async (req, res) => {
     const trayName = location || "Khay 01";
     const pointIdx = getPointIndexFromLocation(trayName);
 
+    // Kiểm tra xem vị trí này có cây trồng trong data/plants.json hay không
+    if (!hasPlantAtPoint(pointIdx)) {
+      addSystemLog("PEST_INSPECT", `Bỏ qua kiểm tra ${trayName}: Vị trí này chưa được gieo trồng cây trong /plants.`, "WARNING");
+      pushWebNotification(`⚠️ Vị trí ${trayName} chưa có cây trồng trong danh sách /plants. Đã bỏ qua kiểm tra.`, "WARNING");
+      return res.status(400).json({
+        success: false,
+        error: `Vị trí ${trayName} chưa có cây trồng trong danh sách /plants. Hệ thống chỉ kiểm tra các vị trí có cây.`,
+      });
+    }
+
     const arduinoStatus = await getRealSerialStatus();
     if (!arduinoStatus.connected && process.platform === "linux") {
       pushWebNotification(`❌ Lỗi kết nối phần cứng: Mạch Arduino chưa được cắm vào cổng USB/Serial!`, "ALERT");
@@ -4086,9 +4419,9 @@ function initScheduleRunner() {
 
               try {
                 if (act === "INSPECT") {
-                  pushWebNotification(`⏰ Lịch [Bước ${stepNum}/${totalSteps}]: Kích hoạt Kiểm tra sâu hại 6 điểm ("${item.title}")`, "PROCESS");
-                  await sendTelegramText(`⏰ LỊCH TỰ ĐỘNG [Bước ${stepNum}/${totalSteps}]:\n📌 Tên: ${item.title}\n🐛 Hành động: Kiểm tra sâu hại (chụp 6 điểm & Gemini AI)\n⏱ Thời gian: ${currentTimeStr}`);
-                  await sendDirectCommandToArduino("k").catch((e) => console.warn(`[Sched k Err] ${e.message}`));
+                  pushWebNotification(`⏰ Lịch [Bước ${stepNum}/${totalSteps}]: Kích hoạt Kiểm tra sâu hại các vị trí có cây ("${item.title}")`, "PROCESS");
+                  await sendTelegramText(`⏰ LỊCH TỰ ĐỘNG [Bước ${stepNum}/${totalSteps}]:\n📌 Tên: ${item.title}\n🐛 Hành động: Kiểm tra sâu hại (chỉ kiểm tra các vị trí có cây trong /plants)\n⏱ Thời gian: ${currentTimeStr}`);
+                  await runFullGardenInspection().catch((e) => console.warn(`[Sched Inspect Err] ${e.message}`));
                 } else if (act === "FERTILIZE") {
                   pushWebNotification(`⏰ Lịch [Bước ${stepNum}/${totalSteps}]: Kích hoạt Tưới Phân Bón ESP32 ("${item.title}")`, "PROCESS");
                   await sendTelegramText(`⏰ LỊCH TỰ ĐỘNG [Bước ${stepNum}/${totalSteps}]:\n📌 Tên: ${item.title}\n💧 Hành động: Tưới Phân bón ESP32\n⏱ Thời gian: ${currentTimeStr}`);

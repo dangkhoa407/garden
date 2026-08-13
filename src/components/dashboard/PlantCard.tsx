@@ -38,6 +38,11 @@ export function PlantCard({ plant, onWater, onHistory }: PlantCardProps) {
   const handleInspectClick = async () => {
     setActionLoading("inspect");
     try {
+      if (!plant || !plant.location) {
+        triggerQuickAction(`⚠️ Vị trí của cây ${plant?.name || ""} không hợp lệ. Chỉ kiểm tra các vị trí có trong danh sách /plants.`);
+        return;
+      }
+
       triggerQuickAction(`🐛 Đang điều khiển robot tới ${displayLocation} để kiểm tra sâu bệnh cho ${plant.name}...`);
 
       const res = await fetch("/api/plant-inspect", {
@@ -55,7 +60,7 @@ export function PlantCard({ plant, onWater, onHistory }: PlantCardProps) {
         setShowHistoryModal(true);
       } else {
         const json = await res.json().catch(() => ({}));
-        triggerQuickAction(`❌ Lỗi kiểm tra sâu cho ${plant.name}: ${json.error || "Server không phản hồi"}`);
+        triggerQuickAction(`⚠️ Lỗi kiểm tra sâu cho ${plant.name}: ${json.error || "Server không phản hồi"}`);
       }
     } catch (e) {
       triggerQuickAction(`❌ Lỗi khi kiểm tra sâu cho ${plant.name}`);

@@ -324,7 +324,13 @@ void checkSerialCommands() {
       Serial.println("PONG:NODE_CONNECTED");
     } else if (normalized == "HOME" || normalized == "H") {
       homeAll();
-    } else if (normalized == "CHECK_PESTS" || normalized == "RUN") {
+    } else if (normalized == "STOP" || normalized == "S") {
+      pumpOFF();
+      Serial.println("STOP OK: EMERGENCY STOP ACTIVATED");
+    } else if (normalized == "RESET_ERROR" || normalized == "R") {
+      pumpOFF();
+      Serial.println("RESET_ERROR OK: SYSTEM RESTORED");
+    } else if (normalized == "CHECK_PESTS" || normalized == "RUN" || normalized == "K") {
       runSprayPoints();
     } else if (normalized.startsWith("FULL_SPRAY_PLANTED:")) {
       sprayPlantedRoute(normalized.substring(normalized.indexOf(':') + 1));
