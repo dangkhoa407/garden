@@ -4216,18 +4216,24 @@ app.post("/api/plant-inspect", async (req, res) => {
     pushWebNotification(`🐛 Đang điều khiển Robot di chuyển tới ${trayName} (Điểm ${pointIdx + 1}) để kiểm tra sâu bệnh trên cây ${plantName || ""}...`, "AI_ANALYSIS");
 
     // 1. Send command to Arduino to move camera to tray/point
-    const moveWait = waitForArduinoMove(pointIdx, 30000);
+    const moveWait = waitForArduinoMove(pointIdx, 15000);
     try {
       await sendDirectCommandToArduino(`P${pointIdx + 1}`);
     } catch (moveErr) {
       const waiter = pendingMoveResolvers.get(pointIdx);
       if (waiter) waiter.reject(moveErr);
-      throw moveErr;
+      console.warn(`[Inspect Move Warning] ${moveErr.message}`);
     }
-    await moveWait;
+    await moveWait.catch((mErr) => console.warn(`[Move Wait Handled] ${mErr.message}`));
 
-    // 2. Capture actual USB camera image
-    // Priority: dung anh tu browser (snapshotBase64) neu co, else dung FFmpeg (Linux only)
+    // 2. Turn on LED Flash light for illumination during inspection
+    try {
+      await sendDirectCommandToArduino("LED_ON");
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    } catch (ledErr) {}
+
+    // 3. Capture actual USB camera image
+    // Priority: dung anh tu browser (snapshotBase64) neu co, else dung FFmpeg
     let imagePathToSend = null;
     const { snapshotBase64 } = req.body;
     if (snapshotBase64) {
@@ -4237,30 +4243,18 @@ app.post("/api/plant-inspect", async (req, res) => {
         const imgBuf = Buffer.from(b64Data, "base64");
         fs.writeFileSync(imgPath, imgBuf);
         imagePathToSend = imgPath;
-        addSystemLog("CAM_CAPTURE", `[BROWSER CAM] Da luu anh WebRTC tu browser (${imgBuf.length} bytes) -> st01.jpg`, "SUCCESS");
-        console.log(`[Plant Inspect] Dung anh browser ${imgBuf.length} bytes cho diem ${pointIdx + 1}`);
+        addSystemLog("CAM_CAPTURE", `[BROWSER CAM] Đã lưu ảnh WebRTC từ browser (${imgBuf.length} bytes) -> st01.jpg`, "SUCCESS");
       } catch (uploadErr) {
-        console.warn(`[Plant Inspect] Loi luu anh browser: ${uploadErr.message}`);
+        console.warn(`[Plant Inspect] Lỗi lưu ảnh browser: ${uploadErr.message}`);
       }
     }
+
     if (!imagePathToSend) {
       try {
-        try {
-          await sendDirectCommandToArduino("LED_ON");
-          await new Promise((resolve) => setTimeout(resolve, 250));
-        } catch (ledErr) {}
-
         imagePathToSend = await captureImage();
-
-        try {
-          await sendDirectCommandToArduino("LED_OFF");
-        } catch (ledErr) {}
-
         addSystemLog("CAM_CAPTURE", `[Camera Log] Đã bật Flash & chụp ảnh thành công từ USB Camera (${trayName} / st01.jpg)!`, "SUCCESS");
       } catch (capErr) {
-        try {
-          await sendDirectCommandToArduino("LED_OFF");
-        } catch (ledErr) {}
+        try { await sendDirectCommandToArduino("LED_OFF"); } catch (ledErr) {}
         console.error(`[Inspect Capture Error] ${capErr.message}`);
         addSystemLog("CAM_CAPTURE", `❌ Chụp ảnh không thành công: ${capErr.message}`, "ALERT");
         pushWebNotification(`❌ Lỗi chụp ảnh camera: ${capErr.message}`, "ALERT");
@@ -4270,6 +4264,11 @@ app.post("/api/plant-inspect", async (req, res) => {
         });
       }
     }
+
+    // Always turn off LED Flash after getting image
+    try {
+      await sendDirectCommandToArduino("LED_OFF");
+    } catch (ledErr) {}
 
     if (!imagePathToSend || !fs.existsSync(imagePathToSend)) {
       addSystemLog("CAM_CAPTURE", `❌ Chụp ảnh không thành công: Không tìm thấy file st01.jpg`, "ALERT");

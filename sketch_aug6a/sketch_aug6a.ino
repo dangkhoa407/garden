@@ -339,7 +339,13 @@ void runSprayPoints() {
 
 // ================== DI CHUYỂN TRỰC TIẾP TỚI 1 ĐIỂM / KHAY ==================
 void moveToPoint(int idx) {
-  if (!homeAll()) return;
+  emergencyStopRequested = false;
+  systemError = false;
+  digitalWrite(EN1_PIN, LOW);
+  digitalWrite(EN2_PIN, LOW);
+
+  homeAll();
+
   Serial.print("MOVING_TO_POINT:");
   Serial.println(idx);
 
@@ -348,19 +354,26 @@ void moveToPoint(int idx) {
     Serial.println("MOVED:0");
   } else if (idx == 1) {
     // Điểm 1 (Khay 02): X = 7cm
-    if (runMotor(STEP1_PIN, DIR1_PIN, steps7, true)) Serial.println("MOVED:1");
+    runMotor(STEP1_PIN, DIR1_PIN, steps7, true);
+    Serial.println("MOVED:1");
   } else if (idx == 2) {
     // Điểm 2 (Khay 03): Y = 7cm
-    if (runMotor(STEP2_PIN, DIR2_PIN, steps7, true)) Serial.println("MOVED:2");
+    runMotor(STEP2_PIN, DIR2_PIN, steps7, true);
+    Serial.println("MOVED:2");
   } else if (idx == 3) {
     // Điểm 3 (Khay 04): X = 7cm, Y = 7cm
-    if (runMotor(STEP1_PIN, DIR1_PIN, steps7, true) && runMotor(STEP2_PIN, DIR2_PIN, steps7, true)) Serial.println("MOVED:3");
+    runMotor(STEP1_PIN, DIR1_PIN, steps7, true);
+    runMotor(STEP2_PIN, DIR2_PIN, steps7, true);
+    Serial.println("MOVED:3");
   } else if (idx == 4) {
     // Điểm 4 (Khay 05): Y = 14cm
-    if (runMotor(STEP2_PIN, DIR2_PIN, steps14, true)) Serial.println("MOVED:4");
+    runMotor(STEP2_PIN, DIR2_PIN, steps14, true);
+    Serial.println("MOVED:4");
   } else if (idx == 5) {
     // Điểm 5 (Khay 06): X = 7cm, Y = 14cm
-    if (runMotor(STEP1_PIN, DIR1_PIN, steps7, true) && runMotor(STEP2_PIN, DIR2_PIN, steps14, true)) Serial.println("MOVED:5");
+    runMotor(STEP1_PIN, DIR1_PIN, steps7, true);
+    runMotor(STEP2_PIN, DIR2_PIN, steps14, true);
+    Serial.println("MOVED:5");
   }
 }
 
