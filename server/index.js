@@ -3669,7 +3669,7 @@ YÊU CẦU BẮT BUỘC VỀ ĐỊNH DẠNG ĐẦU RA:
       success: true,
       recommendations,
       plantsCount: plantedPointIndexes.length,
-      aiModel: aiResult ? aiResult.model : "gemini",
+      aiModel: aiResult ? aiResult.model : "gemini-3.5-flash-lite",
     });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
