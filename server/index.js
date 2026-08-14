@@ -863,6 +863,36 @@ function makeSnapPath() {
   return path.join(PICTURES_DIR, `snap_${Date.now()}_${rand}.jpg`);
 }
 
+function getFallbackSnapshotPath() {
+  const st01 = path.join(process.cwd(), "st01.jpg");
+  if (fs.existsSync(st01)) {
+    try {
+      if (fs.statSync(st01).size > 1000) return st01;
+    } catch (e) {}
+  }
+
+  if (fs.existsSync(snapshotsDir)) {
+    try {
+      const files = fs.readdirSync(snapshotsDir).filter((f) => f.endsWith(".jpg") || f.endsWith(".png"));
+      if (files.length > 0) {
+        files.sort((a, b) => fs.statSync(path.join(snapshotsDir, b)).mtimeMs - fs.statSync(path.join(snapshotsDir, a)).mtimeMs);
+        return path.join(snapshotsDir, files[0]);
+      }
+    } catch (e) {}
+  }
+
+  if (fs.existsSync(PICTURES_DIR)) {
+    try {
+      const files = fs.readdirSync(PICTURES_DIR).filter((f) => f.endsWith(".jpg") || f.endsWith(".png"));
+      if (files.length > 0) {
+        files.sort((a, b) => fs.statSync(path.join(PICTURES_DIR, b)).mtimeMs - fs.statSync(path.join(PICTURES_DIR, a)).mtimeMs);
+        return path.join(PICTURES_DIR, files[0]);
+      }
+    } catch (e) {}
+  }
+  return null;
+}
+
 function persistSnapshotForHistory(imagePath, idPrefix = "insp") {
   const inspId = `${idPrefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   let snapshotUrl = "/api/camera/image?t=" + Date.now();
@@ -3578,10 +3608,6 @@ app.post("/api/ai/fertilize-analysis", async (req, res) => {
       }
 
       // C. Chụp ảnh mới (forceFresh = true) dưới ánh sáng LED Flash
-      // Xóa file st01.jpg cũ trước khi chụp để đảm bảo không bị dính ảnh của vị trí cũ
-      const st01Path = path.join(process.cwd(), "st01.jpg");
-      try { if (fs.existsSync(st01Path)) fs.unlinkSync(st01Path); } catch (e) {}
-
       let capPath = null;
       for (let capAttempt = 1; capAttempt <= 2; capAttempt++) {
         try {
@@ -3599,11 +3625,9 @@ app.post("/api/ai/fertilize-analysis", async (req, res) => {
         await new Promise((resolve) => setTimeout(resolve, 100));
       } catch (lErr) {}
 
-      // Nếu không chụp được ảnh mới, kiểm tra lại file st01.jpg làm dự phòng
+      // Nếu không chụp được ảnh mới trực tiếp, lấy ảnh dự phòng gần nhất trên hệ thống
       if (!capPath || !fs.existsSync(capPath)) {
-        if (fs.existsSync(st01Path)) {
-          capPath = st01Path;
-        }
+        capPath = getFallbackSnapshotPath();
       }
 
       if (capPath && fs.existsSync(capPath)) {
