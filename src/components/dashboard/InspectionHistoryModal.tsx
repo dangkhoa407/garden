@@ -99,7 +99,7 @@ export function InspectionHistoryModal({
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="bg-surface rounded-3xl p-6 max-w-2xl w-full shadow-2xl border border-outline-variant/30 space-y-5 animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col relative">
+      <div className="bg-surface rounded-3xl p-6 max-w-4xl w-full shadow-2xl border border-outline-variant/30 space-y-5 animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col relative">
         {/* Full Image Preview Lightbox */}
         {previewImage && (
           <div
@@ -240,35 +240,38 @@ export function InspectionHistoryModal({
                   )}
                 </h4>
 
-                {/* Actual Inspection Image */}
-                {(item.image || activeTab === "PEST") && (
-                  <div
-                    onClick={() => setPreviewImage(item.image || "/api/camera/image")}
-                    className="rounded-2xl overflow-hidden border border-outline-variant/30 bg-black/40 relative max-h-[220px] flex items-center justify-center cursor-pointer group/img hover:border-purple-500/50 transition-all"
-                  >
-                    <img
-                      src={item.image || "/api/camera/image"}
-                      alt="Ảnh kiểm tra thực tế"
-                      className="w-full h-auto max-h-[220px] object-cover group-hover/img:scale-105 transition-transform duration-300"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = "/api/camera/image";
-                      }}
-                    />
-                    <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
-                      <span className="px-3 py-1.5 bg-black/70 text-white text-xs font-bold rounded-xl backdrop-blur-xs flex items-center gap-1.5">
-                        <span className="material-symbols-outlined text-sm">zoom_in</span>
-                        Xem ảnh phóng to
+                {/* Grid Layout: Image on Left, Results on Right */}
+                <div className={`grid ${item.image || activeTab === "PEST" ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"} gap-4 items-stretch`}>
+                  {/* Left Side: Inspection Image */}
+                  {(item.image || activeTab === "PEST") && (
+                    <div
+                      onClick={() => setPreviewImage(item.image || "/api/camera/image")}
+                      className="rounded-2xl overflow-hidden border border-outline-variant/30 bg-black/40 relative min-h-[190px] h-full max-h-[240px] flex items-center justify-center cursor-pointer group/img hover:border-purple-500/50 transition-all shadow-inner"
+                    >
+                      <img
+                        src={item.image || "/api/camera/image"}
+                        alt="Ảnh kiểm tra thực tế"
+                        className="w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-300"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = "/api/camera/image";
+                        }}
+                      />
+                      <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
+                        <span className="px-3 py-1.5 bg-black/70 text-white text-xs font-bold rounded-xl backdrop-blur-xs flex items-center gap-1.5 shadow-md">
+                          <span className="material-symbols-outlined text-sm">zoom_in</span>
+                          Xem ảnh phóng to
+                        </span>
+                      </div>
+                      <span className="absolute bottom-2 left-2 px-2.5 py-1 bg-black/70 text-white text-[10px] font-mono rounded-md backdrop-blur-xs shadow-xs">
+                        📷 Camera Snapshot thực tế
                       </span>
                     </div>
-                    <span className="absolute bottom-2 left-2 px-2 py-1 bg-black/70 text-white text-[10px] font-mono rounded-md backdrop-blur-xs">
-                      📷 Camera Snapshot thực tế
-                    </span>
-                  </div>
-                )}
+                  )}
 
-                {/* Actual Gemini Telegram Report Format */}
-                <div className="bg-surface rounded-xl p-3 border border-outline-variant/20 font-mono text-xs text-on-surface whitespace-pre-wrap leading-relaxed">
-                  {item.telegramCaption || item.detail}
+                  {/* Right Side: Gemini Telegram Report Details */}
+                  <div className="bg-surface rounded-2xl p-4 border border-outline-variant/20 font-mono text-xs text-on-surface whitespace-pre-wrap leading-relaxed h-full min-h-[190px] max-h-[240px] overflow-y-auto shadow-xs">
+                    {item.telegramCaption || item.detail}
+                  </div>
                 </div>
               </div>
             ))
