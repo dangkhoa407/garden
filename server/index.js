@@ -3513,6 +3513,16 @@ app.post("/api/ai/fertilize-analysis", async (req, res) => {
     addSystemLog("AI_FERTILIZE", `Bắt đầu quét AI phân tích dinh dưỡng tại ${plantedPointIndexes.length} vị trí có cây: ${plantedLabels.join(", ")}`, "PROCESS");
     pushWebNotification(`🌿 Bắt đầu di chuyển camera quét & phân tích Gemini AI tại ${plantedPointIndexes.length} vị trí có cây (${plantedLabels.join(", ")})...`, "AI_ANALYSIS");
 
+    // 0. ĐƯA ROBOT VỀ VỊ TRÍ GỐC (HOMING) TRƯỚC KHI QUÉT
+    addSystemLog("AI_FERTILIZE", "🏠 Đang đưa robot về vị trí gốc (Homing) trước khi bắt đầu quét dinh dưỡng...", "PROCESS");
+    pushWebNotification("🏠 Đang đưa robot về vị trí gốc (Homing) trước khi quét phân tích...", "PROCESS");
+    try {
+      await sendDirectCommandToArduino("HOME");
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    } catch (homeErr) {
+      console.warn(`[AI Fertilize Homing Warning] ${homeErr.message}`);
+    }
+
     // 1. DI CHUYỂN ROBOT QUA CÁC VỊ TRÍ CÓ CÂY & CHỤP ẢNH REAL CHO TẤT CẢ CÂY
     const imageParts = [];
     for (const pointIdx of plantedPointIndexes) {
