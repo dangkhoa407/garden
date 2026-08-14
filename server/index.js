@@ -3547,6 +3547,32 @@ app.post("/api/telegram/notify", async (req, res) => {
   }
 });
 
+app.get("/api/pictures/all", (req, res) => {
+  try {
+    if (!fs.existsSync(PICTURES_DIR)) return res.json({ success: true, pictures: [] });
+    const files = fs.readdirSync(PICTURES_DIR)
+      .filter((f) => f.endsWith(".jpg") || f.endsWith(".png"))
+      .sort((a, b) => fs.statSync(path.join(PICTURES_DIR, b)).mtimeMs - fs.statSync(path.join(PICTURES_DIR, a)).mtimeMs)
+      .slice(0, 12);
+
+    const pictures = files.map((file, i) => {
+      const filePath = path.join(PICTURES_DIR, file);
+      const b64 = fs.readFileSync(filePath).toString("base64");
+      const stat = fs.statSync(filePath);
+      return {
+        id: file,
+        trayName: `Khay ${String((i % 6) + 1).padStart(2, "0")}`,
+        fileName: file,
+        imageBase64: `data:image/jpeg;base64,${b64}`,
+        time: new Date(stat.mtimeMs).toLocaleTimeString("vi-VN"),
+      };
+    });
+    res.json({ success: true, pictures });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // AI SMART FERTILIZE ANALYSIS ENDPOINT (QUÉT CÁC VỊ TRÍ CÓ CÂY THỰC TẾ TRONG /PLANTS + THÔNG TIN CÂY + BÌNH PHÂN => GEMINI JSON)
 app.post("/api/ai/fertilize-analysis", async (req, res) => {
   try {
@@ -3642,9 +3668,9 @@ app.post("/api/ai/fertilize-analysis", async (req, res) => {
         await new Promise((resolve) => setTimeout(resolve, 100));
       } catch (lErr) {}
 
-      // Nếu không chụp được ảnh mới trực tiếp, lấy ảnh dự phòng gần nhất trong vòng 10 giây
+      // Nếu không chụp được ảnh mới trực tiếp, lấy ảnh dự phòng gần nhất trên hệ thống
       if (!capPath || !fs.existsSync(capPath)) {
-        capPath = getFallbackSnapshotPath(10000);
+        capPath = getFallbackSnapshotPath(0);
       }
 
       if (capPath && fs.existsSync(capPath)) {

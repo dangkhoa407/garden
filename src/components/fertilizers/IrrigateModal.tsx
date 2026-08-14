@@ -64,13 +64,35 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
     { tankCode: string; name: string; ml: number; reason: string; selected: boolean }[]
   >([]);
 
+  const [selectedPreviewImage, setSelectedPreviewImage] = useState<{
+    trayName: string;
+    imageBase64: string;
+  } | null>(null);
+
+  const fetchCapturedPictures = async () => {
+    try {
+      const res = await fetch("/api/pictures/all");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.pictures && Array.isArray(data.pictures) && data.pictures.length > 0) {
+          setCapturedImages(
+            data.pictures.map((p: any) => ({
+              trayName: p.trayName || "Khay Cây",
+              imageBase64: p.imageBase64,
+            }))
+          );
+        }
+      }
+    } catch (e) {}
+  };
+
   useEffect(() => {
     setMounted(true);
   }, []);
 
   const [plantedCount, setPlantedCount] = useState<number>(0);
 
-  // Fetch fertilizers & plants list from server whenever modal opens
+  // Fetch fertilizers & plants list & pictures from server whenever modal opens
   useEffect(() => {
     if (!isOpen) return;
 
@@ -90,6 +112,8 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
           const data = await pRes.json();
           if (Array.isArray(data)) setPlantedCount(data.length);
         }
+
+        await fetchCapturedPictures();
       } catch (err) {}
     };
 
@@ -164,8 +188,10 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
       }
 
       if (res.ok && data.success && data.recommendations && Array.isArray(data.recommendations)) {
-        if (data.capturedImages && Array.isArray(data.capturedImages)) {
+        if (data.capturedImages && Array.isArray(data.capturedImages) && data.capturedImages.length > 0) {
           setCapturedImages(data.capturedImages);
+        } else {
+          await fetchCapturedPictures();
         }
 
         const recs = data.recommendations.map((r: any) => ({
@@ -712,10 +738,10 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
                       <span className="material-symbols-outlined text-primary text-base">
                         photo_camera
                       </span>
-                      <span>Ảnh Thực Tế Chụp Từ Camera ({capturedImages.length} vị trí cây):</span>
+                      <span>Ảnh Thực Tế Chụp Từ Camera ({capturedImages.length} ảnh):</span>
                     </div>
-                    <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-mono font-bold">
-                      Flash ON 📸
+                    <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-mono font-bold flex items-center gap-1">
+                      <span>Flash ON</span> 📸
                     </span>
                   </div>
 
@@ -723,17 +749,23 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
                     {capturedImages.map((img, idx) => (
                       <div
                         key={idx}
-                        className="relative rounded-xl overflow-hidden border border-outline-variant/40 bg-black/60 shadow-sm group"
+                        onClick={() => setSelectedPreviewImage(img)}
+                        className="relative rounded-xl overflow-hidden border border-outline-variant/40 bg-black/80 shadow-sm group cursor-pointer hover:border-primary transition-all duration-200"
                       >
                         <img
                           src={img.imageBase64}
                           alt={img.trayName}
-                          className="w-full h-32 object-cover transition-transform duration-300 group-hover:scale-105"
+                          className="w-full h-32 object-cover transition-transform duration-300 group-hover:scale-110"
                         />
+                        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <span className="material-symbols-outlined text-white text-2xl drop-shadow-md">
+                            zoom_in
+                          </span>
+                        </div>
                         <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-2 text-white flex items-center justify-between">
                           <span className="text-[11px] font-bold text-emerald-300">{img.trayName}</span>
                           <span className="text-[9px] bg-primary/80 text-white px-1.5 py-0.5 rounded font-mono font-medium">
-                            Real-time
+                            Xem Ảnh
                           </span>
                         </div>
                       </div>
@@ -882,6 +914,40 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
           </button>
         </div>
       </div>
+
+      {/* Lightbox Modal for Full Resolution Photo Preview */}
+      {selectedPreviewImage && (
+        <div
+          onClick={() => setSelectedPreviewImage(null)}
+          className="fixed inset-0 z-[9999] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 cursor-pointer animate-fade-in"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative max-w-4xl max-h-[90vh] bg-surface rounded-2xl overflow-hidden shadow-2xl border border-outline-variant/40 flex flex-col"
+          >
+            <div className="p-3 bg-black/60 backdrop-blur-md flex items-center justify-between text-white border-b border-white/10">
+              <div className="flex items-center gap-2 font-bold text-emerald-400 text-sm">
+                <span className="material-symbols-outlined text-base">photo_camera</span>
+                <span>{selectedPreviewImage.trayName} - Ảnh Chụp Từ Camera Thật (Flash ON)</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedPreviewImage(null)}
+                className="p-1 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
+              >
+                <span className="material-symbols-outlined text-xl">close</span>
+              </button>
+            </div>
+            <div className="relative bg-black flex items-center justify-center p-2">
+              <img
+                src={selectedPreviewImage.imageBase64}
+                alt={selectedPreviewImage.trayName}
+                className="max-h-[75vh] w-auto object-contain rounded-lg shadow-md"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 
