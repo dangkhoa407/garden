@@ -4415,6 +4415,9 @@ app.post("/api/plant-move", async (req, res) => {
 
     pushWebNotification(`🤖 Đang điều khiển Robot di chuyển tới ${trayName} (Điểm ${pointIdx + 1}) để quan sát...`, "PROCESS");
 
+    // 🏠 HOMING TRƯỚC KHI DI CHUYỂN
+    await homingFirst(`Quan sát ${trayName}`);
+
     // Send movement command to Arduino Serial and wait for the robot to arrive.
     const moveWait = waitForArduinoMove(pointIdx, 30000);
     try {
@@ -4459,6 +4462,9 @@ app.post("/api/plant-water", async (req, res) => {
     }
 
     pushWebNotification(`🤖 Robot đang di chuyển tới ${trayName} (Điểm ${pointIdx + 1}) để tiến hành tưới phân...`, "PROCESS");
+
+    // 🏠 HOMING TRƯỚC KHI PHUN
+    await homingFirst(`Phun Thuốc ${trayName}`);
 
     // 1. Move robot to tray position
     const moveWait = waitForArduinoMove(pointIdx, 30000);
@@ -4537,6 +4543,9 @@ app.post("/api/plant-inspect", async (req, res) => {
 
     addSystemLog("INSPECT_MOVE", `🐛 Đang điều khiển Robot di chuyển tới ${trayName} (Điểm ${pointIdx + 1}) để kiểm tra sâu bệnh...`, "PROCESS");
     pushWebNotification(`🐛 Đang điều khiển Robot di chuyển tới ${trayName} (Điểm ${pointIdx + 1}) để kiểm tra sâu bệnh trên cây ${plantName || ""}...`, "AI_ANALYSIS");
+
+    // 🏠 HOMING TRƯỚC KHI DI CHUYỂN
+    await homingFirst(`Kiểm tra sâu ${trayName}`);
 
     // 1. Send command to Arduino to move camera to tray/point
     const moveWait = waitForArduinoMove(pointIdx, 5000);
