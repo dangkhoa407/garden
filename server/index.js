@@ -849,7 +849,7 @@ async function captureFramesCrossPlatform(directory) {
         "-q:v", "2",
         framePattern
       ],
-      { timeout: 3000, maxBuffer: 2 * 1024 * 1024 }
+      { timeout: 30000, maxBuffer: 2 * 1024 * 1024 }
     );
   }
 }
@@ -3578,12 +3578,19 @@ app.post("/api/ai/fertilize-analysis", async (req, res) => {
       }
 
       // C. Chụp ảnh mới (forceFresh = true) dưới ánh sáng LED Flash
+      // Xóa file st01.jpg cũ trước khi chụp để đảm bảo không bị dính ảnh của vị trí cũ
+      const st01Path = path.join(process.cwd(), "st01.jpg");
+      try { if (fs.existsSync(st01Path)) fs.unlinkSync(st01Path); } catch (e) {}
+
       let capPath = null;
-      try {
-        capPath = await captureImage(true);
-        await new Promise((resolve) => setTimeout(resolve, 200));
-      } catch (capErr) {
-        console.warn(`[AI Fertilize Capture Error ${trayName}] ${capErr.message}`);
+      for (let capAttempt = 1; capAttempt <= 2; capAttempt++) {
+        try {
+          capPath = await captureImage(true);
+          if (capPath && fs.existsSync(capPath)) break;
+        } catch (capErr) {
+          console.warn(`[AI Fertilize Capture Attempt ${capAttempt} ${trayName}] ${capErr.message}`);
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
       }
 
       // D. Tắt đèn LED Flash sau khi chụp xong
@@ -3592,11 +3599,10 @@ app.post("/api/ai/fertilize-analysis", async (req, res) => {
         await new Promise((resolve) => setTimeout(resolve, 100));
       } catch (lErr) {}
 
-      // Nếu không chụp được ảnh mới, sử dụng st01.jpg làm ảnh dự phòng cho điểm này
+      // Nếu không chụp được ảnh mới, kiểm tra lại file st01.jpg làm dự phòng
       if (!capPath || !fs.existsSync(capPath)) {
-        const fallbackImgPath = path.join(process.cwd(), "st01.jpg");
-        if (fs.existsSync(fallbackImgPath)) {
-          capPath = fallbackImgPath;
+        if (fs.existsSync(st01Path)) {
+          capPath = st01Path;
         }
       }
 
