@@ -1,7 +1,10 @@
 /*
- * ESP32 Firmware V2.0 - Hệ thống quản lý canh tác bằng AI
- * Điều khiển qua USB Serial từ Raspberry Pi 4
+ * ESP32 Firmware V2.5 - Hệ thống quản lý canh tác bằng AI
+ * Tích hợp: Bơm phân bón, Bơm tưới/giếng, Phao nước, DHT11 (Nhiệt độ/Độ ẩm), Cảm biến Ánh sáng, Cảm biến Mưa
+ * Điều khiển qua USB Serial từ Raspberry Pi 4 (115200 baud)
  */
+
+#include "DHT.h"
 
 // Định nghĩa các chân (Theo chuẩn ESP32 DevKit V1)
 #define PUMP_A_PIN 18     // Bơm phân A (Đạm hữu cơ)
@@ -11,11 +14,19 @@
 #define RELAY_WATER 23    // Relay bơm tưới
 #define RELAY_WELL 5      // Relay bơm giếng
 
-#define SOIL1_PIN 34      // Cảm biến độ ẩm 1
-#define SOIL2_PIN 35      // Cảm biến độ ẩm 2
+#define SOIL1_PIN 34      // Cảm biến độ ẩm đất 1 (Analog)
+#define SOIL2_PIN 35      // Cảm biến độ ẩm đất 2 (Analog)
 
 #define FLOAT_LOW_PIN 32  // Phao mức thấp (Hết dung dịch)
 #define FLOAT_HIGH_PIN 33 // Phao mức cao (Đầy dung dịch)
+
+// Cụm Cảm biến Thời tiết & Môi trường
+#define DHTPIN 4          // Chân DATA của DHT11
+#define DHTTYPE DHT11
+DHT dht(DHTPIN, DHTTYPE);
+
+#define RAIN_PIN 36       // Cảm biến Mưa (Analog - Chân VP)
+#define LIGHT_PIN 39      // Cảm biến Quang trở (Analog - Chân VN)
 
 // Biến lưu trạng thái phao để bắt sự kiện thay đổi
 bool lastFloatLow = false;
@@ -30,6 +41,9 @@ bool isDosing = false;
 void setup() {
   // Khởi tạo Serial tốc độ 115200 baud
   Serial.begin(115200);
+
+  // Khởi tạo DHT11
+  dht.begin();
 
   // Cấu hình chân Output
   pinMode(PUMP_A_PIN, OUTPUT);
@@ -50,7 +64,7 @@ void setup() {
   lastFloatLow = (digitalRead(FLOAT_LOW_PIN) == LOW);
   lastFloatHigh = (digitalRead(FLOAT_HIGH_PIN) == LOW);
   
-  Serial.println("ESP32_READY");
+  Serial.println("ESP32_READY_V2.5");
 }
 
 void loop() {
@@ -102,20 +116,35 @@ void processCommand(String cmd) {
   }
 }
 
-// Hàm gửi trạng thái về Pi
+// Hàm gửi trạng thái về Pi (Bao gồm Soil, Float, Run, Temp, Humidity, Rain, Light)
 void sendStatus() {
   int soil1 = analogRead(SOIL1_PIN);
   int soil2 = analogRead(SOIL2_PIN);
+  int rainValue = analogRead(RAIN_PIN);
+  int lightValue = analogRead(LIGHT_PIN);
+
   int lowState = (digitalRead(FLOAT_LOW_PIN) == LOW) ? 1 : 0;
   int highState = (digitalRead(FLOAT_HIGH_PIN) == LOW) ? 1 : 0;
   int runState = (digitalRead(RELAY_WATER) == HIGH || digitalRead(RELAY_WELL) == HIGH || isDosing) ? 1 : 0;
+
+  // Đọc DHT11 (Nhiệt độ & Độ ẩm không khí)
+  float h = dht.readHumidity();
+  float t = dht.readTemperature();
+  if (isnan(h) || isnan(t)) {
+    h = 0.0;
+    t = 0.0;
+  }
 
   Serial.print("STATUS,");
   Serial.print("SOIL1="); Serial.print(soil1); Serial.print(",");
   Serial.print("SOIL2="); Serial.print(soil2); Serial.print(",");
   Serial.print("LOW="); Serial.print(lowState); Serial.print(",");
   Serial.print("HIGH="); Serial.print(highState); Serial.print(",");
-  Serial.print("RUN="); Serial.println(runState);
+  Serial.print("RUN="); Serial.print(runState); Serial.print(",");
+  Serial.print("TEMP="); Serial.print(t, 1); Serial.print(",");
+  Serial.print("HUM="); Serial.print(h, 1); Serial.print(",");
+  Serial.print("RAIN="); Serial.print(rainValue); Serial.print(",");
+  Serial.print("LIGHT="); Serial.println(lightValue);
 }
 
 // Hàm kiểm tra phao mức nước

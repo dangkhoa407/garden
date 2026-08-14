@@ -55,6 +55,10 @@ export default function ControlsPage() {
     floatHigh: boolean;
     floatLow: boolean;
     avgMoisture: number;
+    temperature?: number;
+    humidity?: number;
+    lightPercent?: number;
+    rainRaw?: number;
   }
 
   interface TaskProgressState {
@@ -73,6 +77,9 @@ export default function ControlsPage() {
     floatHigh: false,
     floatLow: false,
     avgMoisture: 0,
+    temperature: 28,
+    humidity: 70,
+    lightPercent: 80,
   });
 
   const [taskProgress, setTaskProgress] = useState<TaskProgressState | null>(null);
