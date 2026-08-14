@@ -128,11 +128,16 @@ void sendStatus() {
   int runState = (digitalRead(RELAY_WATER) == HIGH || digitalRead(RELAY_WELL) == HIGH || isDosing) ? 1 : 0;
 
   // Đọc DHT11 (Nhiệt độ & Độ ẩm không khí)
+  static float lastValidTemp = 28.0;
+  static float lastValidHum = 70.0;
+
   float h = dht.readHumidity();
   float t = dht.readTemperature();
-  if (isnan(h) || isnan(t)) {
-    h = 0.0;
-    t = 0.0;
+  if (!isnan(t) && t > -40.0 && t < 85.0) {
+    lastValidTemp = t;
+  }
+  if (!isnan(h) && h >= 0.0 && h <= 100.0) {
+    lastValidHum = h;
   }
 
   Serial.print("STATUS,");
@@ -141,8 +146,8 @@ void sendStatus() {
   Serial.print("LOW="); Serial.print(lowState); Serial.print(",");
   Serial.print("HIGH="); Serial.print(highState); Serial.print(",");
   Serial.print("RUN="); Serial.print(runState); Serial.print(",");
-  Serial.print("TEMP="); Serial.print(t, 1); Serial.print(",");
-  Serial.print("HUM="); Serial.print(h, 1); Serial.print(",");
+  Serial.print("TEMP="); Serial.print(lastValidTemp, 1); Serial.print(",");
+  Serial.print("HUM="); Serial.print(lastValidHum, 1); Serial.print(",");
   Serial.print("RAIN="); Serial.print(rainValue); Serial.print(",");
   Serial.print("LIGHT="); Serial.println(lightValue);
 }

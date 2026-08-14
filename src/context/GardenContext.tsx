@@ -129,7 +129,7 @@ export function GardenProvider({ children }: { children: React.ReactNode }) {
             setControls((prev) => ({
               ...prev,
               ...(typeof json.data.avgMoisture === "number" && { soilMoisture: json.data.avgMoisture }),
-              ...(typeof json.data.temperature === "number" && json.data.temperature > 0 && { temperature: json.data.temperature }),
+              ...(typeof json.data.temperature === "number" && !isNaN(json.data.temperature) && { temperature: json.data.temperature }),
               ...(typeof json.data.lightPercent === "number" && { lightIntensity: json.data.lightPercent }),
             }));
           }

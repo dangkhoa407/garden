@@ -2458,6 +2458,9 @@ async function sendDirectCommandToEsp32(cmdString) {
       await new Promise((res, rej) => activeEsp32Port.open((err) => (err ? rej(err) : res())));
       const parser = activeEsp32Port.pipe(new ReadlineParser({ delimiter: "\n" }));
 
+      activeEsp32Port.on("error", () => { activeEsp32Port = null; });
+      activeEsp32Port.on("close", () => { activeEsp32Port = null; });
+
       parser.on("data", (rawLine) => {
         const line = String(rawLine).trim();
         if (!line) return;
@@ -2466,18 +2469,23 @@ async function sendDirectCommandToEsp32(cmdString) {
         if (line.startsWith("STATUS,")) {
           const parts = line.split(",");
           let s1 = 3171, s2 = 4095, low = 0, high = 0, run = 0;
-          let temp = 28.0, hum = 70.0, rain = 4095, light = 3276;
+          let temp = lastEsp32Sensors.temperature || 28.0;
+          let hum = lastEsp32Sensors.humidity || 70.0;
+          let rain = lastEsp32Sensors.rainRaw || 4095;
+          let light = lastEsp32Sensors.lightRaw || 3276;
+
           parts.forEach((p) => {
             const [k, v] = p.split("=");
+            if (!v) return;
             if (k === "SOIL1") s1 = parseInt(v, 10) || 3171;
             if (k === "SOIL2") s2 = parseInt(v, 10) || 4095;
             if (k === "LOW") low = parseInt(v, 10) || 0;
             if (k === "HIGH") high = parseInt(v, 10) || 0;
             if (k === "RUN") run = parseInt(v, 10) || 0;
-            if (k === "TEMP") temp = parseFloat(v) || 28.0;
-            if (k === "HUM") hum = parseFloat(v) || 70.0;
-            if (k === "RAIN") rain = parseInt(v, 10) || 4095;
-            if (k === "LIGHT") light = parseInt(v, 10) || 3276;
+            if (k === "TEMP") { const n = parseFloat(v); if (!isNaN(n)) temp = n; }
+            if (k === "HUM") { const n = parseFloat(v); if (!isNaN(n)) hum = n; }
+            if (k === "RAIN") { const n = parseInt(v, 10); if (!isNaN(n)) rain = n; }
+            if (k === "LIGHT") { const n = parseInt(v, 10); if (!isNaN(n)) light = n; }
           });
 
           const { pct1, pct2, avg } = parseEsp32Moisture(s1, s2);
