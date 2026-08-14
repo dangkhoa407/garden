@@ -28,16 +28,16 @@ export default function DashboardPage() {
         />
         <StatCard
           label="Nhiệt độ (Temperature)"
-          value={`${controls.temperature}°C`}
-          status="Ổn định"
+          value={typeof controls.temperature === "number" ? `${controls.temperature}°C` : "--"}
+          status={typeof controls.temperature === "number" ? "Ổn định" : "Chờ cảm biến..."}
           statusColor="bg-surface-container-high text-on-surface-variant"
           icon="thermostat"
           iconColor="text-tertiary"
         />
         <StatCard
           label="Cường độ ánh sáng (Light)"
-          value={`${controls.lightIntensity}%`}
-          status={controls.lights ? "Đang bật LED" : "Tối ưu"}
+          value={typeof controls.lightIntensity === "number" ? `${controls.lightIntensity}%` : "--"}
+          status={controls.lights ? "Đang bật LED" : (typeof controls.lightIntensity === "number" ? "Tối ưu" : "Chờ cảm biến...")}
           statusColor="bg-primary/10 text-primary"
           icon="light_mode"
           iconColor="text-tertiary-fixed-dim"

@@ -2164,11 +2164,11 @@ app.get("/api/esp32/sensors", (req, res) => {
       floatLow: live.floatLow,
       avgMoisture: live.avgSoilPercent,
       running: live.running,
-      temperature: live.temperature !== undefined ? live.temperature : 28.0,
-      humidity: live.humidity !== undefined ? live.humidity : 70.0,
-      rainRaw: live.rainRaw !== undefined ? live.rainRaw : 4095,
-      lightRaw: live.lightRaw !== undefined ? live.lightRaw : 3276,
-      lightPercent: live.lightPercent !== undefined ? live.lightPercent : 80,
+      temperature: live.temperature !== undefined ? live.temperature : null,
+      humidity: live.humidity !== undefined ? live.humidity : null,
+      rainRaw: live.rainRaw !== undefined ? live.rainRaw : null,
+      lightRaw: live.lightRaw !== undefined ? live.lightRaw : null,
+      lightPercent: live.lightPercent !== undefined ? live.lightPercent : null,
       lastUpdate: live.lastUpdate,
     },
     sensors: live,
@@ -2400,11 +2400,11 @@ let lastEsp32Sensors = {
   floatLow: false,
   floatHigh: false,
   running: false,
-  temperature: 28.0,
-  humidity: 70.0,
-  rainRaw: 4095,
-  lightRaw: 3276,
-  lightPercent: 80,
+  temperature: undefined,
+  humidity: undefined,
+  rainRaw: undefined,
+  lightRaw: undefined,
+  lightPercent: undefined,
   lastUpdate: new Date().toLocaleTimeString("vi-VN"),
 };
 
@@ -2471,10 +2471,10 @@ async function sendDirectCommandToEsp32(cmdString) {
         if (line.startsWith("STATUS,")) {
           const parts = line.split(",");
           let s1 = 3171, s2 = 4095, low = 0, high = 0, run = 0;
-          let temp = lastEsp32Sensors.temperature || 28.0;
-          let hum = lastEsp32Sensors.humidity || 70.0;
-          let rain = lastEsp32Sensors.rainRaw || 4095;
-          let light = lastEsp32Sensors.lightRaw || 3276;
+          let temp = lastEsp32Sensors.temperature;
+          let hum = lastEsp32Sensors.humidity;
+          let rain = lastEsp32Sensors.rainRaw;
+          let light = lastEsp32Sensors.lightRaw;
 
           parts.forEach((p) => {
             const [k, v] = p.split("=");
@@ -2491,7 +2491,7 @@ async function sendDirectCommandToEsp32(cmdString) {
           });
 
           const { pct1, pct2, avg } = parseEsp32Moisture(s1, s2);
-          const lightPct = Math.min(100, Math.max(0, Math.round((light / 4095) * 100)));
+          const lightPct = typeof light === "number" ? Math.min(100, Math.max(0, Math.round((light / 4095) * 100))) : undefined;
 
           lastEsp32Sensors = {
             soil1Raw: s1,
