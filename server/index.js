@@ -2287,6 +2287,7 @@ async function getRealEsp32Status() {
         mfg.includes("ESP32") ||
         mfg.includes("CH9102") ||
         pathStr.includes("TTYUSB") ||
+        pathStr.includes("TTYACM") ||
         (pathStr.includes("COM") && !mfg.includes("CH340") && !mfg.includes("FTDI"))
       );
     });
@@ -2443,6 +2444,7 @@ async function sendDirectCommandToEsp32(cmdString) {
         mfg.includes("ESP32") ||
         mfg.includes("CH9102") ||
         pathStr.includes("TTYUSB") ||
+        pathStr.includes("TTYACM") ||
         (pathStr.includes("COM") && !mfg.includes("CH340") && !mfg.includes("FTDI"))
       );
     });
@@ -3260,6 +3262,12 @@ app.get("/api/garden", (req, res) => {
   const tasks = readJson("tasks.json", []);
   const chatHistory = readJson("chat.json", []);
   const settings = readJson("settings.json", {});
+
+  if (typeof lastEsp32Sensors !== "undefined") {
+    if (typeof lastEsp32Sensors.avgSoilPercent === "number") controls.soilMoisture = lastEsp32Sensors.avgSoilPercent;
+    if (typeof lastEsp32Sensors.temperature === "number") controls.temperature = lastEsp32Sensors.temperature;
+    if (typeof lastEsp32Sensors.lightPercent === "number") controls.lightIntensity = lastEsp32Sensors.lightPercent;
+  }
 
   res.json({ plants, controls, tasks, chatHistory, settings });
 });
