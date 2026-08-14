@@ -721,7 +721,7 @@ async function releaseCameraBeforeCapture() {
     } catch (e) {}
   }
 
-  await new Promise((resolve) => setTimeout(resolve, 600));
+  await new Promise((resolve) => setTimeout(resolve, 150));
 }
 
 function requestFreshBrowserSnapshot(timeoutMs = 3500) {
@@ -3609,21 +3609,21 @@ app.post("/api/ai/fertilize-analysis", async (req, res) => {
         console.warn(`[AI Fertilize Move Warning ${trayName}] ${moveErr.message}`);
       }
       await moveWait.catch((mErr) => console.warn(`[Move Wait ${trayName}] ${mErr.message}`));
-      // Chờ thêm 1200ms để robot hoàn toàn đứng yên vị trí mới chống rung lắc camera
-      await new Promise((resolve) => setTimeout(resolve, 1200));
+      // Chờ nhanh 300ms để robot ổn định vị trí
+      await new Promise((resolve) => setTimeout(resolve, 300));
 
       // B. Bật đèn LED Flash chiếu sáng cây trồng trước khi chụp
       try {
         await sendDirectCommandToArduino("LED_ON");
-        // Chờ 800ms để ánh sáng Flash ổn định & camera tự động cân bằng độ sáng (exposure)
-        await new Promise((resolve) => setTimeout(resolve, 800));
+        // Chờ nhanh 200ms cho Flash chiếu sáng
+        await new Promise((resolve) => setTimeout(resolve, 200));
       } catch (lErr) {
         console.warn(`[AI Fertilize Flash Warning ${trayName}] ${lErr.message}`);
       }
 
       // C. Chụp ảnh mới (forceFresh = true) và lưu vào thư mục pictures/ với tên ngẫu nhiên
       let capPath = null;
-      for (let capAttempt = 1; capAttempt <= 3; capAttempt++) {
+      for (let capAttempt = 1; capAttempt <= 2; capAttempt++) {
         try {
           if (capAttempt > 1) {
             await releaseCameraBeforeCapture();
@@ -3632,7 +3632,7 @@ app.post("/api/ai/fertilize-analysis", async (req, res) => {
           if (capPath && fs.existsSync(capPath)) break;
         } catch (capErr) {
           console.warn(`[AI Fertilize Capture Attempt ${capAttempt} ${trayName}] ${capErr.message}`);
-          await new Promise((resolve) => setTimeout(resolve, 800));
+          await new Promise((resolve) => setTimeout(resolve, 200));
         }
       }
 

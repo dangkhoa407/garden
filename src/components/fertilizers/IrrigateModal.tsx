@@ -155,7 +155,13 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
         headers: { "Content-Type": "application/json" },
       });
 
-      const data = await res.json();
+      const text = await res.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = { success: false, error: text || "Lỗi máy chủ (Invalid JSON)" };
+      }
 
       if (res.ok && data.success && data.recommendations && Array.isArray(data.recommendations)) {
         if (data.capturedImages && Array.isArray(data.capturedImages)) {
