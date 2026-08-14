@@ -911,7 +911,7 @@ function persistSnapshotForHistory(imagePath, idPrefix = "insp") {
   return { inspId, snapshotUrl };
 }
 
-async function captureImage(forceFresh = false, customPrefix = "") {
+async function captureImage(forceFresh = false) {
   // 1. Kiểm tra xem có ảnh tươi từ Live Persistent Stream (dưới 3s) thì dùng ngay để không bị Device busy (bỏ qua nếu forceFresh = true)
   if (!forceFresh) {
     const liveViewPath = path.join(process.cwd(), "st01.jpg");
@@ -920,9 +920,7 @@ async function captureImage(forceFresh = false, customPrefix = "") {
         const stats = fs.statSync(liveViewPath);
         if (Date.now() - stats.mtimeMs < 3500 && stats.size > 5000) {
           console.log(`[Camera Engine] Sử dụng ảnh trực tiếp vừa chụp từ Persistent Stream (${stats.size} bytes)`);
-          const snapPath = customPrefix
-            ? path.join(PICTURES_DIR, `snap_${customPrefix}_${Date.now()}.jpg`)
-            : makeSnapPath();
+          const snapPath = makeSnapPath();
           fs.copyFileSync(liveViewPath, snapPath);
           return snapPath;
         }
@@ -934,9 +932,7 @@ async function captureImage(forceFresh = false, customPrefix = "") {
   await releaseCameraBeforeCapture();
 
   const ffmpegBin = getFfmpegBinary();
-  const snapPath = customPrefix
-    ? path.join(PICTURES_DIR, `snap_${customPrefix}_${Date.now()}.jpg`)
-    : makeSnapPath();
+  const snapPath = makeSnapPath();
   const totalFrames = WARMUP_FRAMES + CHECK_FRAMES;
   const directory = await fs.promises.mkdtemp(
     path.join(require("os").tmpdir(), "vuon-rau-camera-")
@@ -3611,12 +3607,11 @@ app.post("/api/ai/fertilize-analysis", async (req, res) => {
         console.warn(`[AI Fertilize Flash Warning ${trayName}] ${lErr.message}`);
       }
 
-      // C. Chụp ảnh mới (forceFresh = true) với tên file định danh theo vị trí khay
-      const trayPrefix = `khay_${String(pointIdx + 1).padStart(2, "0")}`;
+      // C. Chụp ảnh mới (forceFresh = true) và lưu vào thư mục pictures/ với tên ngẫu nhiên
       let capPath = null;
       for (let capAttempt = 1; capAttempt <= 2; capAttempt++) {
         try {
-          capPath = await captureImage(true, trayPrefix);
+          capPath = await captureImage(true);
           if (capPath && fs.existsSync(capPath)) break;
         } catch (capErr) {
           console.warn(`[AI Fertilize Capture Attempt ${capAttempt} ${trayName}] ${capErr.message}`);
