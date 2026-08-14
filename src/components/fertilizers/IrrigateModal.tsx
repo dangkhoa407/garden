@@ -57,6 +57,9 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
   const [isAnalyzingAi, setIsAnalyzingAi] = useState(false);
   const [aiAnalysisDone, setAiAnalysisDone] = useState(false);
   const [aiStatusMsg, setAiStatusMsg] = useState("");
+  const [capturedImages, setCapturedImages] = useState<
+    { trayName: string; imageBase64: string }[]
+  >([]);
   const [aiRecommendations, setAiRecommendations] = useState<
     { tankCode: string; name: string; ml: number; reason: string; selected: boolean }[]
   >([]);
@@ -155,6 +158,10 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
       const data = await res.json();
 
       if (res.ok && data.success && data.recommendations && Array.isArray(data.recommendations)) {
+        if (data.capturedImages && Array.isArray(data.capturedImages)) {
+          setCapturedImages(data.capturedImages);
+        }
+
         const recs = data.recommendations.map((r: any) => ({
           tankCode: r.tankCode,
           name: r.name || "Phân bón sinh học",
@@ -690,6 +697,44 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
                   )}
                 </button>
               </div>
+
+              {/* Display Captured Plant Images Gallery */}
+              {capturedImages.length > 0 && (
+                <div className="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/30 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-on-surface font-bold text-xs">
+                      <span className="material-symbols-outlined text-primary text-base">
+                        photo_camera
+                      </span>
+                      <span>Ảnh Thực Tế Chụp Từ Camera ({capturedImages.length} vị trí cây):</span>
+                    </div>
+                    <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-mono font-bold">
+                      Flash ON 📸
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {capturedImages.map((img, idx) => (
+                      <div
+                        key={idx}
+                        className="relative rounded-xl overflow-hidden border border-outline-variant/40 bg-black/60 shadow-sm group"
+                      >
+                        <img
+                          src={img.imageBase64}
+                          alt={img.trayName}
+                          className="w-full h-32 object-cover transition-transform duration-300 group-hover:scale-105"
+                        />
+                        <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-2 text-white flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-emerald-300">{img.trayName}</span>
+                          <span className="text-[9px] bg-primary/80 text-white px-1.5 py-0.5 rounded font-mono font-medium">
+                            Real-time
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Display AI Recommendations */}
               {aiRecommendations.length > 0 && (

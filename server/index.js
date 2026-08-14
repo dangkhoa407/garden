@@ -863,19 +863,21 @@ function persistSnapshotForHistory(imagePath, idPrefix = "insp") {
   return { inspId, snapshotUrl };
 }
 
-async function captureImage() {
-  // 1. Kiểm tra xem có ảnh tươi từ Live Persistent Stream (dưới 3s) thì dùng ngay để không bị Device busy
-  const liveViewPath = path.join(process.cwd(), "st01.jpg");
-  if (fs.existsSync(liveViewPath)) {
-    try {
-      const stats = fs.statSync(liveViewPath);
-      if (Date.now() - stats.mtimeMs < 3500 && stats.size > 5000) {
-        console.log(`[Camera Engine] Sử dụng ảnh trực tiếp vừa chụp từ Persistent Stream (${stats.size} bytes)`);
-        const snapPath = makeSnapPath();
-        fs.copyFileSync(liveViewPath, snapPath);
-        return snapPath;
-      }
-    } catch (e) {}
+async function captureImage(forceFresh = false) {
+  // 1. Kiểm tra xem có ảnh tươi từ Live Persistent Stream (dưới 3s) thì dùng ngay để không bị Device busy (bỏ qua nếu forceFresh = true)
+  if (!forceFresh) {
+    const liveViewPath = path.join(process.cwd(), "st01.jpg");
+    if (fs.existsSync(liveViewPath)) {
+      try {
+        const stats = fs.statSync(liveViewPath);
+        if (Date.now() - stats.mtimeMs < 3500 && stats.size > 5000) {
+          console.log(`[Camera Engine] Sử dụng ảnh trực tiếp vừa chụp từ Persistent Stream (${stats.size} bytes)`);
+          const snapPath = makeSnapPath();
+          fs.copyFileSync(liveViewPath, snapPath);
+          return snapPath;
+        }
+      } catch (e) {}
+    }
   }
 
   // 2. Giải phóng /dev/video0 tuyệt đối trước khi chụp mới
@@ -3525,18 +3527,25 @@ app.post("/api/ai/fertilize-analysis", async (req, res) => {
 
     // 1. DI CHUYỂN ROBOT QUA CÁC VỊ TRÍ CÓ CÂY & CHỤP ẢNH REAL CHO TẤT CẢ CÂY
     const imageParts = [];
+    const capturedImages = [];
+
     for (const pointIdx of plantedPointIndexes) {
       const trayName = `Khay ${String(pointIdx + 1).padStart(2, "0")}`;
       try {
         await sendDirectCommandToArduino(`P${pointIdx + 1}`);
         await new Promise((resolve) => setTimeout(resolve, 800));
+
+        // Bật đèn LED Flash chiếu sáng cây trồng trước khi chụp
         try {
           await sendDirectCommandToArduino("LED_ON");
-          await new Promise((resolve) => setTimeout(resolve, 100));
+          await new Promise((resolve) => setTimeout(resolve, 400));
         } catch (lErr) {}
 
-        const capPath = await captureImage();
+        // Buộc chụp ảnh mới (forceFresh = true) dưới ánh sáng LED Flash
+        const capPath = await captureImage(true);
+        await new Promise((resolve) => setTimeout(resolve, 200));
 
+        // Tắt đèn LED Flash
         try {
           await sendDirectCommandToArduino("LED_OFF");
         } catch (lErr) {}
@@ -3544,16 +3553,24 @@ app.post("/api/ai/fertilize-analysis", async (req, res) => {
         if (capPath && fs.existsSync(capPath)) {
           try {
             const imgBuf = fs.readFileSync(capPath);
+            const b64 = imgBuf.toString("base64");
+            const dataUrl = `data:image/jpeg;base64,${b64}`;
+
             imageParts.push({
               inlineData: {
                 mimeType: "image/jpeg",
-                data: imgBuf.toString("base64"),
+                data: b64,
               },
+            });
+
+            capturedImages.push({
+              trayName,
+              imageBase64: dataUrl,
             });
           } catch (readErr) {}
         }
 
-        addSystemLog("AI_FERTILIZE", `[Camera] Đã chụp ảnh thành công tại ${trayName}`, "SUCCESS");
+        addSystemLog("AI_FERTILIZE", `[Camera Log] Đã bật Flash & chụp ảnh thành công tại ${trayName}`, "SUCCESS");
       } catch (moveErr) {
         console.warn(`[AI Fertilize Move Warning ${trayName}] ${moveErr.message}`);
       }
@@ -3565,11 +3582,16 @@ app.post("/api/ai/fertilize-analysis", async (req, res) => {
       if (fs.existsSync(fallbackImgPath)) {
         try {
           const imgBuf = fs.readFileSync(fallbackImgPath);
+          const b64 = imgBuf.toString("base64");
           imageParts.push({
             inlineData: {
               mimeType: "image/jpeg",
-              data: imgBuf.toString("base64"),
+              data: b64,
             },
+          });
+          capturedImages.push({
+            trayName: "Khay cây trồng",
+            imageBase64: `data:image/jpeg;base64,${b64}`,
           });
         } catch (e) {}
       }
@@ -3678,6 +3700,7 @@ YÊU CẦU BẮT BUỘC VỀ ĐỊNH DẠNG ĐẦU RA:
     res.json({
       success: true,
       recommendations,
+      capturedImages,
       plantsCount: plantedPointIndexes.length,
       aiModel: aiResult ? aiResult.model : "gemini-3.5-flash-lite",
     });
