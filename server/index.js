@@ -483,8 +483,8 @@ const CAMERA_BRIGHTNESS = 105;
 const CAMERA_CONTRAST = 135;
 const CAMERA_SATURATION = 125;
 const CAMERA_SHARPNESS = 140;
-const WARMUP_FRAMES = 5;
-const CHECK_FRAMES = 10;
+const WARMUP_FRAMES = 15;
+const CHECK_FRAMES = 5;
 const TARGET_BRIGHTNESS = 110;
 const JPEG_QUALITY = 85;
 
@@ -999,11 +999,11 @@ async function captureImage(forceFresh = false) {
       }
     }
 
-    // Lấy các frame check (bỏ warmup frames đầu)
+    // Lấy 5 frame cuối cùng tươi nhất (xả sạch hoàn toàn đệm bộ nhớ USB camera cũ)
     const frameFiles = (await fs.promises.readdir(directory))
       .filter((name) => name.toLowerCase().endsWith(".jpg"))
       .sort()
-      .slice(WARMUP_FRAMES, WARMUP_FRAMES + CHECK_FRAMES);
+      .slice(-CHECK_FRAMES);
 
     if (frameFiles.length === 0) throw new Error("Camera không tạo đủ khung hình.");
 
