@@ -1723,6 +1723,30 @@ async function sendDirectCommandToArduino(cmdString) {
   }
 }
 
+// =========================================================
+// HOMING HELPER - Gửi HOME và chờ HOMING OK trước khi làm bất cứ điều gì
+// =========================================================
+async function homingFirst(label = "Hệ thống") {
+  addSystemLog("HOMING", `[${label}] 🏠 Đang đưa robot về vị trí gốc (Homing) trước khi bắt đầu...`, "PROCESS");
+  pushWebNotification(`🏠 [${label}] Đang đưa robot về Home trước khi bắt đầu...`, "PROCESS");
+
+  const homingWait = waitForArduinoHoming(35000);
+  try {
+    await sendDirectCommandToArduino("HOME");
+  } catch (e) {
+    console.warn(`[Homing Send Warning] ${e.message}`);
+  }
+
+  const homingOk = await homingWait;
+  if (homingOk) {
+    addSystemLog("HOMING", `[${label}] ✅ Homing hoàn tất! Robot đã về vị trí gốc.`, "SUCCESS");
+    pushWebNotification(`✅ [${label}] Homing hoàn tất! Bắt đầu thực hiện...`, "SUCCESS");
+  } else {
+    addSystemLog("HOMING", `[${label}] ⚠️ Không nhận được xác nhận HOMING OK (timeout). Tiếp tục thực hiện...`, "WARNING");
+    pushWebNotification(`⚠️ [${label}] Homing timeout. Tiếp tục thực hiện...`, "WARNING");
+  }
+}
+
 async function runFullGardenSpray() {
   const ardStatus = await getRealSerialStatus();
   if (!ardStatus.connected && process.platform === "linux") {
@@ -1746,6 +1770,9 @@ async function runFullGardenSpray() {
   const plantedLabels = plantedPointIndexes.map((pointIdx) => `Khay ${String(pointIdx + 1).padStart(2, "0")}`);
   const skippedPoints = [0, 1, 2, 3, 4, 5].filter((pointIdx) => !plantedPointIndexes.includes(pointIdx));
   const skippedLabels = skippedPoints.map((pointIdx) => `Khay ${String(pointIdx + 1).padStart(2, "0")}`);
+
+  // 🏠 HOMING TRƯỚC KHI PHUN
+  await homingFirst("Phun Thuốc");
 
   addSystemLog("FULL_SPRAY", `Bắt đầu phun các khay có cây: ${plantedLabels.join(", ")}. Bỏ qua ${skippedPoints.length} khay trống (${skippedLabels.join(", ")}).`, "PROCESS");
   pushWebNotification(`🚿 Đang kích hoạt phun thuốc toàn bộ vườn tại ${plantedPointIndexes.length} vị trí có cây (${plantedLabels.join(", ")})...`, "PROCESS");
@@ -1796,6 +1823,9 @@ async function runFullGardenInspection() {
 
   const plantedLabels = plantedPointIndexes.map((idx) => `Khay ${String(idx + 1).padStart(2, "0")}`);
   const skippedLabels = skippedPoints.map((idx) => `Khay ${String(idx + 1).padStart(2, "0")}`);
+
+  // 🏠 HOMING TRƯỚC KHI QUÉT
+  await homingFirst("Kiểm Tra Sâu");
 
   addSystemLog("CHECK_PESTS", `Bắt đầu kiểm tra sâu hại tại các vị trí có cây: ${plantedLabels.join(", ")}. Bỏ qua ${skippedPoints.length} khay trống (${skippedLabels.join(", ")}).`, "PROCESS");
   pushWebNotification(`🐛 Bắt đầu kiểm tra sâu hại tại ${plantedPointIndexes.length} vị trí có cây (${plantedLabels.join(", ")}). Bỏ qua ${skippedPoints.length} khay trống.`, "AI_ANALYSIS");
@@ -2145,9 +2175,16 @@ app.post("/api/arduino/command", async (req, res) => {
       });
     }
 
+    // Lệnh di chuyển cơ học → HOMING TRƯỚC
+    const isMovementCmd = /^P[1-6]$|^SPRAY_POINT|^OBSERVE_POINT|^GOTO|^MOVE/i.test(mapped.cmd);
+    if (isMovementCmd) {
+      await homingFirst(`Lệnh ${mapped.label}`);
+    }
+
     // Send command directly to SerialPort
     try {
       await sendDirectCommandToArduino(mapped.cmd);
+
     } catch (sendErr) {
       console.warn(`[Direct Command Warning] ${sendErr.message}`);
       if (process.platform !== "linux") {
