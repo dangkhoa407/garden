@@ -137,10 +137,15 @@ bool homeAxis(int stepPin, int dirPin, int limitPin, const char* errMsg) {
   return runMotor(stepPin, dirPin, steps02, true);
 }
 
+int currentGridX = 0;
+int currentGridY = 0;
+
 bool homeAll() {
   Serial.println("BAT DAU HOMING");
   if (!homeAxis(STEP1_PIN, DIR1_PIN, LIMIT_X_PIN, "HOMING X TIMEOUT")) return false;
   if (!homeAxis(STEP2_PIN, DIR2_PIN, LIMIT_Y_PIN, "HOMING Y TIMEOUT")) return false;
+  currentGridX = 0;
+  currentGridY = 0;
   Serial.println("HOMING OK");
   return true;
 }
@@ -347,32 +352,14 @@ void moveToPoint(int idx) {
   Serial.print("MOVING_TO_POINT:");
   Serial.println(idx);
 
-  if (idx == 0) {
-    // Điểm 0 (Khay 01): (0, 0)
-    Serial.println("MOVED:0");
-  } else if (idx == 1) {
-    // Điểm 1 (Khay 02): X = 7cm
-    runMotor(STEP1_PIN, DIR1_PIN, steps7, true);
-    Serial.println("MOVED:1");
-  } else if (idx == 2) {
-    // Điểm 2 (Khay 03): Y = 7cm
-    runMotor(STEP2_PIN, DIR2_PIN, steps7, true);
-    Serial.println("MOVED:2");
-  } else if (idx == 3) {
-    // Điểm 3 (Khay 04): X = 7cm, Y = 7cm
-    runMotor(STEP1_PIN, DIR1_PIN, steps7, true);
-    runMotor(STEP2_PIN, DIR2_PIN, steps7, true);
-    Serial.println("MOVED:3");
-  } else if (idx == 4) {
-    // Điểm 4 (Khay 05): Y = 14cm
-    runMotor(STEP2_PIN, DIR2_PIN, steps14, true);
-    Serial.println("MOVED:4");
-  } else if (idx == 5) {
-    // Điểm 5 (Khay 06): X = 7cm, Y = 14cm
-    runMotor(STEP1_PIN, DIR1_PIN, steps7, true);
-    runMotor(STEP2_PIN, DIR2_PIN, steps14, true);
-    Serial.println("MOVED:5");
+  if (idx >= 0 && idx <= 5) {
+    const int pointX[6] = {0, 1, 0, 1, 0, 1};
+    const int pointY[6] = {0, 0, 1, 1, 2, 2};
+    moveGridTo(currentGridX, currentGridY, pointX[idx], pointY[idx]);
   }
+
+  Serial.print("MOVED:");
+  Serial.println(idx);
 }
 
 // ================== LẮNG NGHE & XỬ LÝ LỆNH SERIAL (NON-BLOCKING) ==================
