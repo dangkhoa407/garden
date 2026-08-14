@@ -3513,7 +3513,8 @@ app.post("/api/ai/fertilize-analysis", async (req, res) => {
     addSystemLog("AI_FERTILIZE", `Bắt đầu quét AI phân tích dinh dưỡng tại ${plantedPointIndexes.length} vị trí có cây: ${plantedLabels.join(", ")}`, "PROCESS");
     pushWebNotification(`🌿 Bắt đầu di chuyển camera quét & phân tích Gemini AI tại ${plantedPointIndexes.length} vị trí có cây (${plantedLabels.join(", ")})...`, "AI_ANALYSIS");
 
-    // 1. DI CHUYỂN ROBOT QUA CÁC VỊ TRÍ CÓ CÂY & CHỤP ẢNH REAL
+    // 1. DI CHUYỂN ROBOT QUA CÁC VỊ TRÍ CÓ CÂY & CHỤP ẢNH REAL CHO TẤT CẢ CÂY
+    const imageParts = [];
     for (const pointIdx of plantedPointIndexes) {
       const trayName = `Khay ${String(pointIdx + 1).padStart(2, "0")}`;
       try {
@@ -3524,11 +3525,23 @@ app.post("/api/ai/fertilize-analysis", async (req, res) => {
           await new Promise((resolve) => setTimeout(resolve, 100));
         } catch (lErr) {}
 
-        await captureImage();
+        const capPath = await captureImage();
 
         try {
           await sendDirectCommandToArduino("LED_OFF");
         } catch (lErr) {}
+
+        if (capPath && fs.existsSync(capPath)) {
+          try {
+            const imgBuf = fs.readFileSync(capPath);
+            imageParts.push({
+              inlineData: {
+                mimeType: "image/jpeg",
+                data: imgBuf.toString("base64"),
+              },
+            });
+          } catch (readErr) {}
+        }
 
         addSystemLog("AI_FERTILIZE", `[Camera] Đã chụp ảnh thành công tại ${trayName}`, "SUCCESS");
       } catch (moveErr) {
@@ -3536,20 +3549,20 @@ app.post("/api/ai/fertilize-analysis", async (req, res) => {
       }
     }
 
-    // 2. THU THẬP ẢNH CHỤP VÀ CHUYỂN SANG BASE64
-    const imageParts = [];
-    const imagePath = path.join(process.cwd(), "st01.jpg");
-
-    if (fs.existsSync(imagePath)) {
-      try {
-        const imgBuf = fs.readFileSync(imagePath);
-        imageParts.push({
-          inlineData: {
-            mimeType: "image/jpeg",
-            data: imgBuf.toString("base64"),
-          },
-        });
-      } catch (e) {}
+    // Nếu chưa chụp được ảnh nào trong vòng lặp, kiểm tra file st01.jpg làm dự phòng
+    if (imageParts.length === 0) {
+      const fallbackImgPath = path.join(process.cwd(), "st01.jpg");
+      if (fs.existsSync(fallbackImgPath)) {
+        try {
+          const imgBuf = fs.readFileSync(fallbackImgPath);
+          imageParts.push({
+            inlineData: {
+              mimeType: "image/jpeg",
+              data: imgBuf.toString("base64"),
+            },
+          });
+        } catch (e) {}
+      }
     }
 
     // 3. KIỂM TRẢ GEMINI API KEY
