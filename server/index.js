@@ -3531,69 +3531,65 @@ app.post("/api/ai/fertilize-analysis", async (req, res) => {
 
     for (const pointIdx of plantedPointIndexes) {
       const trayName = `Khay ${String(pointIdx + 1).padStart(2, "0")}`;
+
+      // A. Gửi lệnh di chuyển vị trí robot đến điểm khay cây
       try {
         await sendDirectCommandToArduino(`P${pointIdx + 1}`);
-        await new Promise((resolve) => setTimeout(resolve, 800));
-
-        // Bật đèn LED Flash chiếu sáng cây trồng trước khi chụp
-        try {
-          await sendDirectCommandToArduino("LED_ON");
-          await new Promise((resolve) => setTimeout(resolve, 400));
-        } catch (lErr) {}
-
-        // Buộc chụp ảnh mới (forceFresh = true) dưới ánh sáng LED Flash
-        const capPath = await captureImage(true);
-        await new Promise((resolve) => setTimeout(resolve, 200));
-
-        // Tắt đèn LED Flash
-        try {
-          await sendDirectCommandToArduino("LED_OFF");
-        } catch (lErr) {}
-
-        if (capPath && fs.existsSync(capPath)) {
-          try {
-            const imgBuf = fs.readFileSync(capPath);
-            const b64 = imgBuf.toString("base64");
-            const dataUrl = `data:image/jpeg;base64,${b64}`;
-
-            imageParts.push({
-              inlineData: {
-                mimeType: "image/jpeg",
-                data: b64,
-              },
-            });
-
-            capturedImages.push({
-              trayName,
-              imageBase64: dataUrl,
-            });
-          } catch (readErr) {}
-        }
-
-        addSystemLog("AI_FERTILIZE", `[Camera Log] Đã bật Flash & chụp ảnh thành công tại ${trayName}`, "SUCCESS");
+        await new Promise((resolve) => setTimeout(resolve, 1000));
       } catch (moveErr) {
         console.warn(`[AI Fertilize Move Warning ${trayName}] ${moveErr.message}`);
       }
-    }
 
-    // Nếu chưa chụp được ảnh nào trong vòng lặp, kiểm tra file st01.jpg làm dự phòng
-    if (imageParts.length === 0) {
-      const fallbackImgPath = path.join(process.cwd(), "st01.jpg");
-      if (fs.existsSync(fallbackImgPath)) {
+      // B. Bật đèn LED Flash chiếu sáng cây trồng trước khi chụp
+      try {
+        await sendDirectCommandToArduino("LED_ON");
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      } catch (lErr) {
+        console.warn(`[AI Fertilize Flash Warning ${trayName}] ${lErr.message}`);
+      }
+
+      // C. Chụp ảnh mới (forceFresh = true) dưới ánh sáng LED Flash
+      let capPath = null;
+      try {
+        capPath = await captureImage(true);
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      } catch (capErr) {
+        console.warn(`[AI Fertilize Capture Error ${trayName}] ${capErr.message}`);
+      }
+
+      // D. Tắt đèn LED Flash sau khi chụp xong
+      try {
+        await sendDirectCommandToArduino("LED_OFF");
+      } catch (lErr) {}
+
+      // Nếu không chụp được ảnh mới, sử dụng st01.jpg làm ảnh dự phòng cho điểm này
+      if (!capPath || !fs.existsSync(capPath)) {
+        const fallbackImgPath = path.join(process.cwd(), "st01.jpg");
+        if (fs.existsSync(fallbackImgPath)) {
+          capPath = fallbackImgPath;
+        }
+      }
+
+      if (capPath && fs.existsSync(capPath)) {
         try {
-          const imgBuf = fs.readFileSync(fallbackImgPath);
+          const imgBuf = fs.readFileSync(capPath);
           const b64 = imgBuf.toString("base64");
+          const dataUrl = `data:image/jpeg;base64,${b64}`;
+
           imageParts.push({
             inlineData: {
               mimeType: "image/jpeg",
               data: b64,
             },
           });
+
           capturedImages.push({
-            trayName: "Khay cây trồng",
-            imageBase64: `data:image/jpeg;base64,${b64}`,
+            trayName,
+            imageBase64: dataUrl,
           });
-        } catch (e) {}
+
+          addSystemLog("AI_FERTILIZE", `[Camera Log] Đã bật Flash & chụp ảnh thành công tại ${trayName}`, "SUCCESS");
+        } catch (readErr) {}
       }
     }
 
