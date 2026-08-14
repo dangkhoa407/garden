@@ -3482,24 +3482,61 @@ app.post("/api/telegram/notify", async (req, res) => {
   }
 });
 
-// AI SMART FERTILIZE ANALYSIS ENDPOINT (QUÉT 6 VỊ TRÍ + THÔNG TIN CÂY + BÌNH PHÂN => GEMINI JSON)
+// AI SMART FERTILIZE ANALYSIS ENDPOINT (QUÉT CÁC VỊ TRÍ CÓ CÂY THỰC TẾ TRONG /PLANTS + THÔNG TIN CÂY + BÌNH PHÂN => GEMINI JSON)
 app.post("/api/ai/fertilize-analysis", async (req, res) => {
   try {
-    console.log("[AI Fertilize] Bắt đầu quy trình quét 6 vị trí cây & phân tích Gemini...");
+    console.log("[AI Fertilize] Bắt đầu quy trình quét các vị trí cây thực tế & phân tích Gemini...");
 
-    // 1. GỬI LỆNH 'k' ĐẾN ARDUINO ĐỂ ĐIỀU KHIỂN ROBOT DI CHUYỂN QUA CÁC VỊ TRÍ CÂY
-    try {
-      await sendDirectCommandToArduino("k");
-      console.log("[AI Fertilize] Đã gửi lệnh 'k' thành công xuống Arduino.");
-    } catch (cmdErr) {
-      console.warn(`[AI Fertilize Warning] Gửi lệnh 'k' xuống Arduino: ${cmdErr.message}`);
-    }
-
-    // 2. THU THẬP DỮ LIỆU CÂY TRỒNG & BÌNH PHÂN
     const plants = readJson("plants.json", []);
     const fertilizers = readJson("fertilizers.json", []);
 
-    // 3. THU THẬP ẢNH CHỤP VÀ CHUYỂN SANG BASE64
+    // Lọc duy nhất các vị trí (pointIndex 0..5) ĐANG CÓ CÂY TRỒNG trong data/plants.json
+    const plantedPointIndexes = [];
+    for (let idx = 0; idx < 6; idx++) {
+      if (hasPlantAtPoint(idx)) {
+        plantedPointIndexes.push(idx);
+      }
+    }
+
+    if (plantedPointIndexes.length === 0) {
+      addSystemLog("AI_FERTILIZE", "Chưa có cây nào được gieo trồng trong /plants. Bỏ qua quét AI.", "WARNING");
+      pushWebNotification("⚠️ Chưa có vị trí nào đang gieo trồng cây trong /plants. Vui lòng thêm cây trước khi quét phân tích!", "WARNING");
+      return res.status(400).json({
+        success: false,
+        error: "Chưa có cây nào được gieo trồng trong Vườn của tôi (/plants). Vui lòng thêm cây trước khi thực hiện quét phân tích AI!",
+        recommendations: [],
+        plantsCount: 0,
+      });
+    }
+
+    const plantedLabels = plantedPointIndexes.map((idx) => `Khay ${String(idx + 1).padStart(2, "0")}`);
+    addSystemLog("AI_FERTILIZE", `Bắt đầu quét AI phân tích dinh dưỡng tại ${plantedPointIndexes.length} vị trí có cây: ${plantedLabels.join(", ")}`, "PROCESS");
+    pushWebNotification(`🌿 Bắt đầu di chuyển camera quét & phân tích Gemini AI tại ${plantedPointIndexes.length} vị trí có cây (${plantedLabels.join(", ")})...`, "AI_ANALYSIS");
+
+    // 1. DI CHUYỂN ROBOT QUA CÁC VỊ TRÍ CÓ CÂY & CHỤP ẢNH REAL
+    for (const pointIdx of plantedPointIndexes) {
+      const trayName = `Khay ${String(pointIdx + 1).padStart(2, "0")}`;
+      try {
+        await sendDirectCommandToArduino(`P${pointIdx + 1}`);
+        await new Promise((resolve) => setTimeout(resolve, 800));
+        try {
+          await sendDirectCommandToArduino("LED_ON");
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        } catch (lErr) {}
+
+        await captureImage();
+
+        try {
+          await sendDirectCommandToArduino("LED_OFF");
+        } catch (lErr) {}
+
+        addSystemLog("AI_FERTILIZE", `[Camera] Đã chụp ảnh thành công tại ${trayName}`, "SUCCESS");
+      } catch (moveErr) {
+        console.warn(`[AI Fertilize Move Warning ${trayName}] ${moveErr.message}`);
+      }
+    }
+
+    // 2. THU THẬP ẢNH CHỤP VÀ CHUYỂN SANG BASE64
     const imageParts = [];
     const imagePath = path.join(process.cwd(), "st01.jpg");
 
@@ -3515,21 +3552,39 @@ app.post("/api/ai/fertilize-analysis", async (req, res) => {
       } catch (e) {}
     }
 
-    // 4. SOẠN PROMPT PHÂN TÍCH ĐẶC BIỆT CHO GEMINI & ÉP TRẢ VỀ JSON
+    // 3. KIỂM TRẢ GEMINI API KEY
+    const keys = getKeysList();
+    if (keys.length === 0) {
+      addSystemLog("GEMINI_ERR", `❌ Chưa thiết lập Gemini API Key trong hệ thống`, "ALERT");
+      return res.status(400).json({
+        success: false,
+        error: "Hệ thống chưa được thiết lập Gemini API Key! Vui lòng thêm Gemini API Key trong phần Cài Đặt Thiết Bị.",
+        recommendations: [],
+      });
+    }
+
+    // Lọc danh sách cây trồng thực sự tương ứng các khay có cây
+    const activePlants = plants.filter((p) => {
+      if (!p || !p.location) return false;
+      const matches = String(p.location).match(/\d+/g);
+      return matches && matches.some((numStr) => plantedPointIndexes.includes(parseInt(numStr, 10) - 1));
+    });
+
+    // 4. SOẠN PROMPT PHÂN TÍCH CHO GEMINI & ÉP TRẢ VỀ JSON THỰC TẾ (KHÔNG DÙNG MOCK)
     const promptText = `
 Bạn là hệ thống AI Nông Nghiệp Thông Minh thuộc dự án GrowHub Smart Garden.
-Dưới đây là hình ảnh thực tế chụp từ camera hệ thống robot tại các vị trí cây trồng trong vườn, cùng thông tin danh sách cây trồng và các bình phân bón hiện có.
+Dưới đây là hình ảnh thực tế chụp từ camera hệ thống robot tại ${plantedPointIndexes.length} vị trí đang trồng cây trong vườn, cùng thông tin danh sách cây trồng thực tế và các bình phân bón hiện có.
 
-DANH SÁCH CÂY TRỒNG TRONG VƯỜN:
-${JSON.stringify(plants, null, 2)}
+DANH SÁCH CÂY TRỒNG ĐANG GIEO TRỒNG (${activePlants.length} cây):
+${JSON.stringify(activePlants.length > 0 ? activePlants : plants, null, 2)}
 
 DANH SÁCH BÌNH PHÂN BÓN HIỆN CÓ TRONG HỆ THỐNG:
 ${JSON.stringify(fertilizers, null, 2)}
 
 NHIỆM VỤ CỦA BẠN:
-1. Đánh giá tình trạng thực tế của cây trồng từ hình ảnh và danh sách loại cây/số lượng cây.
-2. Xác định các loại phân bón cần bổ sung từ các bình phân hiện có (ví dụ: Bình A, Bình B, Bình C, Bình D).
-3. Đề xuất dung tích phân (ml) tối ưu cho từng bình từ 0.5 ml đến 8.0 ml.
+1. Phân tích hình ảnh thực tế và tình trạng nhu cầu dinh dưỡng của từng loại cây đang gieo trồng.
+2. Xác định chính xác các loại phân bón cần bổ sung từ danh sách bình phân hiện có (ví dụ: Bình A, Bình B, Bình C, Bình D).
+3. Đề xuất dung tích phân (ml) tối ưu cho từng bình từ 0.5 ml đến 6.0 ml.
 
 YÊU CẦU BẮT BUỘC VỀ ĐỊNH DẠNG ĐẦU RA:
 - Trả về ĐÚNG MỘT MẢNG JSON hợp lệ (JavaScript JSON Array), KHÔNG kèm bất kỳ văn bản giải thích nào khác ngoài JSON.
@@ -3539,7 +3594,7 @@ YÊU CẦU BẮT BUỘC VỀ ĐỊNH DẠNG ĐẦU RA:
     "tankCode": "Bình A",
     "name": "Tên loại phân bón",
     "ml": 2.5,
-    "reason": "Mô tả ngắn gọn lý do bón phân này dựa trên phân tích tình trạng cây"
+    "reason": "Mô tả ngắn gọn lý do bón phân này dựa trên phân tích hình ảnh thực tế cây trồng"
   }
 ]
 - Chỉ bao gồm các tankCode có trong danh sách bình phân hiện có.
@@ -3564,6 +3619,11 @@ YÊU CẦU BẮT BUỘC VỀ ĐỊNH DẠNG ĐẦU RA:
       aiResult = await callGeminiApiWithRotation(payload);
     } catch (aiErr) {
       console.warn(`[AI Fertilize Gemini Error] ${aiErr.message}`);
+      return res.status(500).json({
+        success: false,
+        error: `Lỗi kết nối Gemini AI: ${aiErr.message}`,
+        recommendations: [],
+      });
     }
 
     let recommendations = [];
@@ -3581,24 +3641,22 @@ YÊU CẦU BẮT BUỘC VỀ ĐỊNH DẠNG ĐẦU RA:
       }
     }
 
-    // NẾU AI CHƯA TRẢ VỀ KẾT QUẢ ĐỦ THÌ TỰ ĐỘNG TẠO DEFAULTS DỰA TRÊN BÌNH PHÂN CÓ SẴN
     if (recommendations.length === 0) {
-      const activeTanks = fertilizers.filter((f) => (f.currentMl !== undefined ? f.currentMl > 0 : true));
-      const tankList = activeTanks.length > 0 ? activeTanks : fertilizers;
-
-      recommendations = tankList.map((f, idx) => ({
-        tankCode: f.tankCode || `Bình ${String.fromCharCode(65 + idx)}`,
-        name: f.name || "Phân bón sinh học",
-        ml: 2.0,
-        reason: "AI đề xuất bổ sung lượng phân tiêu chuẩn dựa trên diện tích cây trồng hiện tại.",
-      }));
+      return res.status(500).json({
+        success: false,
+        error: "Gemini AI không trả về dữ liệu phân tích hợp lệ. Vui lòng thử lại!",
+        recommendations: [],
+      });
     }
+
+    addSystemLog("AI_FERTILIZE", `Gemini AI đã phân tích xong và đưa ra đề xuất cho ${recommendations.length} bình phân.`, "SUCCESS");
+    pushWebNotification(`✨ Gemini AI đã hoàn tất phân tích ${plantedPointIndexes.length} vị trí cây trồng thực tế và đưa ra đề xuất bón phân!`, "SUCCESS");
 
     res.json({
       success: true,
       recommendations,
-      plantsCount: plants.length,
-      aiModel: aiResult ? aiResult.model : "offline-rule",
+      plantsCount: plantedPointIndexes.length,
+      aiModel: aiResult ? aiResult.model : "gemini",
     });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

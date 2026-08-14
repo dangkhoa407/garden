@@ -65,23 +65,32 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
     setMounted(true);
   }, []);
 
-  // Fetch fertilizers list from server whenever modal opens
+  const [plantedCount, setPlantedCount] = useState<number>(0);
+
+  // Fetch fertilizers & plants list from server whenever modal opens
   useEffect(() => {
     if (!isOpen) return;
 
-    const fetchFertilizers = async () => {
+    const fetchFertilizersAndPlants = async () => {
       try {
-        const res = await fetch("/api/fertilizers");
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data)) {
-            setActiveFertilizers(data);
-          }
+        const [fRes, pRes] = await Promise.all([
+          fetch("/api/fertilizers"),
+          fetch("/api/plants"),
+        ]);
+
+        if (fRes.ok) {
+          const data = await fRes.json();
+          if (Array.isArray(data)) setActiveFertilizers(data);
+        }
+
+        if (pRes.ok) {
+          const data = await pRes.json();
+          if (Array.isArray(data)) setPlantedCount(data.length);
         }
       } catch (err) {}
     };
 
-    fetchFertilizers();
+    fetchFertilizersAndPlants();
   }, [isOpen]);
 
   // Fetch real-time ESP32 sensors while modal is open
@@ -135,44 +144,43 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
 
   const handleRunAiAnalysis = async () => {
     setIsAnalyzingAi(true);
-    setAiStatusMsg("🤖 Gửi lệnh 'k' tới Arduino di chuyển camera qua 6 vị trí cây...");
+    setAiStatusMsg(`🤖 Đang điều khiển di chuyển camera đến các vị trí cây trong Vườn...`);
 
     try {
-      await new Promise((r) => setTimeout(r, 1500));
-      setAiStatusMsg("📸 Đang gửi 6 ảnh + thông tin cây + các bình phân về Gemini AI...");
-
       const res = await fetch("/api/ai/fertilize-analysis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.recommendations && Array.isArray(data.recommendations)) {
-          const recs = data.recommendations.map((r: any) => ({
-            tankCode: r.tankCode,
-            name: r.name || "Phân bón sinh học",
-            ml: Number(r.ml) || 2.0,
-            reason: r.reason || "AI khuyến nghị dựa trên phân tích hình ảnh cây trồng.",
-            selected: true,
-          }));
+      const data = await res.json();
 
-          setAiRecommendations(recs);
+      if (res.ok && data.success && data.recommendations && Array.isArray(data.recommendations)) {
+        const recs = data.recommendations.map((r: any) => ({
+          tankCode: r.tankCode,
+          name: r.name || "Phân bón sinh học",
+          ml: Number(r.ml) || 2.0,
+          reason: r.reason || "Gemini AI khuyến nghị dựa trên phân tích hình ảnh thực tế cây trồng.",
+          selected: true,
+        }));
 
-          // Đồng bộ với selectedTanks
-          setSelectedTanks((prev) => {
-            const next = { ...prev };
-            recs.forEach((item: any) => {
-              next[item.tankCode] = { selected: true, ml: item.ml };
-            });
-            return next;
+        setAiRecommendations(recs);
+
+        // Đồng bộ với selectedTanks
+        setSelectedTanks((prev) => {
+          const next = { ...prev };
+          recs.forEach((item: any) => {
+            next[item.tankCode] = { selected: true, ml: item.ml };
           });
+          return next;
+        });
 
-          setAiAnalysisDone(true);
-        }
+        setAiAnalysisDone(true);
+      } else {
+        alert(data.error || "Không thể thực hiện phân tích Gemini AI.");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      alert("Lỗi khi kết nối với máy chủ: " + err.message);
     } finally {
       setIsAnalyzingAi(false);
       setAiStatusMsg("");
@@ -653,7 +661,7 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
                 </div>
 
                 <p className="text-xs text-on-surface-variant leading-relaxed">
-                  Hệ thống sẽ gửi lệnh <code className="font-mono bg-surface px-1 py-0.5 rounded text-primary">k</code> xuống Arduino để di chuyển camera chụp các vị trí cây, tổng hợp dữ liệu cây trồng và thông tin các bình phân hiện có gửi về Gemini AI phân tích.
+                  Hệ thống sẽ di chuyển camera đến các vị trí đang gieo trồng cây trong <strong>/plants</strong> {plantedCount > 0 ? `(${plantedCount} vị trí)` : ""}, chụp ảnh thực tế và gửi dữ liệu kèm các bình phân bón hiện có về Gemini AI để phân tích dinh dưỡng.
                 </p>
 
                 {/* Scan & Analyze Action Button */}
@@ -668,15 +676,15 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
                       <span className="material-symbols-outlined text-lg animate-spin">
                         progress_activity
                       </span>
-                      <span>{aiStatusMsg || "Đang phân tích Gemini AI..."}</span>
+                      <span>{aiStatusMsg || "Đang di chuyển camera & phân tích Gemini AI..."}</span>
                     </>
                   ) : (
                     <>
                       <span className="material-symbols-outlined text-lg">auto_awesome</span>
                       <span>
                         {aiAnalysisDone
-                          ? "Quét Lại 6 Vị Trí & Phân Tích Lại Bằng AI"
-                          : "Bắt Đầu Quét 6 Vị Trí & Phân Tích Gemini AI"}
+                          ? `Quét Lại ${plantedCount > 0 ? `${plantedCount} Vị Trí Cây` : "Các Vị Trí Cây"} & Phân Tích Lại Bằng AI`
+                          : `Bắt Đầu Quét ${plantedCount > 0 ? `${plantedCount} Vị Trí Cây` : "Các Vị Trí Cây"} & Phân Tích Gemini AI`}
                       </span>
                     </>
                   )}
