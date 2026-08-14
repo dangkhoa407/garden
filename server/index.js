@@ -3532,18 +3532,24 @@ app.post("/api/ai/fertilize-analysis", async (req, res) => {
     for (const pointIdx of plantedPointIndexes) {
       const trayName = `Khay ${String(pointIdx + 1).padStart(2, "0")}`;
 
-      // A. Gửi lệnh di chuyển vị trí robot đến điểm khay cây
+      // A. Gửi lệnh di chuyển vị trí robot đến điểm khay cây và ĐỜI ARDUINO XÁC NHẬN "MOVED:n"
+      const moveWait = waitForArduinoMove(pointIdx, 25000);
       try {
         await sendDirectCommandToArduino(`P${pointIdx + 1}`);
-        await new Promise((resolve) => setTimeout(resolve, 1000));
       } catch (moveErr) {
+        const waiter = pendingMoveResolvers.get(pointIdx);
+        if (waiter) waiter.reject(moveErr);
         console.warn(`[AI Fertilize Move Warning ${trayName}] ${moveErr.message}`);
       }
+      await moveWait.catch((mErr) => console.warn(`[Move Wait ${trayName}] ${mErr.message}`));
+      // Chờ thêm 300ms để robot hoàn toàn đứng yên chống rung camera
+      await new Promise((resolve) => setTimeout(resolve, 300));
 
       // B. Bật đèn LED Flash chiếu sáng cây trồng trước khi chụp
       try {
         await sendDirectCommandToArduino("LED_ON");
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        // Chờ 600ms để ánh sáng Flash ổn định & camera tự động cân bằng độ sáng (exposure)
+        await new Promise((resolve) => setTimeout(resolve, 600));
       } catch (lErr) {
         console.warn(`[AI Fertilize Flash Warning ${trayName}] ${lErr.message}`);
       }
@@ -3560,6 +3566,7 @@ app.post("/api/ai/fertilize-analysis", async (req, res) => {
       // D. Tắt đèn LED Flash sau khi chụp xong
       try {
         await sendDirectCommandToArduino("LED_OFF");
+        await new Promise((resolve) => setTimeout(resolve, 100));
       } catch (lErr) {}
 
       // Nếu không chụp được ảnh mới, sử dụng st01.jpg làm ảnh dự phòng cho điểm này
