@@ -704,19 +704,24 @@ async function releaseCameraBeforeCapture() {
 
   try {
     if (typeof ffmpegStreamProcess !== "undefined" && ffmpegStreamProcess) {
-      console.warn("[Camera Engine] Dừng stream nội bộ để giành quyền camera /dev/video0...");
+      console.warn("[Camera Engine] Dừng stream nội bộ để giành quyền camera...");
       try { ffmpegStreamProcess.kill("SIGKILL"); } catch (e) {}
       ffmpegStreamProcess = null;
     }
   } catch (e) {}
 
-  if (process.platform === "linux") {
+  if (process.platform === "win32") {
     try {
+      await execAsync("taskkill /F /IM ffmpeg.exe /T || exit 0").catch(() => {});
+    } catch (e) {}
+  } else if (process.platform === "linux") {
+    try {
+      await execAsync("pkill -9 ffmpeg || true").catch(() => {});
       await execAsync("fuser -k /dev/video0 || true").catch(() => {});
     } catch (e) {}
   }
 
-  await new Promise((resolve) => setTimeout(resolve, 800));
+  await new Promise((resolve) => setTimeout(resolve, 600));
 }
 
 function requestFreshBrowserSnapshot(timeoutMs = 3500) {
@@ -863,20 +868,13 @@ function makeSnapPath() {
   return path.join(PICTURES_DIR, `snap_${Date.now()}_${rand}.jpg`);
 }
 
-function getFallbackSnapshotPath() {
+function getFallbackSnapshotPath(maxAgeMs = 15000) {
   const st01 = path.join(process.cwd(), "st01.jpg");
   if (fs.existsSync(st01)) {
     try {
-      if (fs.statSync(st01).size > 1000) return st01;
-    } catch (e) {}
-  }
-
-  if (fs.existsSync(snapshotsDir)) {
-    try {
-      const files = fs.readdirSync(snapshotsDir).filter((f) => f.endsWith(".jpg") || f.endsWith(".png"));
-      if (files.length > 0) {
-        files.sort((a, b) => fs.statSync(path.join(snapshotsDir, b)).mtimeMs - fs.statSync(path.join(snapshotsDir, a)).mtimeMs);
-        return path.join(snapshotsDir, files[0]);
+      const stats = fs.statSync(st01);
+      if (stats.size > 1000 && (maxAgeMs === 0 || Date.now() - stats.mtimeMs < maxAgeMs)) {
+        return st01;
       }
     } catch (e) {}
   }
@@ -886,7 +884,23 @@ function getFallbackSnapshotPath() {
       const files = fs.readdirSync(PICTURES_DIR).filter((f) => f.endsWith(".jpg") || f.endsWith(".png"));
       if (files.length > 0) {
         files.sort((a, b) => fs.statSync(path.join(PICTURES_DIR, b)).mtimeMs - fs.statSync(path.join(PICTURES_DIR, a)).mtimeMs);
-        return path.join(PICTURES_DIR, files[0]);
+        const newest = path.join(PICTURES_DIR, files[0]);
+        if (maxAgeMs === 0 || Date.now() - fs.statSync(newest).mtimeMs < maxAgeMs) {
+          return newest;
+        }
+      }
+    } catch (e) {}
+  }
+
+  if (fs.existsSync(snapshotsDir)) {
+    try {
+      const files = fs.readdirSync(snapshotsDir).filter((f) => f.endsWith(".jpg") || f.endsWith(".png"));
+      if (files.length > 0) {
+        files.sort((a, b) => fs.statSync(path.join(snapshotsDir, b)).mtimeMs - fs.statSync(path.join(snapshotsDir, a)).mtimeMs);
+        const newest = path.join(snapshotsDir, files[0]);
+        if (maxAgeMs === 0 || Date.now() - fs.statSync(newest).mtimeMs < maxAgeMs) {
+          return newest;
+        }
       }
     } catch (e) {}
   }
@@ -3609,13 +3623,16 @@ app.post("/api/ai/fertilize-analysis", async (req, res) => {
 
       // C. Chụp ảnh mới (forceFresh = true) và lưu vào thư mục pictures/ với tên ngẫu nhiên
       let capPath = null;
-      for (let capAttempt = 1; capAttempt <= 2; capAttempt++) {
+      for (let capAttempt = 1; capAttempt <= 3; capAttempt++) {
         try {
+          if (capAttempt > 1) {
+            await releaseCameraBeforeCapture();
+          }
           capPath = await captureImage(true);
           if (capPath && fs.existsSync(capPath)) break;
         } catch (capErr) {
           console.warn(`[AI Fertilize Capture Attempt ${capAttempt} ${trayName}] ${capErr.message}`);
-          await new Promise((resolve) => setTimeout(resolve, 600));
+          await new Promise((resolve) => setTimeout(resolve, 800));
         }
       }
 
@@ -3625,9 +3642,9 @@ app.post("/api/ai/fertilize-analysis", async (req, res) => {
         await new Promise((resolve) => setTimeout(resolve, 100));
       } catch (lErr) {}
 
-      // Nếu không chụp được ảnh mới trực tiếp, lấy ảnh dự phòng gần nhất trên hệ thống
+      // Nếu không chụp được ảnh mới trực tiếp, lấy ảnh dự phòng gần nhất trong vòng 10 giây
       if (!capPath || !fs.existsSync(capPath)) {
-        capPath = getFallbackSnapshotPath();
+        capPath = getFallbackSnapshotPath(10000);
       }
 
       if (capPath && fs.existsSync(capPath)) {
