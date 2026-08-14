@@ -260,6 +260,24 @@ let currentCancellationId = 0;
 let currentCapturePointIndex = null;
 const pendingMoveResolvers = new Map();
 let pendingFullSprayResolver = null;
+let pendingHomingResolver = null;
+
+function waitForArduinoHoming(timeoutMs = 30000) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      pendingHomingResolver = null;
+      resolve(false);
+    }, timeoutMs);
+
+    pendingHomingResolver = {
+      resolve: () => {
+        clearTimeout(timer);
+        pendingHomingResolver = null;
+        resolve(true);
+      },
+    };
+  });
+}
 
 function waitForArduinoMove(pointIndex, timeoutMs = 5000) {
   return new Promise((resolve, reject) => {
@@ -1247,6 +1265,7 @@ async function getOrInitArduinoSerialPort() {
               }
 
               if (normalized.includes("HOMING OK")) {
+                if (pendingHomingResolver) pendingHomingResolver.resolve();
                 pushWebNotification("Arduino: Homing hoan tat! Robot san sang di chuyen.", "SUCCESS");
                 return;
               }
@@ -3515,15 +3534,19 @@ app.post("/api/ai/fertilize-analysis", async (req, res) => {
     addSystemLog("AI_FERTILIZE", `Bắt đầu quét AI phân tích dinh dưỡng tại ${plantedPointIndexes.length} vị trí có cây: ${plantedLabels.join(", ")}`, "PROCESS");
     pushWebNotification(`🌿 Bắt đầu di chuyển camera quét & phân tích Gemini AI tại ${plantedPointIndexes.length} vị trí có cây (${plantedLabels.join(", ")})...`, "AI_ANALYSIS");
 
-    // 0. ĐƯA ROBOT VỀ VỊ TRÍ GỐC (HOMING) TRƯỚC KHI QUÉT
+    // 0. ĐƯA ROBOT VỀ VỊ TRÍ GỐC (HOMING) TRƯỚC KHI QUÉT VÀ CHỜ HOMING OK
     addSystemLog("AI_FERTILIZE", "🏠 Đang đưa robot về vị trí gốc (Homing) trước khi bắt đầu quét dinh dưỡng...", "PROCESS");
     pushWebNotification("🏠 Đang đưa robot về vị trí gốc (Homing) trước khi quét phân tích...", "PROCESS");
+    const homeWait = waitForArduinoHoming(35000);
     try {
       await sendDirectCommandToArduino("HOME");
-      await new Promise((resolve) => setTimeout(resolve, 2000));
     } catch (homeErr) {
+      if (pendingHomingResolver) pendingHomingResolver.resolve();
       console.warn(`[AI Fertilize Homing Warning] ${homeErr.message}`);
     }
+    await homeWait.catch(() => {});
+    // Chờ thêm 500ms để robot hoàn toàn đứng yên tại gốc trước khi bắt đầu di chuyển qua các điểm cây
+    await new Promise((resolve) => setTimeout(resolve, 500));
 
     // 1. DI CHUYỂN ROBOT QUA CÁC VỊ TRÍ CÓ CÂY & CHỤP ẢNH REAL CHO TẤT CẢ CÂY
     const imageParts = [];
