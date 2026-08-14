@@ -911,7 +911,7 @@ function persistSnapshotForHistory(imagePath, idPrefix = "insp") {
   return { inspId, snapshotUrl };
 }
 
-async function captureImage(forceFresh = false) {
+async function captureImage(forceFresh = false, customPrefix = "") {
   // 1. Kiểm tra xem có ảnh tươi từ Live Persistent Stream (dưới 3s) thì dùng ngay để không bị Device busy (bỏ qua nếu forceFresh = true)
   if (!forceFresh) {
     const liveViewPath = path.join(process.cwd(), "st01.jpg");
@@ -920,7 +920,9 @@ async function captureImage(forceFresh = false) {
         const stats = fs.statSync(liveViewPath);
         if (Date.now() - stats.mtimeMs < 3500 && stats.size > 5000) {
           console.log(`[Camera Engine] Sử dụng ảnh trực tiếp vừa chụp từ Persistent Stream (${stats.size} bytes)`);
-          const snapPath = makeSnapPath();
+          const snapPath = customPrefix
+            ? path.join(PICTURES_DIR, `snap_${customPrefix}_${Date.now()}.jpg`)
+            : makeSnapPath();
           fs.copyFileSync(liveViewPath, snapPath);
           return snapPath;
         }
@@ -932,7 +934,9 @@ async function captureImage(forceFresh = false) {
   await releaseCameraBeforeCapture();
 
   const ffmpegBin = getFfmpegBinary();
-  const snapPath = makeSnapPath();
+  const snapPath = customPrefix
+    ? path.join(PICTURES_DIR, `snap_${customPrefix}_${Date.now()}.jpg`)
+    : makeSnapPath();
   const totalFrames = WARMUP_FRAMES + CHECK_FRAMES;
   const directory = await fs.promises.mkdtemp(
     path.join(require("os").tmpdir(), "vuon-rau-camera-")
@@ -3595,27 +3599,28 @@ app.post("/api/ai/fertilize-analysis", async (req, res) => {
         console.warn(`[AI Fertilize Move Warning ${trayName}] ${moveErr.message}`);
       }
       await moveWait.catch((mErr) => console.warn(`[Move Wait ${trayName}] ${mErr.message}`));
-      // Chờ thêm 300ms để robot hoàn toàn đứng yên chống rung camera
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      // Chờ thêm 1200ms để robot hoàn toàn đứng yên vị trí mới chống rung lắc camera
+      await new Promise((resolve) => setTimeout(resolve, 1200));
 
       // B. Bật đèn LED Flash chiếu sáng cây trồng trước khi chụp
       try {
         await sendDirectCommandToArduino("LED_ON");
-        // Chờ 600ms để ánh sáng Flash ổn định & camera tự động cân bằng độ sáng (exposure)
-        await new Promise((resolve) => setTimeout(resolve, 600));
+        // Chờ 800ms để ánh sáng Flash ổn định & camera tự động cân bằng độ sáng (exposure)
+        await new Promise((resolve) => setTimeout(resolve, 800));
       } catch (lErr) {
         console.warn(`[AI Fertilize Flash Warning ${trayName}] ${lErr.message}`);
       }
 
-      // C. Chụp ảnh mới (forceFresh = true) dưới ánh sáng LED Flash
+      // C. Chụp ảnh mới (forceFresh = true) với tên file định danh theo vị trí khay
+      const trayPrefix = `khay_${String(pointIdx + 1).padStart(2, "0")}`;
       let capPath = null;
       for (let capAttempt = 1; capAttempt <= 2; capAttempt++) {
         try {
-          capPath = await captureImage(true);
+          capPath = await captureImage(true, trayPrefix);
           if (capPath && fs.existsSync(capPath)) break;
         } catch (capErr) {
           console.warn(`[AI Fertilize Capture Attempt ${capAttempt} ${trayName}] ${capErr.message}`);
-          await new Promise((resolve) => setTimeout(resolve, 500));
+          await new Promise((resolve) => setTimeout(resolve, 600));
         }
       }
 
