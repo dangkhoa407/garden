@@ -1,6 +1,5 @@
-# SMART GARDEN
 
-## HỆ THỐNG VƯỜN RAU THÔNG MINH ỨNG DỤNG AI VÀ IoT
+## VƯỜN RAU THÔNG MINH TÍCH HỢP GENAI
 
 ---
 
@@ -8,28 +7,25 @@
 
 **Cuộc thi:** Sáng tạo dành cho Thanh thiếu niên, Nhi đồng toàn quốc
 
-**Lĩnh vực:** Nông nghiệp thông minh – Trí tuệ nhân tạo – IoT – Tự động hóa
+**Lĩnh vực:** Updating
 
-**Đơn vị:** `[TÊN TRƯỜNG]`
-
-**Nhóm thực hiện:** `[TÊN NHÓM]`
+**Đơn vị:** `Trường THPT Số 3 Phù Cát`
 
 ### Thành viên
 
 | STT | Họ và tên                  | Vai trò              |
 | --: | -------------------------- | -------------------- |
-|   1 | `[HỌ VÀ TÊN THÀNH VIÊN 1]` | Phát triển hệ thống  |
-|   2 | `[HỌ VÀ TÊN THÀNH VIÊN 2]` | Phần cứng / IoT      |
-|   3 | `[HỌ VÀ TÊN THÀNH VIÊN 3]` | Phần mềm / AI        |
+|   1 | `NGUYỄN THÀNH ĐĂNG KHOA  ` | Phần mền / AI / IOT  |
+|   2 | `BÙI LƯƠNG THÁI BÌNH     ` | Cơ khí / IOT         |
+|   3 | `                        ` | Phần mềm / AI        |
 |   4 | `[HỌ VÀ TÊN THÀNH VIÊN 4]` | Cơ khí / Tự động hóa |
 
-> Thông tin thành viên có thể được điều chỉnh theo danh sách chính thức của đội dự thi.
 
 ---
 
 # 1. GIỚI THIỆU
 
-**Smart Garden** là mô hình vườn rau tự động được phát triển nhằm hỗ trợ theo dõi và chăm sóc cây trồng thông qua sự kết hợp giữa **trí tuệ nhân tạo (AI), Internet of Things (IoT), xử lý ảnh, hệ thống nhúng và cơ cấu cơ khí**.
+**VƯỜN RAU THÔNG MINH TÍCH HỢP GENAI ** là mô hình vườn rau tự động được phát triển nhằm hỗ trợ theo dõi và chăm sóc cây trồng thông qua sự kết hợp giữa **trí tuệ nhân tạo (AI), Internet of Things (IoT), xử lý ảnh, hệ thống nhúng và cơ cấu cơ khí**.
 
 Hệ thống sử dụng **Raspberry Pi 4** làm bộ xử lý trung tâm. Camera được sử dụng để thu thập hình ảnh cây trồng, trong khi các cảm biến cung cấp dữ liệu về môi trường và độ ẩm đất.
 
@@ -87,10 +83,10 @@ Thay vì chỉ sử dụng bộ hẹn giờ để tưới nước, hệ thống 
                     │        RASPBERRY PI 4        │
                     │                              │
                     │  • Xử lý hình ảnh            │
-                    │  • Phân tích AI               │
-                    │  • Backend                    │
-                    │  • Web Dashboard              │
-                    │  • Điều phối hệ thống         │
+                    │  • Phân tích AI              │
+                    │  • Backend                   │
+                    │  • Web Dashboard             │
+                    │  • Điều phối hệ thống        │
                     └──────────────┬───────────────┘
                                    │
                     ┌──────────────┴──────────────┐
@@ -111,7 +107,7 @@ Thay vì chỉ sử dụng bộ hẹn giờ để tưới nước, hệ thống 
           │  CƠ CẤU CƠ KHÍ    │        │ HỆ THỐNG TƯỚI     │
           │                   │        │                   │
           │ Motor             │        │ Bơm nước          │
-          │ L298N              │        │ Bơm dinh dưỡng    │
+          │ L298N             │        │ Bơm dinh dưỡng    │
           │ Ròng rọc          │        │ Bồn pha           │
           │ Dây truyền động   │        │ Đường ống         │
           └───────────────────┘        └───────────────────┘
