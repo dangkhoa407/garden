@@ -559,7 +559,7 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
                 Hệ Thống Tưới Phân Bón Tự Động ESP32
               </h3>
               <p className="text-xs text-on-surface-variant">
-                Quy trình 3 bước: Trích xuất phân $\rightarrow$ Nạp nước bồn $\rightarrow$ Tưới vườn
+                Quy trình 3 bước: Trích xuất phân → Nạp nước bồn → Tưới vườn
               </p>
             </div>
           </div>
