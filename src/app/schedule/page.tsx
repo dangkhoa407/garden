@@ -53,19 +53,11 @@ const ACTION_OPTIONS: {
       color: "from-emerald-500/10 to-teal-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400",
     },
     {
-      type: "FERTILIZE_AI",
-      title: "Tưới Phân AI",
-      desc: "Robot chụp ảnh khay cây, AI Gemini phân tích lá & tự động bón phân theo khuyến nghị.",
-      icon: "psychology",
-      badge: "AI Gemini",
-      color: "from-purple-500/10 to-indigo-500/10 border-purple-500/30 text-purple-700 dark:text-purple-400",
-    },
-    {
-      type: "FERTILIZE_CUSTOM",
-      title: "Tưới Phân Tùy Chỉnh",
-      desc: "Tưới phân theo dung tích ml tùy chỉnh do bạn thiết lập cho từng bình phân bón.",
+      type: "FERTILIZE",
+      title: "Tưới Phân",
+      desc: "Tưới phân bằng AI Gemini hoặc tùy chỉnh dung tích ml cho từng bình phân.",
       icon: "water_drop",
-      badge: "Tùy chỉnh",
+      badge: "AI / Tùy chỉnh",
       color: "from-cyan-500/10 to-blue-500/10 border-cyan-500/30 text-cyan-700 dark:text-cyan-400",
     },
     {
@@ -134,6 +126,10 @@ export default function SchedulePage() {
   const [newRepeatDays, setNewRepeatDays] = useState<string[]>(["T2", "T4", "T6"]);
   const [selectedLocations, setSelectedLocations] = useState<string[]>(["Toàn bộ khu vườn"]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Fertilize Sub-Modal & Mode State
+  const [fertilizeMode, setFertilizeMode] = useState<"AI" | "CUSTOM">("AI");
+  const [showFertilizeSubModal, setShowFertilizeSubModal] = useState(false);
 
   // Custom Dosage State for FERTILIZE_CUSTOM mode
   const [customDosages, setCustomDosages] = useState<{ [tankCode: string]: { enabled: boolean; ml: number; name: string } }>({
@@ -450,14 +446,25 @@ export default function SchedulePage() {
 
     setIsSubmitting(true);
     try {
-      const activeDosages = Object.entries(customDosages)
-        .filter(([_, val]) => val.enabled)
-        .map(([tankCode, val]) => ({ tankCode, ml: val.ml, name: val.name }));
+      const mappedActions = selectedActions.map((a) => {
+        if (a === "FERTILIZE") {
+          return fertilizeMode === "AI" ? "FERTILIZE_AI" : "FERTILIZE_CUSTOM";
+        }
+        return a;
+      });
+
+      const activeDosages = fertilizeMode === "CUSTOM"
+        ? Object.entries(customDosages)
+          .filter(([_, val]) => val.enabled)
+          .map(([tankCode, val]) => ({ tankCode, ml: val.ml, name: val.name }))
+        : [];
 
       const defaultTitle = selectedActions
         .map((a) => {
-          if (a === "FERTILIZE_CUSTOM" && activeDosages.length > 0) {
-            return `Tưới Phân Tùy Chỉnh (${activeDosages.map((d) => `${d.tankCode} ${d.ml}ml`).join(", ")})`;
+          if (a === "FERTILIZE") {
+            if (fertilizeMode === "AI") return "Tưới Phân AI (Gemini)";
+            const doseStr = activeDosages.map((d) => `${d.tankCode} ${d.ml}ml`).join(", ");
+            return `Tưới Phân Tùy Chỉnh (${doseStr || "Bình A, B"})`;
           }
           return ACTION_OPTIONS.find((opt) => opt.type === a)?.title;
         })
@@ -470,8 +477,8 @@ export default function SchedulePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: newTitle.trim() || defaultTitle,
-          actions: selectedActions,
-          actionType: selectedActions[0],
+          actions: mappedActions,
+          actionType: mappedActions[0],
           customDosages: activeDosages,
           scheduleType: newScheduleType,
           slots: newScheduleType === "once" ? dateTimeSlots : [],
@@ -892,11 +899,13 @@ export default function SchedulePage() {
                                 )}
                               </div>
 
-                              <div className="min-w-0">
+                              <div className="min-w-0 flex-1">
                                 <div className="font-bold text-xs text-on-surface flex items-center gap-2">
                                   <span>{opt.title}</span>
                                   <span className="px-1.5 py-0.5 bg-surface-container-high text-on-surface-variant text-[10px] font-mono font-bold rounded">
-                                    {opt.badge}
+                                    {opt.type === "FERTILIZE"
+                                      ? (fertilizeMode === "AI" ? "🤖 AI Gemini" : "🧪 Tùy chỉnh")
+                                      : opt.badge}
                                   </span>
                                 </div>
                                 <div className="text-[11px] text-on-surface-variant truncate max-w-[240px]">
@@ -904,77 +913,30 @@ export default function SchedulePage() {
                                 </div>
                               </div>
                             </div>
+
+                            {/* Setting Button for FERTILIZE */}
+                            {opt.type === "FERTILIZE" && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (!isSelected) {
+                                    handleActionToggle("FERTILIZE");
+                                  }
+                                  setShowFertilizeSubModal(true);
+                                }}
+                                className="px-2.5 py-1.5 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all border border-cyan-500/30 flex-shrink-0 shadow-2xs active:scale-95"
+                              >
+                                <span className="material-symbols-outlined text-base">settings</span>
+                                <span>{fertilizeMode === "AI" ? "Cài đặt (AI)" : "Cài đặt (Tùy chỉnh)"}</span>
+                              </button>
+                            )}
                           </div>
                         </div>
                       );
                     })}
                   </div>
                 </div>
-
-                {/* 1.5 Cấu hình liều lượng cho Tưới Phân Tùy Chỉnh */}
-                {selectedActions.includes("FERTILIZE_CUSTOM") && (
-                  <div className="p-4 bg-cyan-500/10 border border-cyan-500/30 rounded-2xl space-y-3 animate-in fade-in duration-200">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-bold uppercase tracking-wider text-cyan-700 dark:text-cyan-300 flex items-center gap-1.5">
-                        <span className="material-symbols-outlined text-base">tune</span>
-                        CẤU HÌNH LIỀU LƯỢNG TƯỚI PHÂN TÙY CHỈNH:
-                      </label>
-                      <span className="text-[10px] font-mono font-bold text-cyan-700 dark:text-cyan-300 bg-cyan-500/20 px-2 py-0.5 rounded">
-                        Đơn vị: ml
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      {Object.entries(customDosages).map(([tankCode, conf]) => (
-                        <div
-                          key={tankCode}
-                          className={`p-3 rounded-xl border flex items-center justify-between gap-2 transition-all ${conf.enabled
-                            ? "bg-surface border-cyan-500/40 shadow-xs"
-                            : "bg-surface-container-low border-outline-variant/30 opacity-50"
-                            }`}
-                        >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <input
-                              type="checkbox"
-                              checked={conf.enabled}
-                              onChange={(e) =>
-                                setCustomDosages((prev) => ({
-                                  ...prev,
-                                  [tankCode]: { ...prev[tankCode], enabled: e.target.checked },
-                                }))
-                              }
-                              className="w-4 h-4 rounded text-primary focus:ring-primary accent-primary cursor-pointer"
-                            />
-                            <div className="min-w-0">
-                              <div className="font-bold text-xs text-on-surface truncate">
-                                {tankCode} ({conf.name})
-                              </div>
-                            </div>
-                          </div>
-
-                          {conf.enabled && (
-                            <div className="flex items-center gap-1">
-                              <input
-                                type="number"
-                                step="0.5"
-                                min="0.5"
-                                max="10"
-                                value={conf.ml}
-                                onChange={(e) =>
-                                  setCustomDosages((prev) => ({
-                                    ...prev,
-                                    [tankCode]: { ...prev[tankCode], ml: Math.max(0.5, parseFloat(e.target.value) || 0.5) },
-                                  }))
-                                }
-                                className="w-16 px-2 py-1 bg-surface-container-high border border-outline-variant/40 rounded-lg text-xs font-mono font-bold text-center focus:outline-none focus:ring-1 focus:ring-primary"
-                              />
-                              <span className="text-xs font-bold text-on-surface-variant font-mono">ml</span>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
 
                 {/* 2. Tên lịch trình */}
                 <div>
@@ -1232,6 +1194,172 @@ export default function SchedulePage() {
           </div>,
           document.body
         )}
+
+      {/* Sub-modal popup Cấu hình Tưới Phân */}
+      {showFertilizeSubModal && mounted && createPortal(
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-[9999] animate-in fade-in duration-200">
+          <div className="bg-surface border border-outline-variant/30 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-5 animate-in zoom-in-95 duration-200">
+
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-outline-variant/20 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-xl">settings</span>
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-on-surface">Cấu Hình Chế Độ Tưới Phân</h3>
+                  <p className="text-xs text-on-surface-variant">Chọn chế độ tưới phân bằng AI hoặc tùy chỉnh ml</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowFertilizeSubModal(false)}
+                className="w-8 h-8 rounded-full bg-surface-container-high text-on-surface-variant hover:text-on-surface flex items-center justify-center transition-all cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </div>
+
+            {/* Options list */}
+            <div className="space-y-3">
+              {/* Option 1: AI Gemini */}
+              <div
+                onClick={() => setFertilizeMode("AI")}
+                className={`p-4 rounded-2xl border cursor-pointer transition-all flex items-start gap-3.5 ${fertilizeMode === "AI"
+                  ? "bg-purple-500/10 border-purple-500/50 shadow-xs ring-1 ring-purple-500/40"
+                  : "bg-surface-container-low border-outline-variant/30 hover:border-outline-variant"
+                  }`}
+              >
+                <input
+                  type="radio"
+                  name="fertilizeMode"
+                  checked={fertilizeMode === "AI"}
+                  onChange={() => setFertilizeMode("AI")}
+                  className="mt-1 w-4 h-4 text-purple-600 focus:ring-purple-500 accent-purple-600 cursor-pointer"
+                />
+                <div className="space-y-1 min-w-0 flex-1">
+                  <div className="flex items-center gap-2 font-bold text-xs text-on-surface">
+                    <span>🤖 Tưới Phân AI (Gemini)</span>
+                    <span className="px-2 py-0.5 bg-purple-500/20 text-purple-700 dark:text-purple-300 text-[10px] font-mono font-bold rounded-full">
+                      Tự động
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-on-surface-variant leading-relaxed">
+                    Robot di chuyển chụp ảnh khay cây, AI Gemini phân tích lá & lịch sử bón phân để tự động tưới phân thích hợp.
+                  </p>
+                </div>
+              </div>
+
+              {/* Option 2: Custom */}
+              <div
+                onClick={() => setFertilizeMode("CUSTOM")}
+                className={`p-4 rounded-2xl border cursor-pointer transition-all flex items-start gap-3.5 ${fertilizeMode === "CUSTOM"
+                  ? "bg-cyan-500/10 border-cyan-500/50 shadow-xs ring-1 ring-cyan-500/40"
+                  : "bg-surface-container-low border-outline-variant/30 hover:border-outline-variant"
+                  }`}
+              >
+                <input
+                  type="radio"
+                  name="fertilizeMode"
+                  checked={fertilizeMode === "CUSTOM"}
+                  onChange={() => setFertilizeMode("CUSTOM")}
+                  className="mt-1 w-4 h-4 text-cyan-600 focus:ring-cyan-500 accent-cyan-600 cursor-pointer"
+                />
+                <div className="space-y-1 min-w-0 flex-1">
+                  <div className="flex items-center gap-2 font-bold text-xs text-on-surface">
+                    <span>🧪 Tưới Phân Tùy Chỉnh</span>
+                    <span className="px-2 py-0.5 bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 text-[10px] font-mono font-bold rounded-full">
+                      Thủ công
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-on-surface-variant leading-relaxed">
+                    Tưới phân theo dung tích ml tùy chỉnh do bạn chọn cho từng bình phân bón.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Custom dosages config if CUSTOM selected */}
+            {fertilizeMode === "CUSTOM" && (
+              <div className="p-4 bg-surface-container-high/60 border border-cyan-500/30 rounded-2xl space-y-3 animate-in fade-in duration-200">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold uppercase tracking-wider text-cyan-700 dark:text-cyan-300">
+                    Cấu hình từng bình phân bón:
+                  </label>
+                  <span className="text-[10px] font-mono font-bold text-cyan-700 dark:text-cyan-300 bg-cyan-500/20 px-2 py-0.5 rounded">
+                    Đơn vị: ml
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 gap-2">
+                  {Object.entries(customDosages).map(([tankCode, conf]) => (
+                    <div
+                      key={tankCode}
+                      className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 transition-all ${conf.enabled
+                        ? "bg-surface border-cyan-500/40 shadow-xs"
+                        : "bg-surface-container-low border-outline-variant/30 opacity-50"
+                        }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <input
+                          type="checkbox"
+                          checked={conf.enabled}
+                          onChange={(e) =>
+                            setCustomDosages((prev) => ({
+                              ...prev,
+                              [tankCode]: { ...prev[tankCode], enabled: e.target.checked },
+                            }))
+                          }
+                          className="w-4 h-4 rounded text-primary focus:ring-primary accent-primary cursor-pointer"
+                        />
+                        <span className="font-bold text-xs text-on-surface truncate">
+                          {tankCode} ({conf.name})
+                        </span>
+                      </div>
+
+                      {conf.enabled && (
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            step="0.5"
+                            min="0.5"
+                            max="10"
+                            value={conf.ml}
+                            onChange={(e) =>
+                              setCustomDosages((prev) => ({
+                                ...prev,
+                                [tankCode]: {
+                                  ...prev[tankCode],
+                                  ml: Math.max(0.5, parseFloat(e.target.value) || 0.5),
+                                },
+                              }))
+                            }
+                            className="w-16 px-2 py-1 bg-surface-container-high border border-outline-variant/40 rounded-lg text-xs font-mono font-bold text-center focus:outline-none focus:ring-1 focus:ring-primary"
+                          />
+                          <span className="text-xs font-bold text-on-surface-variant font-mono">ml</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Confirm button */}
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setShowFertilizeSubModal(false)}
+                className="w-full bg-primary text-white font-bold py-3 rounded-2xl hover:bg-primary/90 transition-all shadow-md text-xs uppercase tracking-wider flex items-center justify-center gap-2 active:scale-95 cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-base font-bold">check_circle</span>
+                Xác Nhận & Lưu Cấu Hình
+              </button>
+            </div>
+
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
