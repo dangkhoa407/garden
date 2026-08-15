@@ -782,6 +782,20 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
               )}
 
               {/* Display AI Recommendations */}
+              {aiAnalysisDone && aiRecommendations.length === 0 && (
+                <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-center space-y-1.5">
+                  <span className="material-symbols-outlined text-3xl text-emerald-500">
+                    check_circle
+                  </span>
+                  <p className="font-bold text-sm text-emerald-700 dark:text-emerald-300">
+                    Tất Cả Cây Trồng Đang Phát Triển Tốt!
+                  </p>
+                  <p className="text-xs text-on-surface-variant">
+                    Gemini AI đã phân tích tổng thể tất cả các vị trí hình ảnh và đánh giá cây trồng đang khỏe mạnh, hiện tại chưa cần bổ sung thêm phân bón.
+                  </p>
+                </div>
+              )}
+
               {aiRecommendations.length > 0 && (
                 <div className="space-y-3 pt-1">
                   <h4 className="text-xs font-bold text-on-surface uppercase tracking-wider flex items-center gap-1.5">
