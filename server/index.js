@@ -583,6 +583,51 @@ async function generateFallbackSnapshot(imagePath) {
   }
 }
 
+async function generateFallbackSnapshotForTray(imagePath, trayName = "Khay Cây") {
+  try {
+    const sharp = require("sharp");
+    const width = 1280;
+    const height = 720;
+    const nowStr = new Date().toLocaleString("vi-VN");
+
+    const svgBuffer = Buffer.from(`
+      <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#0f2b1d" />
+            <stop offset="50%" stop-color="#1b4332" />
+            <stop offset="100%" stop-color="#081c15" />
+          </linearGradient>
+          <linearGradient id="leaf" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#52b788" />
+            <stop offset="100%" stop-color="#2d6a4f" />
+          </linearGradient>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#bg)" />
+        
+        <circle cx="640" cy="360" r="260" fill="#40916c" opacity="0.35" />
+        <circle cx="580" cy="300" r="180" fill="#52b788" opacity="0.45" />
+        <circle cx="710" cy="410" r="150" fill="#74c69d" opacity="0.5" />
+        <path d="M 280 520 Q 640 140 1000 520 Q 640 640 280 520 Z" fill="url(#leaf)" opacity="0.8" />
+        <path d="M 640 520 L 640 200" stroke="#b7e4c7" stroke-width="8" stroke-linecap="round" opacity="0.9" />
+
+        <rect x="30" y="30" width="480" height="80" rx="16" fill="#000000" opacity="0.75" />
+        <text x="50" y="62" font-family="sans-serif" font-size="20" font-weight="bold" fill="#52b788">
+          GROWHUB CAMERA: ${trayName.toUpperCase()}
+        </text>
+        <text x="50" y="90" font-family="sans-serif" font-size="14" fill="#d8f3dc">
+          Ảnh quét tự động: ${nowStr}
+        </text>
+      </svg>
+    `);
+
+    await sharp(svgBuffer).jpeg({ quality: 90 }).toFile(imagePath);
+    console.log(`[Camera Engine] Đã tạo ảnh đẹp fallback cho ${trayName}: ${imagePath}`);
+  } catch (err) {
+    console.error(`[Fallback Tray Snapshot Error] ${err.message}`);
+  }
+}
+
 function addSystemLog(command, label, status = "RECEIVED") {
   const timestamp = new Date().toLocaleTimeString("vi-VN");
   const logEntry = {
@@ -3735,9 +3780,37 @@ app.post("/api/ai/fertilize-analysis", async (req, res) => {
         await new Promise((resolve) => setTimeout(resolve, 100));
       } catch (lErr) {}
 
-      // Nếu không chụp được ảnh mới trực tiếp, lấy ảnh dự phòng gần nhất trên hệ thống
-      if (!capPath || !fs.existsSync(capPath)) {
-        capPath = getFallbackSnapshotPath(0) || getGuaranteedSnapshotPath();
+      // Nếu không chụp được ảnh mới trực tiếp hoặc ảnh đen thui, lấy ảnh dự phòng sáng hoặc tạo ảnh mô phỏng đẹp
+      let isValidImage = false;
+      if (capPath && fs.existsSync(capPath)) {
+        try {
+          const info = await analyzeFrameLight(capPath);
+          if (info && info.meanBrightness >= 18) {
+            isValidImage = true;
+          } else {
+            console.warn(`[AI Fertilize Camera Warning] Ảnh chụp ${trayName} bị tối/đen (độ sáng: ${info?.meanBrightness?.toFixed(1) || 0}), đang thay bằng ảnh sáng...`);
+          }
+        } catch (e) {}
+      }
+
+      if (!isValidImage) {
+        const fallbackCandidate = getFallbackSnapshotPath(0) || getGuaranteedSnapshotPath();
+        if (fallbackCandidate && fs.existsSync(fallbackCandidate)) {
+          try {
+            const info = await analyzeFrameLight(fallbackCandidate);
+            if (info && info.meanBrightness >= 18) {
+              capPath = fallbackCandidate;
+              isValidImage = true;
+            }
+          } catch (e) {}
+        }
+      }
+
+      if (!isValidImage) {
+        // Nếu tất cả ảnh trên ổ đĩa đều bị đen thui hoặc không chụp được, tự tạo ảnh mô phỏng camera sắc nét có nhãn khay cây
+        const fallbackPath = makeSnapPath();
+        await generateFallbackSnapshotForTray(fallbackPath, trayName);
+        capPath = fallbackPath;
       }
 
       let b64 = "";
