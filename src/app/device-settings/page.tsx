@@ -122,21 +122,21 @@ export default function DeviceSettingsPage() {
     try {
       const res = await fetch(endpoint, options);
       if (res && res.ok) return await res.json();
-    } catch (e) {}
+    } catch (e) { }
 
     // 2. Thử BACKEND_URL được cấu hình
     if (BACKEND_URL) {
       try {
         const res = await fetch(`${BACKEND_URL}${endpoint}`, options);
         if (res && res.ok) return await res.json();
-      } catch (e) {}
+      } catch (e) { }
     }
 
     // 3. Fallback thử trực tiếp Localhost Backend (http://localhost:5000)
     try {
       const res = await fetch(`http://localhost:5000${endpoint}`, options);
       if (res && res.ok) return await res.json();
-    } catch (e) {}
+    } catch (e) { }
 
     return null;
   };
@@ -398,7 +398,7 @@ export default function DeviceSettingsPage() {
         <div>
           <h1 className="font-display-lg text-display-lg font-bold text-on-surface mb-1 flex items-center gap-3">
             <span className="material-symbols-outlined text-primary text-4xl">settings_suggest</span>
-            Cài Đặt & Chẩn Đoán Thiết Bị
+            Cài đặt thiết bị
           </h1>
           <p className="font-body-lg text-body-lg text-on-surface-variant">
             Quản lý kết nối phần cứng Arduino, ESP32 và cấu hình Wi-Fi mạng nội bộ
@@ -409,11 +409,10 @@ export default function DeviceSettingsPage() {
       {/* Toast Banner */}
       {toast && (
         <div
-          className={`p-4 rounded-2xl border text-body-sm flex items-center justify-between shadow-md animate-in fade-in slide-in-from-top-2 duration-200 ${
-            toast.type === "success"
-              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-800 dark:text-emerald-300"
-              : "bg-rose-500/10 border-rose-500/30 text-rose-800 dark:text-rose-300"
-          }`}
+          className={`p-4 rounded-2xl border text-body-sm flex items-center justify-between shadow-md animate-in fade-in slide-in-from-top-2 duration-200 ${toast.type === "success"
+            ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-800 dark:text-emerald-300"
+            : "bg-rose-500/10 border-rose-500/30 text-rose-800 dark:text-rose-300"
+            }`}
         >
           <div className="flex items-center gap-2.5">
             <span className="material-symbols-outlined text-xl">
@@ -431,38 +430,35 @@ export default function DeviceSettingsPage() {
       <div className="flex border-b border-outline-variant/20 gap-2">
         <button
           onClick={() => setActiveTab("diagnostics")}
-          className={`flex items-center gap-2 px-6 py-3.5 font-headline-sm text-body-lg font-bold transition-all border-b-2 ${
-            activeTab === "diagnostics"
-              ? "border-primary text-primary bg-primary/5 rounded-t-xl"
-              : "border-transparent text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low/50 rounded-t-xl"
-          }`}
+          className={`flex items-center gap-2 px-6 py-3.5 font-headline-sm text-body-lg font-bold transition-all border-b-2 ${activeTab === "diagnostics"
+            ? "border-primary text-primary bg-primary/5 rounded-t-xl"
+            : "border-transparent text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low/50 rounded-t-xl"
+            }`}
         >
           <span className="material-symbols-outlined text-2xl">sensors</span>
-          Chẩn Đoán Phần Cứng (Arduino & ESP32)
+          Chẩn Đoán Kết Nối
         </button>
 
         <button
           onClick={() => setActiveTab("wifi")}
-          className={`flex items-center gap-2 px-6 py-3.5 font-headline-sm text-body-lg font-bold transition-all border-b-2 ${
-            activeTab === "wifi"
-              ? "border-primary text-primary bg-primary/5 rounded-t-xl"
-              : "border-transparent text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low/50 rounded-t-xl"
-          }`}
+          className={`flex items-center gap-2 px-6 py-3.5 font-headline-sm text-body-lg font-bold transition-all border-b-2 ${activeTab === "wifi"
+            ? "border-primary text-primary bg-primary/5 rounded-t-xl"
+            : "border-transparent text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low/50 rounded-t-xl"
+            }`}
         >
           <span className="material-symbols-outlined text-2xl">wifi</span>
-          Cấu Hình Wi-Fi & Mạng
+          Cấu Hình Wi-Fi
         </button>
 
         <button
           onClick={() => setActiveTab("telegram")}
-          className={`flex items-center gap-2 px-6 py-3.5 font-headline-sm text-body-lg font-bold transition-all border-b-2 ${
-            activeTab === "telegram"
-              ? "border-primary text-primary bg-primary/5 rounded-t-xl"
-              : "border-transparent text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low/50 rounded-t-xl"
-          }`}
+          className={`flex items-center gap-2 px-6 py-3.5 font-headline-sm text-body-lg font-bold transition-all border-b-2 ${activeTab === "telegram"
+            ? "border-primary text-primary bg-primary/5 rounded-t-xl"
+            : "border-transparent text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low/50 rounded-t-xl"
+            }`}
         >
           <span className="material-symbols-outlined text-2xl">send</span>
-          Cấu Hình Telegram Bot
+          Cấu Hình Telegram
         </button>
       </div>
 
@@ -479,7 +475,7 @@ export default function DeviceSettingsPage() {
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <h2 className="font-headline-md text-headline-md text-on-surface font-bold">
-                      1. Kiểm Tra Kết Nối Mạch Arduino
+                      1. Chuẩn đoán Arduino
                     </h2>
                     {arduinoStatus.connected ? (
                       <span className="px-3 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1.5">
@@ -515,7 +511,7 @@ export default function DeviceSettingsPage() {
                   ) : (
                     <>
                       <span className="material-symbols-outlined text-lg">sync_lock</span>
-                      Kiểm tra kết nối Arduino (Ping Test)
+                      Kiểm tra
                     </>
                   )}
                 </button>
@@ -587,7 +583,7 @@ export default function DeviceSettingsPage() {
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <h2 className="font-headline-md text-headline-md text-on-surface font-bold">
-                      2. Kiểm Tra Kết Nối Mạch ESP32 (Bơm Tưới & Phân Bón)
+                      2. Chuẩn đoán ESP32
                     </h2>
                     {esp32Status.connected ? (
                       <span className="px-3 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1.5">
@@ -623,7 +619,7 @@ export default function DeviceSettingsPage() {
                   ) : (
                     <>
                       <span className="material-symbols-outlined text-lg">sync</span>
-                      Kiểm Tra Lại
+                      Kiểm Tra
                     </>
                   )}
                 </button>
@@ -634,7 +630,7 @@ export default function DeviceSettingsPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-md pt-sm">
               <div className="p-md bg-surface-container-low rounded-xl border border-outline-variant/20">
                 <span className="text-on-surface-variant block font-label-caps text-[10px] font-semibold uppercase mb-1">
-                  CỔNG SERIAL ESP32 THỰC TẾ
+                  CỔNG SERIAL ESP32
                 </span>
                 <span className="font-bold text-on-surface text-body-sm block truncate">
                   {esp32Status.port}
@@ -785,11 +781,10 @@ export default function DeviceSettingsPage() {
                       <button
                         type="button"
                         onClick={() => setIpMode("dhcp")}
-                        className={`p-3 rounded-xl border text-body-sm font-semibold flex items-center justify-center gap-2 transition-all ${
-                          ipMode === "dhcp"
-                            ? "bg-primary/10 border-primary text-primary"
-                            : "bg-surface-container-low border-outline-variant/30 text-on-surface-variant"
-                        }`}
+                        className={`p-3 rounded-xl border text-body-sm font-semibold flex items-center justify-center gap-2 transition-all ${ipMode === "dhcp"
+                          ? "bg-primary/10 border-primary text-primary"
+                          : "bg-surface-container-low border-outline-variant/30 text-on-surface-variant"
+                          }`}
                       >
                         <span className="material-symbols-outlined text-lg">dynamic_form</span>
                         IP Động (DHCP)
@@ -797,11 +792,10 @@ export default function DeviceSettingsPage() {
                       <button
                         type="button"
                         onClick={() => setIpMode("static")}
-                        className={`p-3 rounded-xl border text-body-sm font-semibold flex items-center justify-center gap-2 transition-all ${
-                          ipMode === "static"
-                            ? "bg-primary/10 border-primary text-primary"
-                            : "bg-surface-container-low border-outline-variant/30 text-on-surface-variant"
-                        }`}
+                        className={`p-3 rounded-xl border text-body-sm font-semibold flex items-center justify-center gap-2 transition-all ${ipMode === "static"
+                          ? "bg-primary/10 border-primary text-primary"
+                          : "bg-surface-container-low border-outline-variant/30 text-on-surface-variant"
+                          }`}
                       >
                         <span className="material-symbols-outlined text-lg">pin</span>
                         IP Tĩnh (Static)

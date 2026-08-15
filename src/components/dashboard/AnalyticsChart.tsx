@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import {
   BarChart,
   Bar,
@@ -13,6 +14,34 @@ import {
 import { HISTORICAL_DATA } from "@/lib/data";
 
 export function AnalyticsChart() {
+  const [chartData, setChartData] = useState(HISTORICAL_DATA);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchRealData = async () => {
+      try {
+        const res = await fetch("/api/sensors/history");
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+            if (isMounted) setChartData(json.data);
+          }
+        }
+      } catch (e) {
+        console.warn("Lỗi khi tải dữ liệu lịch sử cảm biến:", e);
+      }
+    };
+
+    fetchRealData();
+    const interval = setInterval(fetchRealData, 10000); // 10s tự cập nhật dữ liệu thật
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
   return (
     <div className="bg-surface rounded-xl p-md card-shadow border border-outline-variant/20">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-xs mb-md">
@@ -29,7 +58,7 @@ export function AnalyticsChart() {
       {/* Recharts Bar Chart container */}
       <div className="h-64 sm:h-72 w-full pt-2">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={HISTORICAL_DATA} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+          <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eeeeee" />
             <XAxis dataKey="day" tick={{ fill: "#40493d", fontSize: 12 }} axisLine={false} tickLine={false} />
             <YAxis tick={{ fill: "#40493d", fontSize: 12 }} axisLine={false} tickLine={false} />

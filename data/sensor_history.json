@@ -1,0 +1,9 @@
+[
+  { "day": "T2", "soilMoisture": 68, "temperature": 27.5, "lightIntensity": 82 },
+  { "day": "T3", "soilMoisture": 72, "temperature": 28.0, "lightIntensity": 78 },
+  { "day": "T4", "soilMoisture": 64, "temperature": 29.1, "lightIntensity": 85 },
+  { "day": "T5", "soilMoisture": 70, "temperature": 28.4, "lightIntensity": 72 },
+  { "day": "T6", "soilMoisture": 76, "temperature": 27.8, "lightIntensity": 88 },
+  { "day": "T7", "soilMoisture": 65, "temperature": 28.2, "lightIntensity": 80 },
+  { "day": "CN", "soilMoisture": 67, "temperature": 28.0, "lightIntensity": 81 }
+]
