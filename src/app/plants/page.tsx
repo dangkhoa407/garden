@@ -20,6 +20,9 @@ export default function PlantsPage() {
   const [newPlantName, setNewPlantName] = useState("");
   const [mounted, setMounted] = useState(false);
 
+  const todayStr = new Date().toISOString().split("T")[0];
+  const [newPlantDate, setNewPlantDate] = useState(todayStr);
+
   // Filter out locations that are already occupied by existing plants
   const availableLocations = LOCATION_OPTIONS.filter(
     (loc) => !plants.some((p) => p.location === loc)
@@ -46,12 +49,30 @@ export default function PlantsPage() {
       return;
     }
 
-    const now = new Date();
-    const formattedDate = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`;
+    let formattedDate = "";
+    let daysCalculated = 1;
+
+    if (newPlantDate) {
+      const parts = newPlantDate.split("-");
+      if (parts.length === 3) {
+        const [yyyy, mm, dd] = parts;
+        formattedDate = `${parseInt(dd, 10)}/${parseInt(mm, 10)}/${yyyy}`;
+
+        const plantTime = new Date(newPlantDate).getTime();
+        const currentTime = new Date().getTime();
+        const diffDays = Math.floor((currentTime - plantTime) / (1000 * 60 * 60 * 24));
+        daysCalculated = Math.max(1, diffDays + 1);
+      }
+    }
+
+    if (!formattedDate) {
+      const now = new Date();
+      formattedDate = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`;
+    }
 
     await addPlant({
       name: newPlantName,
-      days: 1,
+      days: daysCalculated,
       status: "Mới gieo trồng",
       statusColor: "text-primary bg-primary/10",
       progress: 10,
@@ -63,6 +84,7 @@ export default function PlantsPage() {
     });
 
     setNewPlantName("");
+    setNewPlantDate(todayStr);
     setShowAddModal(false);
   };
 
@@ -170,6 +192,19 @@ export default function PlantsPage() {
                       Đã hết vị trí để thêm!
                     </div>
                   )}
+                </div>
+
+                <div>
+                  <label className="block font-label-caps text-label-caps text-on-surface-variant mb-1 font-semibold">
+                    NGÀY TRỒNG
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={newPlantDate}
+                    onChange={(e) => setNewPlantDate(e.target.value)}
+                    className="w-full px-3 py-2.5 bg-surface-container-low border border-outline-variant/40 rounded-xl text-body-sm focus:outline-none focus:ring-1 focus:ring-primary font-medium text-on-surface"
+                  />
                 </div>
 
                 <div className="flex justify-end gap-3 pt-xs">
