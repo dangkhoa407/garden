@@ -3807,13 +3807,14 @@ YÊU CẦU BẮT BUỘC VỀ ĐỊNH DẠNG ĐẦU RA:
       });
     }
 
+    const rawResponse = aiResult ? aiResult.text : "";
     let recommendations = [];
 
     if (aiResult && aiResult.text) {
       try {
-        let rawText = aiResult.text.trim();
-        rawText = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
-        const parsed = JSON.parse(rawText);
+        let cleanText = aiResult.text.trim();
+        cleanText = cleanText.replace(/```json/g, "").replace(/```/g, "").trim();
+        const parsed = JSON.parse(cleanText);
         if (Array.isArray(parsed)) {
           recommendations = parsed;
         }
@@ -3827,6 +3828,7 @@ YÊU CẦU BẮT BUỘC VỀ ĐỊNH DẠNG ĐẦU RA:
         success: false,
         error: "Gemini AI không trả về dữ liệu phân tích hợp lệ. Vui lòng thử lại!",
         recommendations: [],
+        rawResponse,
       });
     }
 
@@ -3839,6 +3841,7 @@ YÊU CẦU BẮT BUỘC VỀ ĐỊNH DẠNG ĐẦU RA:
       capturedImages,
       plantsCount: plantedPointIndexes.length,
       aiModel: aiResult ? aiResult.model : "gemini-3.5-flash-lite",
+      rawResponse,
     });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
