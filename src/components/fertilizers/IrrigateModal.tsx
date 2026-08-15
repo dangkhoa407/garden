@@ -60,6 +60,7 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
   const [capturedImages, setCapturedImages] = useState<
     { trayName: string; imageBase64: string }[]
   >([]);
+  const [aiOverallAssessment, setAiOverallAssessment] = useState<string>("");
   const [aiRecommendations, setAiRecommendations] = useState<
     { tankCode: string; name: string; ml: number; reason: string; selected: boolean }[]
   >([]);
@@ -84,6 +85,7 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
 
     setCapturedImages([]);
     setAiAnalysisDone(false);
+    setAiOverallAssessment("");
     setAiRecommendations([]);
     setRawAiResponse("");
     setRawRequestPayload("");
@@ -163,6 +165,7 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
     setIsAnalyzingAi(true);
     setCapturedImages([]);
     setAiAnalysisDone(false);
+    setAiOverallAssessment("");
     setAiStatusMsg(`🤖 Đang điều khiển di chuyển camera đến các vị trí cây trong Vườn...`);
 
     try {
@@ -179,11 +182,15 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
         data = { success: false, error: text || "Lỗi máy chủ (Invalid JSON)" };
       }
 
-      if (res.ok && data.success && data.recommendations && Array.isArray(data.recommendations)) {
+      if (res.ok && data.success && Array.isArray(data.recommendations)) {
         if (data.capturedImages && Array.isArray(data.capturedImages)) {
           setCapturedImages(data.capturedImages);
         } else {
           setCapturedImages([]);
+        }
+
+        if (data.overallAssessment) {
+          setAiOverallAssessment(data.overallAssessment);
         }
 
         if (data.aiModel) {
@@ -784,18 +791,22 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
                 </div>
               )}
 
-              {/* Display AI Recommendations */}
+              {/* Display Real AI Overall Assessment from Gemini */}
+              {aiAnalysisDone && (
+                <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 space-y-2">
+                  <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400 font-bold text-xs uppercase tracking-wider">
+                    <span className="material-symbols-outlined text-lg">psychology</span>
+                    <span>Đánh Giá Tổng Quan Từ Gemini AI:</span>
+                  </div>
+                  <p className="text-xs text-on-surface leading-relaxed font-medium">
+                    {aiOverallAssessment || "Gemini AI đã hoàn tất phân tích tổng thể hình ảnh từ camera."}
+                  </p>
+                </div>
+              )}
+
               {aiAnalysisDone && aiRecommendations.length === 0 && (
-                <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-center space-y-1.5">
-                  <span className="material-symbols-outlined text-3xl text-emerald-500">
-                    check_circle
-                  </span>
-                  <p className="font-bold text-sm text-emerald-700 dark:text-emerald-300">
-                    Tất Cả Cây Trồng Đang Phát Triển Tốt!
-                  </p>
-                  <p className="text-xs text-on-surface-variant">
-                    Gemini AI đã phân tích tổng thể tất cả các vị trí hình ảnh và đánh giá cây trồng đang khỏe mạnh, hiện tại chưa cần bổ sung thêm phân bón.
-                  </p>
+                <div className="p-3 rounded-xl bg-surface-container-low border border-outline-variant/30 text-center text-xs text-on-surface-variant font-medium">
+                  ℹ️ Hiện tại Gemini AI chưa đề xuất bổ sung thêm loại phân bón nào cho chu kỳ này.
                 </div>
               )}
 

@@ -3837,37 +3837,37 @@ app.post("/api/ai/fertilize-analysis", async (req, res) => {
     // 4. SOẠN PROMPT PHÂN TÍCH CHO GEMINI & ÉP TRẢ VỀ JSON THỰC TẾ (KHÔNG DÙNG MOCK)
     const promptText = `
 Bạn là hệ thống AI Nông Nghiệp Thông Minh thuộc dự án GrowHub Smart Garden.
-Dưới đây là TOÀN BỘ ${plantedPointIndexes.length} HÌNH ẢNH THỰC TẾ chụp từ camera robot tại các vị trí cây trồng trong vườn, cùng thông tin danh sách cây trồng thực tế và các bình phân bón hiện có.
+Dưới đây là TOÀN BỘ ${plantedPointIndexes.length} HÌNH ẢNH THỰC TẾ chụp từ camera robot tại các vị trí khay cây trong vườn, cùng thông tin danh sách cây trồng thực tế và các bình phân bón hiện có.
 
-DANH SÁCH CÂY TRỒNG ĐANG GIEO TRỒNG (${activePlants.length} cây):
+DANH SÁCH CÂY TRỒNG ĐANG GIEO TRỒNG TRONG HỆ THỐNG (${activePlants.length} cây):
 ${JSON.stringify(activePlants.length > 0 ? activePlants : plants, null, 2)}
 
 DANH SÁCH BÌNH PHÂN BÓN HIỆN CÓ TRONG HỆ THỐNG:
 ${JSON.stringify(fertilizers, null, 2)}
 
 NHIỆM VỤ CỦA BẠN:
-1. Quan sát và phân tích TỔNG THỂ TOÀN BỘ các hình ảnh chụp thực tế cùng tình trạng nhu cầu dinh dưỡng của tất cả các cây đang gieo trồng trong vườn.
-2. Tổng hợp nhu cầu dinh dưỡng và xác định chính xác những loại phân bón NÀO THỰC SỰ CẦN BỔ SUNG từ danh sách các bình phân hiện có (ví dụ: Bình A, Bình B, Bình C, Bình D).
-3. Đề xuất dung tích phân bón (ml) tối ưu cho từng bình phân cần dùng (từ 0.5 ml đến 6.0 ml) cho chu kỳ tưới chung này.
+1. Quan sát thật kỹ TOÀN BỘ các hình ảnh chụp thực tế từ camera được gửi kèm.
+   - Kiểm tra kỹ xem trong các hình ảnh CÓ CÂY TRỒNG KHÔNG hay KHAY ĐANG TRỐNG / chỉ thấy dây nhợ, ống tưới, nền bồn.
+   - Nếu KHÔNG thấy cây trồng (khay trống): Bắt buộc nêu rõ trong đánh giá là không nhìn thấy cây trồng ở các khay chụp, nên không cần bón phân.
+   - Nếu CÓ cây trồng: Đánh giá thực tế tình trạng sức khỏe lá, màu sắc lá, dấu hiệu thiếu dinh dưỡng hoặc phát triển.
+2. Viết ĐÁNH GIÁ TỔNG QUAN THỰC TẾ (overallAssessment) bằng tiếng Việt trung thực, dựa đúng 100% trên quan sát hình ảnh camera.
+3. Xác định các bình phân bón CẦN BỔ SUNG (nếu có) từ danh sách các bình phân hiện có, kèm liều lượng ml khuyến nghị (từ 0.5 ml đến 6.0 ml) và lý do. Nếu không có cây hoặc cây tốt không cần phân, recommendations là mảng rỗng [].
 
-QUY ĐỊNH BẮT BUỘC:
-- Đưa ra KẾT LUẬN TỔNG HỢP 1 LẦN DUY NHẤT cho toàn bộ các cây sau khi xem xét tất cả ảnh.
-- KHÔNG BẮT BUỘC phải chọn đủ tất cả các bình phân. Chỉ đề xuất bình phân thực sự cần thiết.
-- NẾU TẤT CẢ CÁC CÂY ĐỀU ĐANG PHÁT TRIỂN TỐT và không cần bổ sung phân bón, hãy trả về mảng rỗng: []
-
-YÊU CẦU BẮT BUỘC VỀ ĐỊNH DẠNG ĐẦU RA:
-- Trả về ĐÚNG MỘT MẢNG JSON hợp lệ (JavaScript JSON Array), KHÔNG kèm bất kỳ văn bản giải thích nào khác ngoài JSON.
-- Mỗi phần tử có cấu trúc:
-[
-  {
-    "tankCode": "Bình A",
-    "name": "Tên loại phân bón",
-    "ml": 2.5,
-    "reason": "Mô tả ngắn gọn tổng hợp lý do bón phân này dựa trên phân tích tổng thể hình ảnh các cây trồng"
-  }
-]
-- Chỉ bao gồm các tankCode có trong danh sách bình phân hiện có.
-- Nếu tất cả cây đều phát triển tốt không cần bón phân, trả về: []
+YÊU CẦU BẮT BUỘC VỀ ĐỊNH DẠNG ĐẦU RA (JSON OBJECT):
+- Trả về ĐÚNG MỘT JSON OBJECT duy nhất có cấu trúc chính xác (KHÔNG kèm bất kỳ văn bản giải thích nào ngoài JSON):
+{
+  "overallAssessment": "Đánh giá tổng quan thực tế chi tiết dựa trên quan sát từ toàn bộ hình ảnh camera chụp được",
+  "recommendations": [
+    {
+      "tankCode": "Bình A",
+      "name": "Tên loại phân bón",
+      "ml": 2.5,
+      "reason": "Lý do ngắn gọn bón phân này dựa trên phân tích hình ảnh"
+    }
+  ]
+}
+- Trường "overallAssessment" LÀ BẮT BUỘC và phải nhận xét chân thực từ hình ảnh (KHÔNG được tự bịa cây phát triển tốt nếu ảnh chụp là khay trống).
+- Nếu không cần bổ sung phân bón hoặc không thấy cây, "recommendations" sẽ là mảng rỗng: []
 `;
 
     const payload = {
@@ -3911,6 +3911,7 @@ YÊU CẦU BẮT BUỘC VỀ ĐỊNH DẠNG ĐẦU RA:
       return res.status(500).json({
         success: false,
         error: `Lỗi kết nối Gemini AI: ${aiErr.message}`,
+        overallAssessment: "",
         recommendations: [],
         aiModel: "gemini-3.5-flash-lite",
         requestPayload,
@@ -3919,6 +3920,7 @@ YÊU CẦU BẮT BUỘC VỀ ĐỊNH DẠNG ĐẦU RA:
 
     const rawResponse = aiResult ? aiResult.text : "";
     let recommendations = [];
+    let overallAssessment = "";
     let isParsedValid = false;
 
     if (aiResult && aiResult.text) {
@@ -3926,7 +3928,13 @@ YÊU CẦU BẮT BUỘC VỀ ĐỊNH DẠNG ĐẦU RA:
         let cleanText = aiResult.text.trim();
         cleanText = cleanText.replace(/```json/g, "").replace(/```/g, "").trim();
         const parsed = JSON.parse(cleanText);
-        if (Array.isArray(parsed)) {
+        if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+          overallAssessment = parsed.overallAssessment || "";
+          if (Array.isArray(parsed.recommendations)) {
+            recommendations = parsed.recommendations;
+          }
+          isParsedValid = true;
+        } else if (Array.isArray(parsed)) {
           recommendations = parsed;
           isParsedValid = true;
         }
@@ -3939,6 +3947,7 @@ YÊU CẦU BẮT BUỘC VỀ ĐỊNH DẠNG ĐẦU RA:
       return res.status(500).json({
         success: false,
         error: "Gemini AI không trả về dữ liệu phân tích hợp lệ. Vui lòng thử lại!",
+        overallAssessment: "",
         recommendations: [],
         aiModel: "gemini-3.5-flash-lite",
         rawResponse,
@@ -3946,16 +3955,17 @@ YÊU CẦU BẮT BUỘC VỀ ĐỊNH DẠNG ĐẦU RA:
       });
     }
 
-    addSystemLog("AI_FERTILIZE", `Gemini AI đã phân tích tổng thể xong và đưa ra đề xuất cho ${recommendations.length} bình phân.`, "SUCCESS");
+    addSystemLog("AI_FERTILIZE", `Gemini AI đã phân tích tổng thể xong và đưa ra đánh giá tổng quan.`, "SUCCESS");
     pushWebNotification(
       recommendations.length > 0
         ? `✨ Gemini AI đã hoàn tất phân tích tổng thể ${plantedPointIndexes.length} vị trí cây và đưa ra đề xuất bón phân!`
-        : `🌿 Gemini AI đánh giá tất cả ${plantedPointIndexes.length} vị trí cây đều đang phát triển tốt, chưa cần bổ sung phân bón.`,
+        : `🌿 Gemini AI đã hoàn tất phân tích tổng thể ${plantedPointIndexes.length} vị trí cây.`,
       "SUCCESS"
     );
 
     res.json({
       success: true,
+      overallAssessment: overallAssessment || "Gemini AI đã quan sát toàn bộ hình ảnh camera thực tế và hoàn tất đánh giá tổng quan.",
       recommendations,
       capturedImages,
       plantsCount: plantedPointIndexes.length,
