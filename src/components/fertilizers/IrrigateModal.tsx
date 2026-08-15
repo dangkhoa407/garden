@@ -106,7 +106,7 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
           const data = await pRes.json();
           if (Array.isArray(data)) setPlantedCount(data.length);
         }
-      } catch (err) {}
+      } catch (err) { }
     };
 
     fetchFertilizersAndPlants();
@@ -125,7 +125,7 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
             setEspSensors(data.sensors);
           }
         }
-      } catch (err) {}
+      } catch (err) { }
     };
 
     fetchSensors();
@@ -215,7 +215,7 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
           tankCode: r.tankCode,
           name: r.name || "Phân bón sinh học",
           ml: Number(r.ml) || 2.0,
-          reason: r.reason || "Gemini AI khuyến nghị dựa trên phân tích hình ảnh thực tế cây trồng.",
+          reason: r.reason || "AI khuyến nghị dựa trên phân tích hình ảnh thực tế cây trồng.",
           selected: true,
         }));
 
@@ -232,7 +232,7 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
 
         setAiAnalysisDone(true);
       } else {
-        alert(data.error || "Không thể thực hiện phân tích Gemini AI.");
+        alert(data.error || "Không thể thực hiện phân tích AI.");
       }
     } catch (err: any) {
       console.error(err);
@@ -315,7 +315,7 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
         const freshList = await fRes.json();
         if (Array.isArray(freshList)) currentFertilizersList = freshList;
       }
-    } catch (e) {}
+    } catch (e) { }
 
     let insufficientTank: { name: string; tankCode: string; required: number; remaining: number } | null = null;
 
@@ -370,7 +370,7 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ message: textMsg }),
         });
-      } catch (e) {}
+      } catch (e) { }
     };
 
     try {
@@ -390,7 +390,7 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
         try {
           const fRes = await fetch("/api/fertilizers");
           if (fRes.ok) currentFertilizersList = await fRes.json();
-        } catch (e) {}
+        } catch (e) { }
 
         let insufficientTank: { tankCode: string; required: number; remaining: number } | null = null;
 
@@ -491,7 +491,7 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
                 break;
               }
             }
-          } catch (e) {}
+          } catch (e) { }
         }
 
         if (!floatHighTriggered) {
@@ -548,7 +548,7 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
                 break;
               }
             }
-          } catch (e) {}
+          } catch (e) { }
         }
 
         // Tắt bơm tưới
@@ -598,7 +598,7 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
             </div>
             <div>
               <h3 className="font-headline-sm text-headline-sm font-bold text-on-surface">
-                Hệ Thống Tưới Phân Bón Tự Động ESP32
+                Hệ Thống Tưới Phân Bón Tự Động
               </h3>
               <p className="text-xs text-on-surface-variant">
                 Quy trình 3 bước: Trích xuất phân → Nạp nước bồn → Tưới vườn
@@ -621,26 +621,24 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
             <button
               type="button"
               onClick={() => setIrrigateTab("custom")}
-              className={`flex-1 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 ${
-                irrigateTab === "custom"
-                  ? "bg-surface text-primary shadow-sm"
-                  : "text-on-surface-variant hover:text-on-surface"
-              }`}
+              className={`flex-1 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 ${irrigateTab === "custom"
+                ? "bg-surface text-primary shadow-sm"
+                : "text-on-surface-variant hover:text-on-surface"
+                }`}
             >
               <span className="material-symbols-outlined text-lg">tune</span>
-              Tab 1: Tưới phân tùy chỉnh
+              Tưới phân tùy chỉnh
             </button>
             <button
               type="button"
               onClick={() => setIrrigateTab("ai")}
-              className={`flex-1 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 ${
-                irrigateTab === "ai"
-                  ? "bg-surface text-primary shadow-sm"
-                  : "text-on-surface-variant hover:text-on-surface"
-              }`}
+              className={`flex-1 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 ${irrigateTab === "ai"
+                ? "bg-surface text-primary shadow-sm"
+                : "text-on-surface-variant hover:text-on-surface"
+                }`}
             >
               <span className="material-symbols-outlined text-lg">auto_awesome</span>
-              Tab 2: Tưới phân bằng AI
+              Tưới phân bằng AI
             </button>
           </div>
 
@@ -670,11 +668,10 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
                     return (
                       <div
                         key={code}
-                        className={`p-3.5 rounded-2xl border transition-all ${
-                          item.selected
-                            ? "bg-primary/10 border-primary shadow-sm"
-                            : "bg-surface-container-low border-outline-variant/30 opacity-80"
-                        }`}
+                        className={`p-3.5 rounded-2xl border transition-all ${item.selected
+                          ? "bg-primary/10 border-primary shadow-sm"
+                          : "bg-surface-container-low border-outline-variant/30 opacity-80"
+                          }`}
                       >
                         <div className="flex items-center justify-between mb-2">
                           <label className="flex items-center gap-2.5 cursor-pointer font-bold text-sm text-on-surface">
@@ -749,7 +746,7 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-primary font-bold text-sm">
                     <span className="material-symbols-outlined text-xl">psychology</span>
-                    AI Phân Tích Cây Trồng & Đề Xuất Phân Bón
+                    AI Phân Tích Dinh Dưỡng Cây Trồng
                   </div>
                   {aiAnalysisDone && (
                     <span className="px-2.5 py-1 bg-emerald-500/10 text-emerald-600 rounded-full text-[11px] font-mono font-bold">
@@ -759,7 +756,7 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
                 </div>
 
                 <p className="text-xs text-on-surface-variant leading-relaxed">
-                  Hệ thống sẽ di chuyển camera đến các vị trí đang gieo trồng cây trong <strong>/plants</strong> {plantedCount > 0 ? `(${plantedCount} vị trí)` : ""}, chụp ảnh thực tế và gửi dữ liệu kèm các bình phân bón hiện có về Gemini AI để phân tích dinh dưỡng.
+                  Hệ thống sẽ di chuyển camera đến các vị trí cây trồng trong vườn để phân tích dữ liệu dinh dưỡng.
                 </p>
 
                 {/* Scan & Analyze Action Button */}
@@ -797,11 +794,9 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
                       <span className="material-symbols-outlined text-primary text-base">
                         photo_camera
                       </span>
-                      <span>Ảnh Thực Tế Chụp Từ Camera ({capturedImages.length} ảnh):</span>
+                      <span>Hình ảnh phân tích ({capturedImages.length} ảnh):</span>
                     </div>
-                    <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-mono font-bold flex items-center gap-1">
-                      <span>Flash ON</span> 📸
-                    </span>
+
                   </div>
 
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -838,7 +833,7 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
                 <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 space-y-2">
                   <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400 font-bold text-xs uppercase tracking-wider">
                     <span className="material-symbols-outlined text-lg">psychology</span>
-                    <span>Đánh Giá Tổng Quan Từ Gemini AI:</span>
+                    <span>Đánh Giá Tổng Quan Từ AI:</span>
                   </div>
                   <p className="text-xs text-on-surface leading-relaxed font-medium">
                     {aiOverallAssessment || "Gemini AI đã hoàn tất phân tích tổng thể hình ảnh từ camera."}
@@ -848,7 +843,7 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
 
               {aiAnalysisDone && aiRecommendations.length === 0 && (
                 <div className="p-3 rounded-xl bg-surface-container-low border border-outline-variant/30 text-center text-xs text-on-surface-variant font-medium">
-                  ℹ️ Hiện tại Gemini AI chưa đề xuất bổ sung thêm loại phân bón nào cho chu kỳ này.
+                  Hiện tại AI chưa đề xuất bổ sung thêm loại phân bón nào cho chu kỳ này.
                 </div>
               )}
 
@@ -858,18 +853,17 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
                     <span className="material-symbols-outlined text-emerald-600 text-base">
                       playlist_add_check
                     </span>
-                    ĐỀ XUẤT TỪ GEMINI AI (NGƯỜI DÙNG CÓ THỂ ĐIỀU CHỈNH LẠI):
+                    ĐỀ XUẤT TỪ AI:
                   </h4>
 
                   <div className="space-y-2.5">
                     {aiRecommendations.map((item) => (
                       <div
                         key={item.tankCode}
-                        className={`p-3.5 rounded-2xl border transition-all ${
-                          item.selected
-                            ? "bg-primary/10 border-primary shadow-sm"
-                            : "bg-surface-container-low border-outline-variant/30 opacity-70"
-                        }`}
+                        className={`p-3.5 rounded-2xl border transition-all ${item.selected
+                          ? "bg-primary/10 border-primary shadow-sm"
+                          : "bg-surface-container-low border-outline-variant/30 opacity-70"
+                          }`}
                       >
                         <div className="flex items-center justify-between mb-1.5">
                           <label className="flex items-center gap-2.5 cursor-pointer font-bold text-sm text-on-surface">

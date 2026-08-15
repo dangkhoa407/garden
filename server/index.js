@@ -2772,6 +2772,25 @@ app.post("/api/esp32/dose", async (req, res) => {
     } catch (e) {}
   }
 
+  // Ghi nhật ký tưới phân bón vào inspection_history.json
+  try {
+    const history = readJson("inspection_history.json", []);
+    const now = new Date();
+    const timeStr = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}:${now.getSeconds().toString().padStart(2, "0")} ${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`;
+    const newEntry = {
+      id: `insp-${now.getTime()}`,
+      type: "FERTILIZE",
+      timestamp: timeStr,
+      title: `Tưới phân bón ${tankCode}`,
+      detail: `Đã trích xuất ${ml} ml phân bón từ ${tankCode} vào hệ thống tưới.`,
+      dosage: `${ml} ml (${tankCode})`,
+      status: "Đã tưới phân",
+      createdAt: now.toISOString(),
+    };
+    history.unshift(newEntry);
+    writeJson("inspection_history.json", history);
+  } catch (eHistory) {}
+
   const success = await sendDirectCommandToEsp32(cmdStr);
   res.json({
     success: true,
@@ -3848,10 +3867,60 @@ app.post("/api/ai/fertilize-analysis", async (req, res) => {
       return matches && matches.some((numStr) => plantedPointIndexes.includes(parseInt(numStr, 10) - 1));
     });
 
+    // 3.5. LẤY THÔNG TIN LẦN TƯỚI PHÂN GẦN NHẤT TỪ CƠ SỞ DỮ LIỆU (INSPECTION HISTORY)
+    let lastFertilizeSummary = "Chưa có lịch sử tưới phân trước đó trong hệ thống (Lần tưới đầu tiên)";
+    try {
+      const history = readJson("inspection_history.json", []);
+      const fertilizeLogs = history.filter((item) => item && (item.type === "FERTILIZE" || item.title?.includes("Tưới phân") || item.detail?.includes("tưới phân")));
+
+      if (fertilizeLogs.length > 0) {
+        const lastLog = fertilizeLogs[0]; // Log mới nhất ở đầu mảng
+        let daysAgoText = "không xác định";
+
+        let logDate = null;
+        if (lastLog.createdAt) {
+          logDate = new Date(lastLog.createdAt);
+        } else if (lastLog.timestamp) {
+          const parts = lastLog.timestamp.match(/(\d{1,2}):(\d{1,2}):(\d{1,2})\s+(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+          if (parts) {
+            logDate = new Date(parseInt(parts[6]), parseInt(parts[5]) - 1, parseInt(parts[4]), parseInt(parts[1]), parseInt(parts[2]), parseInt(parts[3]));
+          }
+        }
+
+        if (!logDate || isNaN(logDate.getTime())) {
+          const idMatch = lastLog.id && String(lastLog.id).match(/\d{13}/);
+          if (idMatch) {
+            logDate = new Date(parseInt(idMatch[0], 10));
+          }
+        }
+
+        if (logDate && !isNaN(logDate.getTime())) {
+          const diffMs = Math.max(0, new Date().getTime() - logDate.getTime());
+          const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+          const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+
+          if (diffDays === 0) {
+            daysAgoText = diffHours < 1 ? "vừa mới thực hiện (dưới 1 giờ trước)" : `hôm nay (${diffHours} giờ trước)`;
+          } else {
+            daysAgoText = `${diffDays} ngày trước`;
+          }
+        }
+
+        const dosageInfo = lastLog.dosage || lastLog.detail || lastLog.title || "Phân bón hỗn hợp";
+        const timeDetail = lastLog.timestamp ? ` (${lastLog.timestamp})` : "";
+        lastFertilizeSummary = `CÁCH ĐÂY ${daysAgoText.toUpperCase()}${timeDetail}\nLoại phân bón & liều lượng đã tưới: ${dosageInfo}`;
+      }
+    } catch (e) {
+      console.warn(`[AI Fertilize History Error] ${e.message}`);
+    }
+
     // 4. SOẠN PROMPT PHÂN TÍCH CHO GEMINI & ÉP TRẢ VỀ JSON THỰC TẾ (KHÔNG DÙNG MOCK)
     const promptText = `
 Bạn là hệ thống AI Nông Nghiệp Thông Minh thuộc dự án GrowHub Smart Garden.
-Dưới đây là TOÀN BỘ ${plantedPointIndexes.length} HÌNH ẢNH THỰC TẾ chụp từ camera robot tại các vị trí khay cây trong vườn, cùng thông tin danh sách cây trồng thực tế và các bình phân bón hiện có.
+Dưới đây là TOÀN BỘ ${plantedPointIndexes.length} HÌNH ẢNH THỰC TẾ chụp từ camera robot tại các vị trí khay cây trong vườn, cùng thông tin cây trồng, danh sách bình phân bón và THÔNG TIN TƯỚI PHÂN LẦN CUỐI CỦA VƯỜN.
+
+--- LỊCH SỬ TƯỚI PHÂN BÓN LẦN GẦN NHẤT ---
+${lastFertilizeSummary}
 
 DANH SÁCH CÂY TRỒNG ĐANG GIEO TRỒNG TRONG HỆ THỐNG (${activePlants.length} cây):
 ${JSON.stringify(activePlants.length > 0 ? activePlants : plants, null, 2)}
@@ -3863,24 +3932,24 @@ NHIỆM VỤ CỦA BẠN:
 1. Quan sát thật kỹ TOÀN BỘ các hình ảnh chụp thực tế từ camera được gửi kèm.
    - Kiểm tra kỹ xem trong các hình ảnh CÓ CÂY TRỒNG KHÔNG hay KHAY ĐANG TRỐNG / chỉ thấy dây nhợ, ống tưới, nền bồn.
    - Nếu KHÔNG thấy cây trồng (khay trống): Bắt buộc nêu rõ trong đánh giá là không nhìn thấy cây trồng ở các khay chụp, nên không cần bón phân.
-   - Nếu CÓ cây trồng: Đánh giá thực tế tình trạng sức khỏe lá, màu sắc lá, dấu hiệu thiếu dinh dưỡng hoặc phát triển.
-2. Viết ĐÁNH GIÁ TỔNG QUAN THỰC TẾ (overallAssessment) bằng tiếng Việt trung thực, dựa đúng 100% trên quan sát hình ảnh camera.
-3. Xác định các bình phân bón CẦN BỔ SUNG (nếu có) từ danh sách các bình phân hiện có, kèm liều lượng ml khuyến nghị (từ 0.5 ml đến 6.0 ml) và lý do. Nếu không có cây hoặc cây tốt không cần phân, recommendations là mảng rỗng [].
+   - Nếu CÓ cây trồng: Đánh giá thực tế tình trạng sức khỏe lá, màu sắc lá, dấu hiệu thiếu dinh dưỡng hoặc phát triển. KẾT HỢP VỚI THÔNG TIN TƯỚI PHÂN LẦN GẦN NHẤT (${lastFertilizeSummary}) để cân nhắc hợp lý (nếu mới bón phân gần đây thì chưa cần bón tiếp để tránh ngộ độc phân).
+2. Viết ĐÁNH GIÁ TỔNG QUAN THỰC TẾ (overallAssessment) bằng tiếng Việt trung thực, dựa đúng 100% trên quan sát hình ảnh camera và khoảng thời gian từ lần bón phân trước. Trong phần đánh giá, BẮT BUỘC ĐỀ CẬP RÕ thông tin cách đây bao nhiêu ngày đã tưới phân lần cuối và đã tưới những loại phân gì.
+3. Xác định các bình phân bón CẦN BỔ SUNG (nếu có) từ danh sách các bình phân hiện có, kèm liều lượng ml khuyến nghị (từ 0.5 ml đến 6.0 ml) và lý do. Nếu không có cây hoặc mới bón phân gần đây hoặc cây phát triển tốt không cần phân, recommendations là mảng rỗng [].
 
 YÊU CẦU BẮT BUỘC VỀ ĐỊNH DẠNG ĐẦU RA (JSON OBJECT):
 - Trả về ĐÚNG MỘT JSON OBJECT duy nhất có cấu trúc chính xác (KHÔNG kèm bất kỳ văn bản giải thích nào ngoài JSON):
 {
-  "overallAssessment": "Đánh giá tổng quan thực tế chi tiết dựa trên quan sát từ toàn bộ hình ảnh camera chụp được",
+  "overallAssessment": "Đánh giá tổng quan thực tế chi tiết dựa trên quan sát từ toàn bộ hình ảnh camera và thông tin lần tưới phân gần nhất (nêu rõ số ngày & loại phân đã tưới)",
   "recommendations": [
     {
       "tankCode": "Bình A",
       "name": "Tên loại phân bón",
       "ml": 2.5,
-      "reason": "Lý do ngắn gọn bón phân này dựa trên phân tích hình ảnh"
+      "reason": "Lý do ngắn gọn bón phân này dựa trên phân tích hình ảnh và thời gian tưới lần trước"
     }
   ]
 }
-- Trường "overallAssessment" LÀ BẮT BUỘC và phải nhận xét chân thực từ hình ảnh (KHÔNG được tự bịa cây phát triển tốt nếu ảnh chụp là khay trống).
+- Trường "overallAssessment" LÀ BẮT BUỘC và phải nhận xét chân thực từ hình ảnh & lịch sử bón phân (KHÔNG được tự bịa cây phát triển tốt nếu ảnh chụp là khay trống).
 - Nếu không cần bổ sung phân bón hoặc không thấy cây, "recommendations" sẽ là mảng rỗng: []
 `;
 
