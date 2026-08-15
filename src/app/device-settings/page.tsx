@@ -683,10 +683,10 @@ export default function DeviceSettingsPage() {
                   </div>
                   <div>
                     <h3 className="font-headline-md text-headline-md text-on-surface font-bold">
-                      Thêm & Kết Nối Mạng Wi-Fi Mới
+                      Kết nối WIFI
                     </h3>
                     <p className="font-body-sm text-xs text-on-surface-variant">
-                      Nhập thông số SSID & Mật khẩu để truyền dữ liệu xuống thiết bị
+                      Nhập tin để kết nối với WIFI
                     </p>
                   </div>
                 </div>
