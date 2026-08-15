@@ -549,41 +549,7 @@ package-lock.json
 
 ---
 
-# 19. CÀI MÔI TRƯỜNG PYTHON
-
-Kiểm tra:
-
-```bash
-python3 --version
-```
-
-Tạo virtual environment:
-
-```bash
-python3 -m venv venv
-```
-
-Kích hoạt:
-
-```bash
-source venv/bin/activate
-```
-
-Cài các thư viện cần thiết:
-
-```bash
-pip install pyserial
-pip install websockets
-pip install urllib3
-pip install python-telegram-bot
-pip install google-genai
-pip install numpy
-pip install opencv-python-headless
-```
-
----
-
-# 20. KIỂM TRA CAMERA
+# 19. KIỂM TRA CAMERA
 
 Cài công cụ V4L:
 
@@ -607,7 +573,7 @@ Nếu camera được nhận, thiết bị sẽ xuất hiện dưới dạng `/d
 
 ---
 
-# 21. NẠP CODE ARDUINO
+# 20. NẠP CODE ARDUINO
 
 Mở thư mục:
 
@@ -634,7 +600,7 @@ Kiểm tra:
 
 ---
 
-# 22. NẠP CODE ESP32
+# 21. NẠP CODE ESP32
 
 Mở firmware trong:
 
@@ -662,7 +628,7 @@ Không nên chạy toàn bộ hệ thống ngay trong lần kiểm tra đầu ti
 
 ---
 
-# 23. CHẠY DEVELOPMENT
+# 22. CHẠY DEVELOPMENT
 
 Chạy môi trường phát triển:
 
@@ -696,7 +662,7 @@ hostname -I
 
 ---
 
-# 24. BUILD PRODUCTION
+# 23. BUILD PRODUCTION
 
 Build project:
 
@@ -712,7 +678,7 @@ npm start
 
 ---
 
-# 25. CHẠY BẰNG PM2
+# 24. CHẠY BẰNG PM2
 
 Project có file:
 
@@ -746,7 +712,7 @@ pm2 restart all
 
 ---
 
-# 26. TỰ ĐỘNG KHỞI ĐỘNG SAU KHI RASPBERRY PI REBOOT
+# 25. TỰ ĐỘNG KHỞI ĐỘNG SAU KHI RASPBERRY PI REBOOT
 
 Chạy:
 
@@ -772,7 +738,7 @@ Sau khi Raspberry Pi khởi động lại, các process đã lưu sẽ được 
 
 ---
 
-# 27. CẬP NHẬT SOURCE CODE
+# 26. CẬP NHẬT SOURCE CODE
 
 Di chuyển tới project:
 
@@ -813,7 +779,7 @@ pm2 logs
 
 ---
 
-# 28. TRUY CẬP TỪ XA
+# 27. TRUY CẬP TỪ XA
 
 Hệ thống có thể sử dụng Cloudflare Tunnel để truy cập Dashboard từ Internet.
 
@@ -839,30 +805,7 @@ Phương pháp này cho phép truy cập hệ thống từ xa mà không cần m
 
 ---
 
-# 29. BIẾN MÔI TRƯỜNG
-
-Các thông tin như API key và token không được đưa trực tiếp vào source code.
-
-Có thể sử dụng:
-
-```text
-.env
-.env.local
-```
-
-Ví dụ:
-
-```env
-GOOGLE_API_KEY=YOUR_API_KEY
-TELEGRAM_BOT_TOKEN=YOUR_TOKEN
-NEXT_PUBLIC_BACKEND_URL=http://localhost:3001
-```
-
-Không commit API key thật lên GitHub.
-
----
-
-# 30. KIỂM TRA SAU KHI CÀI ĐẶT
+# 28. KIỂM TRA SAU KHI CÀI ĐẶT
 
 Kiểm tra Raspberry Pi:
 
@@ -882,12 +825,6 @@ Kiểm tra Node.js:
 ```bash
 node -v
 npm -v
-```
-
-Kiểm tra Python:
-
-```bash
-python3 --version
 ```
 
 Kiểm tra camera:
@@ -910,7 +847,7 @@ pm2 logs
 
 ---
 
-# 31. TRÌNH TỰ TEST HỆ THỐNG
+# 29. TRÌNH TỰ TEST HỆ THỐNG
 
 Để tránh lỗi khi chạy đồng thời nhiều thiết bị, hệ thống nên được kiểm tra theo từng lớp:
 
@@ -944,7 +881,7 @@ Sau khi từng thành phần hoạt động ổn định mới thực hiện ki�
 
 ---
 
-# 32. AN TOÀN KHI VẬN HÀNH
+# 30. AN TOÀN KHI VẬN HÀNH
 
 Hệ thống có các thiết bị sử dụng nguồn điện, động cơ và bơm.
 
@@ -963,7 +900,7 @@ Khi lắp đặt và kiểm tra cần:
 
 ---
 
-# 33. NGUYÊN TẮC THIẾT KẾ
+# 31. NGUYÊN TẮC THIẾT KẾ
 
 Hệ thống được chia thành các module độc lập:
 
@@ -997,7 +934,7 @@ Ví dụ:
 
 ---
 
-# 34. ĐIỂM KỸ THUẬT CỦA MÔ HÌNH
+# 32. ĐIỂM KỸ THUẬT CỦA MÔ HÌNH
 
 ### Xử lý tại Raspberry Pi
 
@@ -1019,7 +956,7 @@ Các bộ điều khiển chuyên dụng đảm nhiệm phần thực thi.
 
 ---
 
-# 35. KHẢ NĂNG MỞ RỘNG
+# 33. KHẢ NĂNG MỞ RỘNG
 
 Kiến trúc của hệ thống cho phép bổ sung:
 
@@ -1037,7 +974,7 @@ Kiến trúc của hệ thống cho phép bổ sung:
 
 ---
 
-# 36. HƯỚNG PHÁT TRIỂN
+# 34. HƯỚNG PHÁT TRIỂN
 
 Các hướng phát triển tiếp theo của đề tài:
 
@@ -1054,7 +991,7 @@ Các hướng phát triển tiếp theo của đề tài:
 
 ---
 
-# 37. Ý NGHĨA CỦA ĐỀ TÀI
+# 35. Ý NGHĨA CỦA ĐỀ TÀI
 
 Đề tài hướng tới việc đưa các công nghệ:
 
@@ -1094,32 +1031,7 @@ THU THẬP DỮ LIỆU MỚI
 
 ---
 
-# 38. THÔNG TIN DỰ ÁN
-
-**Tên đề tài:** Hệ thống vườn rau thông minh ứng dụng AI và IoT
-
-**Tên tiếng Anh:** Smart Garden – AI & IoT Based Automated Vegetable Monitoring and Care System
-
-**Cuộc thi:** Sáng tạo dành cho Thanh thiếu niên, Nhi đồng toàn quốc
-
-**Trường:** `[TÊN TRƯỜNG]`
-
-**Đơn vị:** `[ĐƠN VỊ / TỈNH / THÀNH PHỐ]`
-
-**Nhóm thực hiện:** `[TÊN NHÓM]`
-
-### Thành viên
-
-| STT | Họ và tên     | Phụ trách            |
-| --: | ------------- | -------------------- |
-|   1 | `[HỌ VÀ TÊN]` | Phát triển hệ thống  |
-|   2 | `[HỌ VÀ TÊN]` | Phần cứng / IoT      |
-|   3 | `[HỌ VÀ TÊN]` | Phần mềm / AI        |
-|   4 | `[HỌ VÀ TÊN]` | Cơ khí / Tự động hóa |
-
----
-
-# 39. SOURCE CODE
+# 36. SOURCE CODE
 
 Repository chính thức:
 
@@ -1127,7 +1039,7 @@ https://github.com/dangkhoa407/garden
 
 ---
 
-# 40. GHI CHÚ
+# 37. GHI CHÚ
 
 Repository này được sử dụng để lưu trữ:
 
@@ -1142,6 +1054,5 @@ Repository này được sử dụng để lưu trữ:
 
 ---
 
-## SMART GARDEN
 
 **Hệ thống giám sát và chăm sóc cây trồng tự động dựa trên AI, IoT và hệ thống nhúng.**
