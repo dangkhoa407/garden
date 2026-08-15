@@ -37,33 +37,27 @@ export function computePlantGrowth(createdDateStr?: string, defaultDays?: number
     }
   }
 
-  let status = "Mới gieo trồng";
-  let statusColor = "text-emerald-700 bg-emerald-500/10";
-  let progress = 10;
+  const totalDays = Math.round(days);
+  const years = Math.floor(totalDays / 365);
+  const months = Math.floor((totalDays % 365) / 30);
 
-  if (days <= 3) {
-    status = "Mới gieo trồng";
-    statusColor = "text-emerald-700 bg-emerald-500/10";
-    progress = Math.min(25, 10 + days * 5);
-  } else if (days <= 10) {
-    status = "Đang nảy mầm";
-    statusColor = "text-teal-700 bg-teal-500/10";
-    progress = Math.min(50, 25 + (days - 3) * 3.5);
-  } else if (days <= 25) {
-    status = "Đang phát triển";
+  let status = "";
+  let statusColor = "text-emerald-700 bg-emerald-500/10 dark:text-emerald-300 dark:bg-emerald-500/20";
+
+  if (years >= 1) {
+    status = `${years} tuổi`;
+    statusColor = "text-purple-700 bg-purple-500/10 dark:text-purple-300 dark:bg-purple-500/20";
+  } else if (months >= 1) {
+    status = `${months} tháng`;
     statusColor = "text-primary bg-primary/10";
-    progress = Math.min(75, 50 + (days - 10) * 1.6);
-  } else if (days <= 40) {
-    status = "Phát triển tốt";
-    statusColor = "text-emerald-600 bg-emerald-500/20";
-    progress = Math.min(95, 75 + (days - 25) * 1.3);
   } else {
-    status = "Chuẩn bị thu hoạch";
-    statusColor = "text-amber-700 bg-amber-500/10";
-    progress = 100;
+    status = `${totalDays} ngày`;
+    statusColor = "text-emerald-700 bg-emerald-500/10 dark:text-emerald-300 dark:bg-emerald-500/20";
   }
 
-  return { days: Math.round(days), status, statusColor, progress: Math.round(progress) };
+  const progress = Math.min(100, Math.max(5, Math.round((totalDays / 40) * 100)));
+
+  return { days: totalDays, status, statusColor, progress };
 }
 
 export interface TaskItem {
