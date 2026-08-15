@@ -301,12 +301,54 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
     }
 
     if (tanksToDose.length === 0) {
-      setIrrigateLog((prev) => [
-        ...prev,
-        "❌ Chưa chọn bình phân nào! Vui lòng tích chọn ít nhất 1 bình phân.",
-      ]);
+      alert("❌ Chưa chọn bình phân nào! Vui lòng tích chọn ít nhất 1 bình phân.");
       setIsIrrigating(false);
       setIrrigateStep("idle");
+      return;
+    }
+
+    // Kiểm tra lượng phân bón trong từng bình trước khi trích xuất
+    let currentFertilizersList: any[] = activeFertilizers || [];
+    try {
+      const fRes = await fetch("/api/fertilizers");
+      if (fRes.ok) {
+        const freshList = await fRes.json();
+        if (Array.isArray(freshList)) currentFertilizersList = freshList;
+      }
+    } catch (e) {}
+
+    let insufficientTank: { name: string; tankCode: string; required: number; remaining: number } | null = null;
+
+    for (const t of tanksToDose) {
+      const fertItem = currentFertilizersList.find(
+        (f) => f.tankCode === t.tankCode || f.name === t.tankCode || f.code === t.tankCode
+      );
+      const remainingMl = fertItem
+        ? fertItem.currentMl !== undefined
+          ? Number(fertItem.currentMl)
+          : Number(fertItem.capacityMl || 0)
+        : 0;
+
+      if (remainingMl < t.ml) {
+        insufficientTank = {
+          name: fertItem?.name || t.tankCode,
+          tankCode: t.tankCode,
+          required: t.ml,
+          remaining: remainingMl,
+        };
+        break;
+      }
+    }
+
+    if (insufficientTank) {
+      setIsIrrigating(false);
+      setIrrigateStep("idle");
+      alert(
+        `⚠️ KHÔNG THỂ TRÍCH XUẤT PHÂN BÓN!\n\n` +
+        `Bình phân [${insufficientTank.tankCode} - ${insufficientTank.name}] hiện chỉ còn ${insufficientTank.remaining} ml.\n` +
+        `Lượng phân cần trích xuất: ${insufficientTank.required} ml.\n\n` +
+        `Lượng phân trong bình không đủ để trích xuất! Vui lòng châm thêm phân bón trước khi thực hiện.`
+      );
       return;
     }
 

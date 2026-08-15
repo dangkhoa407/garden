@@ -2738,14 +2738,28 @@ app.post("/api/esp32/dose", async (req, res) => {
   const durationSec = Math.max(1, Math.round(ml * 60)); // Quy đổi: 1 ml = 60 giây (1 phút)
   const cmdStr = `DOSE ${pumpLetter} ${durationSec}`;
 
+  const reqMl = Number(ml);
+
   // Trừ dung tích phân còn lại trong file data/fertilizers.json
   const dataPath = path.join(process.cwd(), "data", "fertilizers.json");
   if (fs.existsSync(dataPath)) {
     try {
       let ferts = JSON.parse(fs.readFileSync(dataPath, "utf-8"));
+      const targetFert = ferts.find((f) => f.tankCode === tankCode || f.name === tankCode);
+
+      if (targetFert) {
+        const remaining = targetFert.currentMl !== undefined ? Number(targetFert.currentMl) : 0;
+        if (remaining < reqMl) {
+          return res.status(400).json({
+            success: false,
+            error: `Bình phân [${tankCode}] chỉ còn ${remaining}ml, không đủ để trích xuất ${reqMl}ml!`,
+          });
+        }
+      }
+
       ferts = ferts.map((f) => {
-        if (f.tankCode === tankCode) {
-          const newMl = Math.max(0, Number((f.currentMl - ml).toFixed(1)));
+        if (f.tankCode === tankCode || f.name === tankCode) {
+          const newMl = Math.max(0, Number((f.currentMl - reqMl).toFixed(1)));
           return {
             ...f,
             currentMl: newMl,
