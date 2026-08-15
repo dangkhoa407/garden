@@ -3801,6 +3801,24 @@ YÊU CẦU BẮT BUỘC VỀ ĐỊNH DẠNG ĐẦU RA:
       },
     };
 
+    const debugPayload = {
+      contents: [
+        {
+          parts: [
+            ...imageParts.map((img, i) => ({
+              inlineData: {
+                mimeType: img.inlineData.mimeType,
+                data: `[Base64 Image ${i + 1} (${capturedImages[i]?.trayName || "Khay"}) - ${img.inlineData.data.length} bytes]`,
+              },
+            })),
+            { text: promptText },
+          ],
+        },
+      ],
+      generationConfig: payload.generationConfig,
+    };
+    const requestPayload = JSON.stringify(debugPayload, null, 2);
+
     let aiResult = null;
     try {
       aiResult = await callGeminiApiWithRotation(payload);
@@ -3810,6 +3828,7 @@ YÊU CẦU BẮT BUỘC VỀ ĐỊNH DẠNG ĐẦU RA:
         success: false,
         error: `Lỗi kết nối Gemini AI: ${aiErr.message}`,
         recommendations: [],
+        requestPayload,
       });
     }
 
@@ -3837,6 +3856,7 @@ YÊU CẦU BẮT BUỘC VỀ ĐỊNH DẠNG ĐẦU RA:
         error: "Gemini AI không trả về dữ liệu phân tích hợp lệ. Vui lòng thử lại!",
         recommendations: [],
         rawResponse,
+        requestPayload,
       });
     }
 
@@ -3855,6 +3875,7 @@ YÊU CẦU BẮT BUỘC VỀ ĐỊNH DẠNG ĐẦU RA:
       plantsCount: plantedPointIndexes.length,
       aiModel: aiResult ? aiResult.model : "gemini-3.5-flash-lite",
       rawResponse,
+      requestPayload,
     });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
