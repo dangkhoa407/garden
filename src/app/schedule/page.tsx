@@ -4,7 +4,13 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useGarden } from "@/context/GardenContext";
 
-export type ActionType = "INSPECT" | "FERTILIZE" | "SPRAY_ALL";
+export type ActionType = "INSPECT" | "FERTILIZE" | "FERTILIZE_AI" | "FERTILIZE_CUSTOM" | "SPRAY_ALL";
+
+export interface CustomDosageItem {
+  tankCode: string;
+  ml: number;
+  name?: string;
+}
 
 export interface ScheduleItem {
   id: string;
@@ -22,6 +28,7 @@ export interface ScheduleItem {
   status: "upcoming" | "active" | "completed";
   lastRun?: string;
   createdAt?: string;
+  customDosages?: CustomDosageItem[];
 }
 
 export interface DateTimeSlot {
@@ -46,11 +53,19 @@ const ACTION_OPTIONS: {
       color: "from-emerald-500/10 to-teal-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400",
     },
     {
-      type: "FERTILIZE",
-      title: "Tưới Phân",
-      desc: "Có thể tưới phân theo yêu cầu hoặc dùng AI để phân tích",
+      type: "FERTILIZE_AI",
+      title: "Tưới Phân AI",
+      desc: "Robot chụp ảnh khay cây, AI Gemini phân tích lá & tự động bón phân theo khuyến nghị.",
+      icon: "psychology",
+      badge: "AI Gemini",
+      color: "from-purple-500/10 to-indigo-500/10 border-purple-500/30 text-purple-700 dark:text-purple-400",
+    },
+    {
+      type: "FERTILIZE_CUSTOM",
+      title: "Tưới Phân Tùy Chỉnh",
+      desc: "Tưới phân theo dung tích ml tùy chỉnh do bạn thiết lập cho từng bình phân bón.",
       icon: "water_drop",
-      badge: "Tự động",
+      badge: "Tùy chỉnh",
       color: "from-cyan-500/10 to-blue-500/10 border-cyan-500/30 text-cyan-700 dark:text-cyan-400",
     },
     {
@@ -120,10 +135,36 @@ export default function SchedulePage() {
   const [selectedLocations, setSelectedLocations] = useState<string[]>(["Toàn bộ khu vườn"]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Custom Dosage State for FERTILIZE_CUSTOM mode
+  const [customDosages, setCustomDosages] = useState<{ [tankCode: string]: { enabled: boolean; ml: number; name: string } }>({
+    "Bình A": { enabled: true, ml: 2.0, name: "Phân A" },
+    "Bình B": { enabled: true, ml: 2.0, name: "Phân B" },
+    "Bình C": { enabled: false, ml: 2.0, name: "Phân C" },
+  });
+
   useEffect(() => {
     setMounted(true);
     fetchSchedules();
+    fetchFertilizers();
   }, []);
+
+  const fetchFertilizers = async () => {
+    try {
+      const res = await fetch("/api/fertilizers");
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          const map: { [tankCode: string]: { enabled: boolean; ml: number; name: string } } = {};
+          data.forEach((f: any) => {
+            if (f.tankCode) {
+              map[f.tankCode] = { enabled: true, ml: 2.0, name: f.name || f.tankCode };
+            }
+          });
+          setCustomDosages(map);
+        }
+      }
+    } catch (e) {}
+  };
 
   const fetchSchedules = async () => {
     try {
@@ -409,8 +450,17 @@ export default function SchedulePage() {
 
     setIsSubmitting(true);
     try {
+      const activeDosages = Object.entries(customDosages)
+        .filter(([_, val]) => val.enabled)
+        .map(([tankCode, val]) => ({ tankCode, ml: val.ml, name: val.name }));
+
       const defaultTitle = selectedActions
-        .map((a) => ACTION_OPTIONS.find((opt) => opt.type === a)?.title)
+        .map((a) => {
+          if (a === "FERTILIZE_CUSTOM" && activeDosages.length > 0) {
+            return `Tưới Phân Tùy Chỉnh (${activeDosages.map((d) => `${d.tankCode} ${d.ml}ml`).join(", ")})`;
+          }
+          return ACTION_OPTIONS.find((opt) => opt.type === a)?.title;
+        })
         .join(" ➔ ");
 
       const locationStr = selectedLocations.join(", ");
@@ -422,6 +472,7 @@ export default function SchedulePage() {
           title: newTitle.trim() || defaultTitle,
           actions: selectedActions,
           actionType: selectedActions[0],
+          customDosages: activeDosages,
           scheduleType: newScheduleType,
           slots: newScheduleType === "once" ? dateTimeSlots : [],
           repeatDays: newScheduleType === "repeating" ? newRepeatDays : [],
@@ -612,7 +663,12 @@ export default function SchedulePage() {
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-[11px] font-bold text-on-surface-variant">Thứ tự chạy:</span>
                           {itemActions.map((actType, idx) => {
-                            const meta = ACTION_OPTIONS.find((a) => a.type === actType);
+                            const meta = ACTION_OPTIONS.find((a) => a.type === actType) ||
+                              (actType === "FERTILIZE" ? ACTION_OPTIONS.find((a) => a.type === "FERTILIZE_AI") : null);
+                            const actionTitle = meta?.title || (actType === "FERTILIZE" ? "Tưới Phân AI" : actType);
+                            const isCustom = actType === "FERTILIZE_CUSTOM" && Array.isArray(item.customDosages) && item.customDosages.length > 0;
+                            const dosageText = isCustom ? ` (${item.customDosages!.map(d => `${d.tankCode}: ${d.ml}ml`).join(", ")})` : "";
+
                             return (
                               <div key={idx} className="flex items-center gap-1">
                                 {idx > 0 && <span className="text-xs text-primary font-bold">➔</span>}
@@ -620,7 +676,7 @@ export default function SchedulePage() {
                                   <span className="w-3.5 h-3.5 rounded-full bg-emerald-500 text-white text-[9px] font-mono flex items-center justify-center font-bold">
                                     {idx + 1}
                                   </span>
-                                  {meta?.title}
+                                  {actionTitle}{dosageText}
                                 </span>
                               </div>
                             );
@@ -854,6 +910,71 @@ export default function SchedulePage() {
                     })}
                   </div>
                 </div>
+
+                {/* 1.5 Cấu hình liều lượng cho Tưới Phân Tùy Chỉnh */}
+                {selectedActions.includes("FERTILIZE_CUSTOM") && (
+                  <div className="p-4 bg-cyan-500/10 border border-cyan-500/30 rounded-2xl space-y-3 animate-in fade-in duration-200">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold uppercase tracking-wider text-cyan-700 dark:text-cyan-300 flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-base">tune</span>
+                        CẤU HÌNH LIỀU LƯỢNG TƯỚI PHÂN TÙY CHỈNH:
+                      </label>
+                      <span className="text-[10px] font-mono font-bold text-cyan-700 dark:text-cyan-300 bg-cyan-500/20 px-2 py-0.5 rounded">
+                        Đơn vị: ml
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {Object.entries(customDosages).map(([tankCode, conf]) => (
+                        <div
+                          key={tankCode}
+                          className={`p-3 rounded-xl border flex items-center justify-between gap-2 transition-all ${conf.enabled
+                            ? "bg-surface border-cyan-500/40 shadow-xs"
+                            : "bg-surface-container-low border-outline-variant/30 opacity-50"
+                            }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <input
+                              type="checkbox"
+                              checked={conf.enabled}
+                              onChange={(e) =>
+                                setCustomDosages((prev) => ({
+                                  ...prev,
+                                  [tankCode]: { ...prev[tankCode], enabled: e.target.checked },
+                                }))
+                              }
+                              className="w-4 h-4 rounded text-primary focus:ring-primary accent-primary cursor-pointer"
+                            />
+                            <div className="min-w-0">
+                              <div className="font-bold text-xs text-on-surface truncate">
+                                {tankCode} ({conf.name})
+                              </div>
+                            </div>
+                          </div>
+
+                          {conf.enabled && (
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="number"
+                                step="0.5"
+                                min="0.5"
+                                max="10"
+                                value={conf.ml}
+                                onChange={(e) =>
+                                  setCustomDosages((prev) => ({
+                                    ...prev,
+                                    [tankCode]: { ...prev[tankCode], ml: Math.max(0.5, parseFloat(e.target.value) || 0.5) },
+                                  }))
+                                }
+                                className="w-16 px-2 py-1 bg-surface-container-high border border-outline-variant/40 rounded-lg text-xs font-mono font-bold text-center focus:outline-none focus:ring-1 focus:ring-primary"
+                              />
+                              <span className="text-xs font-bold text-on-surface-variant font-mono">ml</span>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* 2. Tên lịch trình */}
                 <div>

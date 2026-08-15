@@ -4418,7 +4418,7 @@ app.get("/api/schedules", (req, res) => {
 app.post("/api/schedules", (req, res) => {
   try {
     const schedules = readJson("schedules.json", []);
-    const { title, actions, actionType, scheduleType, slots, date, dates, repeatDays, time, times, location } = req.body;
+    const { title, actions, actionType, scheduleType, slots, date, dates, repeatDays, time, times, location, customDosages } = req.body;
 
     const finalActions = Array.isArray(actions) && actions.length > 0
       ? actions
@@ -4426,18 +4426,23 @@ app.post("/api/schedules", (req, res) => {
 
     const actionLabels = {
       INSPECT: "Kiểm tra sâu hại (chụp 6 điểm & Gemini AI)",
-      FERTILIZE: "Tưới Phân bón (ESP32)",
+      FERTILIZE: "Tưới Phân AI (Gemini)",
+      FERTILIZE_AI: "Tưới Phân AI (Gemini)",
+      FERTILIZE_CUSTOM: "Tưới Phân Tùy Chỉnh",
       SPRAY_ALL: "Phun toàn bộ vườn (Phím p)",
     };
 
     const actionIcons = {
       INSPECT: "bug_report",
-      FERTILIZE: "water_drop",
+      FERTILIZE: "psychology",
+      FERTILIZE_AI: "psychology",
+      FERTILIZE_CUSTOM: "water_drop",
       SPRAY_ALL: "shower",
     };
 
     const firstAction = finalActions[0];
     const defaultTitle = title || finalActions.map((a) => actionLabels[a] || a).join(" ➔ ");
+    const savedCustomDosages = Array.isArray(customDosages) ? customDosages : [];
 
     const newItems = [];
     const baseTimestamp = Date.now();
@@ -4453,6 +4458,7 @@ app.post("/api/schedules", (req, res) => {
           actionType: firstAction,
           actionLabel: actionLabels[firstAction] || firstAction,
           icon: actionIcons[firstAction] || "event",
+          customDosages: savedCustomDosages,
           scheduleType: "once",
           date: slot.date,
           repeatDays: [],
@@ -4484,6 +4490,7 @@ app.post("/api/schedules", (req, res) => {
             actionType: firstAction,
             actionLabel: actionLabels[firstAction] || firstAction,
             icon: actionIcons[firstAction] || "event",
+            customDosages: savedCustomDosages,
             scheduleType: scheduleType || "once",
             date: d,
             repeatDays: Array.isArray(repeatDays) ? repeatDays : [],
@@ -5025,19 +5032,44 @@ function initScheduleRunner() {
                   pushWebNotification(`⏰ Lịch [Bước ${stepNum}/${totalSteps}]: Kích hoạt Kiểm tra sâu hại các vị trí có cây ("${item.title}")`, "PROCESS");
                   await sendTelegramText(`⏰ LỊCH TỰ ĐỘNG [Bước ${stepNum}/${totalSteps}]:\n📌 Tên: ${item.title}\n🐛 Hành động: Kiểm tra sâu hại (chỉ kiểm tra các vị trí có cây trong /plants)\n⏱ Thời gian: ${currentTimeStr}`);
                   await runFullGardenInspection().catch((e) => console.warn(`[Sched Inspect Err] ${e.message}`));
-                } else if (act === "FERTILIZE") {
-                  pushWebNotification(`⏰ Lịch [Bước ${stepNum}/${totalSteps}]: Kích hoạt Tưới Phân Bón ESP32 ("${item.title}")`, "PROCESS");
-                  await sendTelegramText(`⏰ LỊCH TỰ ĐỘNG [Bước ${stepNum}/${totalSteps}]:\n📌 Tên: ${item.title}\n💧 Hành động: Tưới Phân bón ESP32\n⏱ Thời gian: ${currentTimeStr}`);
-                  await fetch(`http://localhost:${PORT}/api/esp32/dose`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      dosages: [
-                        { tankCode: "Bình A", ml: 2.0 },
-                        { tankCode: "Bình B", ml: 2.0 },
-                      ],
-                    }),
-                  }).catch(() => {});
+                } else if (act === "FERTILIZE_AI" || act === "FERTILIZE") {
+                  pushWebNotification(`⏰ Lịch [Bước ${stepNum}/${totalSteps}]: Kích hoạt Tưới Phân AI Gemini ("${item.title}")`, "AI_ANALYSIS");
+                  await sendTelegramText(`⏰ LỊCH TỰ ĐỘNG [Bước ${stepNum}/${totalSteps}]:\n📌 Tên: ${item.title}\n🤖 Hành động: Tưới Phân AI (Quét camera & Gemini AI phân tích)\n⏱ Thời gian: ${currentTimeStr}`);
+                  try {
+                    const aiRes = await fetch(`http://localhost:${PORT}/api/ai/fertilize-analysis`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                    }).then((r) => r.json());
+                    if (aiRes.success && Array.isArray(aiRes.recommendations) && aiRes.recommendations.length > 0) {
+                      for (const rec of aiRes.recommendations) {
+                        if (rec.tankCode && rec.ml > 0) {
+                          await fetch(`http://localhost:${PORT}/api/esp32/dose`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ tankCode: rec.tankCode, ml: rec.ml }),
+                          }).catch(() => {});
+                        }
+                      }
+                    }
+                  } catch (aiErr) {
+                    console.warn(`[Sched AI Fertilize Err] ${aiErr.message}`);
+                  }
+                } else if (act === "FERTILIZE_CUSTOM") {
+                  const doses = Array.isArray(item.customDosages) && item.customDosages.length > 0
+                    ? item.customDosages
+                    : [{ tankCode: "Bình A", ml: 2.0 }, { tankCode: "Bình B", ml: 2.0 }];
+                  const doseDesc = doses.map((d) => `${d.tankCode}: ${d.ml}ml`).join(", ");
+                  pushWebNotification(`⏰ Lịch [Bước ${stepNum}/${totalSteps}]: Kích hoạt Tưới Phân Tùy Chỉnh [${doseDesc}] ("${item.title}")`, "PROCESS");
+                  await sendTelegramText(`⏰ LỊCH TỰ ĐỘNG [Bước ${stepNum}/${totalSteps}]:\n📌 Tên: ${item.title}\n🧪 Hành động: Tưới Phân Tùy Chỉnh (${doseDesc})\n⏱ Thời gian: ${currentTimeStr}`);
+                  for (const dose of doses) {
+                    if (dose.tankCode && dose.ml > 0) {
+                      await fetch(`http://localhost:${PORT}/api/esp32/dose`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ tankCode: dose.tankCode, ml: dose.ml }),
+                      }).catch(() => {});
+                    }
+                  }
                 } else if (act === "SPRAY_ALL") {
                   pushWebNotification(`⏰ Lịch [Bước ${stepNum}/${totalSteps}]: Kích hoạt Phun toàn bộ vườn ("${item.title}")`, "PROCESS");
                   await sendTelegramText(`⏰ LỊCH TỰ ĐỘNG [Bước ${stepNum}/${totalSteps}]:\n📌 Tên: ${item.title}\n🚿 Hành động: Phun toàn bộ vườn (Phím p)\n⏱ Thời gian: ${currentTimeStr}`);
