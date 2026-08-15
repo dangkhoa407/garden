@@ -180,9 +180,9 @@ export function PlantCard({ plant, onWater, onHistory }: PlantCardProps) {
             {actionLoading === "water" ? (
               <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
             ) : (
-              <span className="material-symbols-outlined text-sm">water_drop</span>
+              <span className="material-symbols-outlined text-sm">shower</span>
             )}
-            Tưới thuốc
+            Phun thuốc
           </button>
 
           <button
