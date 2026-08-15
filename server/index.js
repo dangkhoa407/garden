@@ -3780,37 +3780,9 @@ app.post("/api/ai/fertilize-analysis", async (req, res) => {
         await new Promise((resolve) => setTimeout(resolve, 100));
       } catch (lErr) {}
 
-      // Nếu không chụp được ảnh mới trực tiếp hoặc ảnh đen thui, lấy ảnh dự phòng sáng hoặc tạo ảnh mô phỏng đẹp
-      let isValidImage = false;
-      if (capPath && fs.existsSync(capPath)) {
-        try {
-          const info = await analyzeFrameLight(capPath);
-          if (info && info.meanBrightness >= 18) {
-            isValidImage = true;
-          } else {
-            console.warn(`[AI Fertilize Camera Warning] Ảnh chụp ${trayName} bị tối/đen (độ sáng: ${info?.meanBrightness?.toFixed(1) || 0}), đang thay bằng ảnh sáng...`);
-          }
-        } catch (e) {}
-      }
-
-      if (!isValidImage) {
-        const fallbackCandidate = getFallbackSnapshotPath(0) || getGuaranteedSnapshotPath();
-        if (fallbackCandidate && fs.existsSync(fallbackCandidate)) {
-          try {
-            const info = await analyzeFrameLight(fallbackCandidate);
-            if (info && info.meanBrightness >= 18) {
-              capPath = fallbackCandidate;
-              isValidImage = true;
-            }
-          } catch (e) {}
-        }
-      }
-
-      if (!isValidImage) {
-        // Nếu tất cả ảnh trên ổ đĩa đều bị đen thui hoặc không chụp được, tự tạo ảnh mô phỏng camera sắc nét có nhãn khay cây
-        const fallbackPath = makeSnapPath();
-        await generateFallbackSnapshotForTray(fallbackPath, trayName);
-        capPath = fallbackPath;
+      // Nếu không chụp được ảnh mới trực tiếp, lấy ảnh dự phòng gần nhất đã lưu trong folder pictures/
+      if (!capPath || !fs.existsSync(capPath)) {
+        capPath = getFallbackSnapshotPath(0) || getGuaranteedSnapshotPath();
       }
 
       let b64 = "";
@@ -3818,12 +3790,18 @@ app.post("/api/ai/fertilize-analysis", async (req, res) => {
         try {
           const imgBuf = fs.readFileSync(capPath);
           b64 = imgBuf.toString("base64");
-        } catch (readErr) {}
+          console.log(`[AI Fertilize Camera Log] Sử dụng ảnh camera thực tế từ folder pictures (${path.basename(capPath)}, ${imgBuf.length} bytes) cho ${trayName}`);
+        } catch (readErr) {
+          console.warn(`[AI Fertilize Read Error ${trayName}] ${readErr.message}`);
+        }
       }
 
-      // Ảnh dự phòng mặc định nếu không đọc được file ảnh nào từ hệ thống
+      // Nếu không có bất kỳ ảnh nào trên hệ thống, tạo ảnh mới lưu thẳng vào pictures/
       if (!b64) {
-        b64 = "/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=";
+        capPath = makeSnapPath();
+        await generateFallbackSnapshotForTray(capPath, trayName);
+        const imgBuf = fs.readFileSync(capPath);
+        b64 = imgBuf.toString("base64");
       }
 
       const dataUrl = `data:image/jpeg;base64,${b64}`;
