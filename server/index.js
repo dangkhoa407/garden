@@ -3761,6 +3761,7 @@ app.post("/api/ai/fertilize-analysis", async (req, res) => {
 
       // C. Chụp ảnh mới (forceFresh = true) và lưu vào thư mục pictures/ với tên ngẫu nhiên
       let capPath = null;
+      let lastCapError = null;
       for (let capAttempt = 1; capAttempt <= 2; capAttempt++) {
         try {
           if (capAttempt > 1) {
@@ -3769,6 +3770,7 @@ app.post("/api/ai/fertilize-analysis", async (req, res) => {
           capPath = await captureImage(true);
           if (capPath && fs.existsSync(capPath)) break;
         } catch (capErr) {
+          lastCapError = capErr;
           console.warn(`[AI Fertilize Capture Attempt ${capAttempt} ${trayName}] ${capErr.message}`);
           await new Promise((resolve) => setTimeout(resolve, 200));
         }
@@ -3780,30 +3782,21 @@ app.post("/api/ai/fertilize-analysis", async (req, res) => {
         await new Promise((resolve) => setTimeout(resolve, 100));
       } catch (lErr) {}
 
-      // Nếu không chụp được ảnh mới trực tiếp, lấy ảnh dự phòng gần nhất đã lưu trong folder pictures/
+      // E. Nếu không chụp được ảnh mới trực tiếp từ camera, báo lỗi chụp ảnh ngay lập tức (KHÔNG dùng ảnh cũ)
       if (!capPath || !fs.existsSync(capPath)) {
-        capPath = getFallbackSnapshotPath(0) || getGuaranteedSnapshotPath();
+        const errorMsg = `Lỗi chụp ảnh từ USB Camera tại ${trayName}${lastCapError ? `: ${lastCapError.message}` : ""}. Vui lòng kiểm tra kết nối camera!`;
+        addSystemLog("AI_FERTILIZE", `❌ ${errorMsg}`, "ALERT");
+        pushWebNotification(`❌ ${errorMsg}`, "ERROR");
+        return res.status(500).json({
+          success: false,
+          error: errorMsg,
+          recommendations: [],
+          capturedImages,
+        });
       }
 
-      let b64 = "";
-      if (capPath && fs.existsSync(capPath)) {
-        try {
-          const imgBuf = fs.readFileSync(capPath);
-          b64 = imgBuf.toString("base64");
-          console.log(`[AI Fertilize Camera Log] Sử dụng ảnh camera thực tế từ folder pictures (${path.basename(capPath)}, ${imgBuf.length} bytes) cho ${trayName}`);
-        } catch (readErr) {
-          console.warn(`[AI Fertilize Read Error ${trayName}] ${readErr.message}`);
-        }
-      }
-
-      // Nếu không có bất kỳ ảnh nào trên hệ thống, tạo ảnh mới lưu thẳng vào pictures/
-      if (!b64) {
-        capPath = makeSnapPath();
-        await generateFallbackSnapshotForTray(capPath, trayName);
-        const imgBuf = fs.readFileSync(capPath);
-        b64 = imgBuf.toString("base64");
-      }
-
+      const imgBuf = fs.readFileSync(capPath);
+      const b64 = imgBuf.toString("base64");
       const dataUrl = `data:image/jpeg;base64,${b64}`;
 
       imageParts.push({
@@ -3816,9 +3809,10 @@ app.post("/api/ai/fertilize-analysis", async (req, res) => {
       capturedImages.push({
         trayName,
         imageBase64: dataUrl,
+        filePath: path.relative(process.cwd(), capPath),
       });
 
-      addSystemLog("AI_FERTILIZE", `[Camera Log] Đã gắn ảnh chụp thực tế thành công tại ${trayName}`, "SUCCESS");
+      addSystemLog("AI_FERTILIZE", `[Camera Log] Đã chụp & lưu ảnh thực tế từ camera vào pictures/ cho ${trayName} (${path.basename(capPath)})`, "SUCCESS");
     }
 
     // 3. KIỂM TRẢ GEMINI API KEY
