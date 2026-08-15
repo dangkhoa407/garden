@@ -1001,9 +1001,10 @@ function persistSnapshotForHistory(imagePath, idPrefix = "insp") {
 }
 
 async function captureImage(forceFresh = false) {
+  const liveViewPath = path.join(process.cwd(), "st01.jpg");
+
   // 1. Kiểm tra xem có ảnh tươi từ Live Persistent Stream (dưới 3s) thì dùng ngay để không bị Device busy (bỏ qua nếu forceFresh = true)
   if (!forceFresh) {
-    const liveViewPath = path.join(process.cwd(), "st01.jpg");
     if (fs.existsSync(liveViewPath)) {
       try {
         const stats = fs.statSync(liveViewPath);
