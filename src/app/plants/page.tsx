@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { PlantCard } from "@/components/dashboard/PlantCard";
 import { useGarden } from "@/context/GardenContext";
+import { computePlantGrowth } from "@/lib/data";
 
 const LOCATION_OPTIONS = [
   "Khay 01",
@@ -70,12 +71,14 @@ export default function PlantsPage() {
       formattedDate = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`;
     }
 
+    const growth = computePlantGrowth(formattedDate, daysCalculated);
+
     await addPlant({
       name: newPlantName,
-      days: daysCalculated,
-      status: "Mới gieo trồng",
-      statusColor: "text-primary bg-primary/10",
-      progress: 10,
+      days: growth.days,
+      status: growth.status,
+      statusColor: growth.statusColor,
+      progress: growth.progress,
       category: "Rau ăn lá",
       location: newPlantLocation,
       createdDate: formattedDate,

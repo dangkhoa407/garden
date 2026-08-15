@@ -12,6 +12,60 @@ export interface Plant {
   waterNeed?: string;
 }
 
+export function computePlantGrowth(createdDateStr?: string, defaultDays?: number) {
+  let days = defaultDays || 1;
+
+  if (createdDateStr) {
+    const parts = createdDateStr.split(/[/.-]/);
+    if (parts.length === 3) {
+      let d = 1, m = 1, y = 2026;
+      if (parts[0].length === 4) {
+        y = parseInt(parts[0], 10);
+        m = parseInt(parts[1], 10);
+        d = parseInt(parts[2], 10);
+      } else {
+        d = parseInt(parts[0], 10);
+        m = parseInt(parts[1], 10);
+        y = parseInt(parts[2], 10);
+      }
+      const createdTime = new Date(y, m - 1, d).getTime();
+      const nowTime = new Date().getTime();
+      const diffDays = Math.floor((nowTime - createdTime) / (1000 * 60 * 60 * 24));
+      if (!isNaN(diffDays) && diffDays >= 0) {
+        days = diffDays + 1;
+      }
+    }
+  }
+
+  let status = "Mới gieo trồng";
+  let statusColor = "text-emerald-700 bg-emerald-500/10";
+  let progress = 10;
+
+  if (days <= 3) {
+    status = "Mới gieo trồng";
+    statusColor = "text-emerald-700 bg-emerald-500/10";
+    progress = Math.min(25, 10 + days * 5);
+  } else if (days <= 10) {
+    status = "Đang nảy mầm";
+    statusColor = "text-teal-700 bg-teal-500/10";
+    progress = Math.min(50, 25 + (days - 3) * 3.5);
+  } else if (days <= 25) {
+    status = "Đang phát triển";
+    statusColor = "text-primary bg-primary/10";
+    progress = Math.min(75, 50 + (days - 10) * 1.6);
+  } else if (days <= 40) {
+    status = "Phát triển tốt";
+    statusColor = "text-emerald-600 bg-emerald-500/20";
+    progress = Math.min(95, 75 + (days - 25) * 1.3);
+  } else {
+    status = "Chuẩn bị thu hoạch";
+    statusColor = "text-amber-700 bg-amber-500/10";
+    progress = 100;
+  }
+
+  return { days: Math.round(days), status, statusColor, progress: Math.round(progress) };
+}
+
 export interface TaskItem {
   id: string;
   title: string;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plant } from "@/lib/data";
+import { Plant, computePlantGrowth } from "@/lib/data";
 import { useGarden } from "@/context/GardenContext";
 import { InspectionHistoryModal } from "@/components/dashboard/InspectionHistoryModal";
 
@@ -34,6 +34,8 @@ export function PlantCard({ plant, onWater, onHistory }: PlantCardProps) {
   const defaultDateStr = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`;
   const displayDate = plant.createdDate || defaultDateStr;
   const displayLocation = cleanLocation(plant.location);
+
+  const growth = computePlantGrowth(plant.createdDate, plant.days);
 
   const handleInspectClick = async () => {
     setActionLoading("inspect");
@@ -139,15 +141,15 @@ export function PlantCard({ plant, onWater, onHistory }: PlantCardProps) {
 
           <div className="mb-md">
             <div className="flex justify-between items-center mb-1.5">
-              <span className={`font-label-caps text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${plant.statusColor}`}>
-                {plant.status}
+              <span className={`font-label-caps text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${growth.statusColor}`}>
+                {growth.status}
               </span>
               <span className="font-label-caps text-[10px] text-on-surface-variant font-medium">
-                {plant.progress}%
+                {growth.progress}%
               </span>
             </div>
             <div className="w-full bg-surface-container-high rounded-full h-2 overflow-hidden">
-              <div className="bg-primary h-2 rounded-full transition-all duration-500" style={{ width: `${plant.progress}%` }} />
+              <div className="bg-primary h-2 rounded-full transition-all duration-500" style={{ width: `${growth.progress}%` }} />
             </div>
           </div>
         </div>
