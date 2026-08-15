@@ -704,31 +704,7 @@ export default function ControlsPage() {
         <h2 className="font-headline-md text-headline-md text-on-surface mb-md font-bold">
           Công tắc thiết bị
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-gutter">
-          <QuickToggleCard
-            label="Hệ thống tưới"
-            icon="water_drop"
-            checked={controls.watering}
-            onChange={(checked) => updateControls({ watering: checked })}
-          />
-          <QuickToggleCard
-            label="Đèn LED"
-            icon="lightbulb"
-            checked={controls.lights}
-            onChange={(checked) => updateControls({ lights: checked })}
-          />
-          <QuickToggleCard
-            label="Quạt thông gió"
-            icon="mode_fan"
-            checked={controls.fan}
-            onChange={(checked) => updateControls({ fan: checked })}
-          />
-          <QuickToggleCard
-            label="Máy phun sương"
-            icon="air"
-            checked={controls.misting}
-            onChange={(checked) => updateControls({ misting: checked })}
-          />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-gutter">
           <QuickToggleCard
             label="Màn che tự động"
             icon="smart_toy"
