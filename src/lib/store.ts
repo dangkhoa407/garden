@@ -9,6 +9,9 @@ export interface GardenStoreData {
     lights: boolean;
     fan: boolean;
     misting: boolean;
+    autoShade?: boolean;
+    sunRoof?: boolean;
+    rainRoof?: boolean;
     lightIntensity: number;
     waterFlowRate: number;
     targetHumidity: number;

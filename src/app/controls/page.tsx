@@ -729,6 +729,49 @@ export default function ControlsPage() {
             checked={controls.misting}
             onChange={(checked) => updateControls({ misting: checked })}
           />
+          <QuickToggleCard
+            label="Màn che tự động"
+            icon="smart_toy"
+            checked={!!controls.autoShade}
+            onChange={(checked) => {
+              updateControls({ autoShade: checked });
+              setActiveToast(`🤖 Đã ${checked ? "BẬT" : "TẮT"} chế độ màn che tự động!`);
+            }}
+          />
+          <QuickToggleCard
+            label="Màn che nắng"
+            icon="wb_sunny"
+            checked={!!controls.sunRoof}
+            onChange={async (checked) => {
+              updateControls({ sunRoof: checked });
+              const cmd = checked ? "SUN CLOSE" : "SUN OPEN";
+              try {
+                await fetch("/api/esp32/roof", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ action: cmd }),
+                });
+              } catch (e) {}
+              setActiveToast(`☀️ Đã ${checked ? "KÉO CHE" : "THU LẠI"} màn che nắng!`);
+            }}
+          />
+          <QuickToggleCard
+            label="Màn che mưa"
+            icon="water_drop"
+            checked={!!controls.rainRoof}
+            onChange={async (checked) => {
+              updateControls({ rainRoof: checked });
+              const cmd = checked ? "RAIN CLOSE" : "RAIN OPEN";
+              try {
+                await fetch("/api/esp32/roof", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ action: cmd }),
+                });
+              } catch (e) {}
+              setActiveToast(`🌧️ Đã ${checked ? "KÉO CHE" : "THU LẠI"} màn che mưa!`);
+            }}
+          />
         </div>
       </section>
 

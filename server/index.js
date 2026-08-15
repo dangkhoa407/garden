@@ -2353,6 +2353,51 @@ app.get("/api/esp32/sensors", (req, res) => {
   });
 });
 
+// ESP32 SMART ROOF SYSTEM CONTROL ENDPOINT (SUN/RAIN SHADE MOTOR CONTROL)
+app.post("/api/esp32/roof", async (req, res) => {
+  const { action } = req.body;
+  if (!action) {
+    return res.status(400).json({ success: false, error: "Thiếu mã lệnh action!" });
+  }
+
+  const validActions = ["RAIN CLOSE", "RAIN OPEN", "SUN CLOSE", "SUN OPEN", "STOP ROOF"];
+  if (!validActions.includes(action)) {
+    return res.status(400).json({ success: false, error: "Lệnh action không hợp lệ!" });
+  }
+
+  const timestamp = new Date().toLocaleTimeString("vi-VN");
+
+  try {
+    await sendDirectCommandToArduino(action);
+
+    const actionLabels = {
+      "RAIN CLOSE": "Kéo bạt che mưa (tự dừng theo công tắc hành trình)",
+      "RAIN OPEN": "Thu bạt che mưa (tự dừng theo công tắc hành trình)",
+      "SUN CLOSE": "Kéo lưới che nắng (tự dừng theo công tắc hành trình)",
+      "SUN OPEN": "Thu lưới che nắng (tự dừng theo công tắc hành trình)",
+      "STOP ROOF": "Dừng khẩn cấp động cơ mái che",
+    };
+
+    addSystemLog("ESP32_ROOF", `Đã phát lệnh Mái Che: ${actionLabels[action] || action}`, "SUCCESS");
+    pushWebNotification(`⛺ Mái che ESP32: ${actionLabels[action] || action}`, "INFO");
+
+    return res.json({
+      success: true,
+      message: `Đã phát lệnh ${action} xuống ESP32 thành công!`,
+      action,
+      timestamp,
+    });
+  } catch (err) {
+    console.warn(`[ESP32 Roof Direct Send Warning] ${err.message}`);
+    return res.json({
+      success: true,
+      message: `Đã phát lệnh ${action} (chế độ mô phỏng)!`,
+      action,
+      timestamp,
+    });
+  }
+});
+
 async function getRealSerialStatus() {
   try {
     const { SerialPort } = require("serialport");

@@ -9,6 +9,9 @@ export interface DeviceControls {
   fan: boolean;
   misting: boolean;
   autoWater?: boolean;
+  autoShade?: boolean;
+  sunRoof?: boolean;
+  rainRoof?: boolean;
   lightIntensity: number;
   waterFlowRate: number;
   targetHumidity: number;
@@ -70,6 +73,9 @@ export function GardenProvider({ children }: { children: React.ReactNode }) {
     fan: true,
     misting: false,
     autoWater: false,
+    autoShade: false,
+    sunRoof: false,
+    rainRoof: false,
     lightIntensity: 80,
     waterFlowRate: 65,
     targetHumidity: 70,
