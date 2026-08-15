@@ -65,6 +65,7 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
   >([]);
   const [rawAiResponse, setRawAiResponse] = useState<string>("");
   const [rawRequestPayload, setRawRequestPayload] = useState<string>("");
+  const [aiModelName, setAiModelName] = useState<string>("gemini-3.5-flash-lite");
 
   const [selectedPreviewImage, setSelectedPreviewImage] = useState<{
     trayName: string;
@@ -194,6 +195,10 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
           setCapturedImages(data.capturedImages);
         } else {
           await fetchCapturedPictures();
+        }
+
+        if (data.aiModel) {
+          setAiModelName(data.aiModel);
         }
 
         if (data.requestPayload) {
@@ -900,7 +905,7 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
                       <span className="material-symbols-outlined text-primary text-base">
                         upload_file
                       </span>
-                      <span>Payload & Prompt Gửi Lên Gemini AI (Request Payload):</span>
+                      <span>Payload & Prompt Gửi Lên Gemini AI ({aiModelName}):</span>
                     </div>
                     <button
                       type="button"
@@ -933,7 +938,7 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
                       <span className="material-symbols-outlined text-primary text-base">
                         data_object
                       </span>
-                      <span>Dữ Liệu Raw Gemini AI Phản Hồi (Raw JSON Output):</span>
+                      <span>Dữ Liệu Raw Gemini AI Phản Hồi ({aiModelName}):</span>
                     </div>
                     <button
                       type="button"

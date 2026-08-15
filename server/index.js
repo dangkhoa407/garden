@@ -3802,6 +3802,7 @@ YÊU CẦU BẮT BUỘC VỀ ĐỊNH DẠNG ĐẦU RA:
     };
 
     const debugPayload = {
+      model: "gemini-3.5-flash-lite",
       contents: [
         {
           parts: [
@@ -3828,6 +3829,7 @@ YÊU CẦU BẮT BUỘC VỀ ĐỊNH DẠNG ĐẦU RA:
         success: false,
         error: `Lỗi kết nối Gemini AI: ${aiErr.message}`,
         recommendations: [],
+        aiModel: "gemini-3.5-flash-lite",
         requestPayload,
       });
     }
@@ -3855,6 +3857,7 @@ YÊU CẦU BẮT BUỘC VỀ ĐỊNH DẠNG ĐẦU RA:
         success: false,
         error: "Gemini AI không trả về dữ liệu phân tích hợp lệ. Vui lòng thử lại!",
         recommendations: [],
+        aiModel: "gemini-3.5-flash-lite",
         rawResponse,
         requestPayload,
       });
@@ -3873,7 +3876,7 @@ YÊU CẦU BẮT BUỘC VỀ ĐỊNH DẠNG ĐẦU RA:
       recommendations,
       capturedImages,
       plantsCount: plantedPointIndexes.length,
-      aiModel: aiResult ? aiResult.model : "gemini-3.5-flash-lite",
+      aiModel: "gemini-3.5-flash-lite",
       rawResponse,
       requestPayload,
     });
