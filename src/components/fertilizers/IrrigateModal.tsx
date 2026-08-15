@@ -72,32 +72,21 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
     imageBase64: string;
   } | null>(null);
 
-  const fetchCapturedPictures = async () => {
-    try {
-      const res = await fetch("/api/pictures/all");
-      if (res.ok) {
-        const data = await res.json();
-        if (data.pictures && Array.isArray(data.pictures) && data.pictures.length > 0) {
-          setCapturedImages(
-            data.pictures.map((p: any) => ({
-              trayName: p.trayName || "Khay Cây",
-              imageBase64: p.imageBase64,
-            }))
-          );
-        }
-      }
-    } catch (e) {}
-  };
-
   useEffect(() => {
     setMounted(true);
   }, []);
 
   const [plantedCount, setPlantedCount] = useState<number>(0);
 
-  // Fetch fertilizers & plants list & pictures from server whenever modal opens
+  // Reset state & Fetch fertilizers & plants list from server whenever modal opens
   useEffect(() => {
     if (!isOpen) return;
+
+    setCapturedImages([]);
+    setAiAnalysisDone(false);
+    setAiRecommendations([]);
+    setRawAiResponse("");
+    setRawRequestPayload("");
 
     const fetchFertilizersAndPlants = async () => {
       try {
@@ -115,8 +104,6 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
           const data = await pRes.json();
           if (Array.isArray(data)) setPlantedCount(data.length);
         }
-
-        await fetchCapturedPictures();
       } catch (err) {}
     };
 
@@ -174,6 +161,8 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
 
   const handleRunAiAnalysis = async () => {
     setIsAnalyzingAi(true);
+    setCapturedImages([]);
+    setAiAnalysisDone(false);
     setAiStatusMsg(`🤖 Đang điều khiển di chuyển camera đến các vị trí cây trong Vườn...`);
 
     try {
@@ -191,10 +180,10 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
       }
 
       if (res.ok && data.success && data.recommendations && Array.isArray(data.recommendations)) {
-        if (data.capturedImages && Array.isArray(data.capturedImages) && data.capturedImages.length > 0) {
+        if (data.capturedImages && Array.isArray(data.capturedImages)) {
           setCapturedImages(data.capturedImages);
         } else {
-          await fetchCapturedPictures();
+          setCapturedImages([]);
         }
 
         if (data.aiModel) {
