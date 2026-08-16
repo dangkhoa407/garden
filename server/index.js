@@ -462,12 +462,12 @@ function extractInspectionStatus(resultText) {
   return text;
 }
 
-// Quyet dinh phun: chi SPRAY khi status la SAU / LA BI SAU AN / SAU VA BENH.
+// Quyet dinh phun: CHI SPRAY KHI TRONG ANH CO CON SAU SONG (SAU / SAU VA BENH).
+// LA BI SAU AN (khong thay con sau) SE KHONG PHUN DIEM.
 function needSpray(resultText) {
   const status = extractInspectionStatus(resultText);
   return [
     "SAU",
-    "LA BI SAU AN",
     "SAU VA BENH",
   ].includes(status);
 }
