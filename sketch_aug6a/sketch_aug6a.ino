@@ -71,6 +71,12 @@ bool checkIncomingEmergencyStop() {
       digitalWrite(EN2_PIN, HIGH);
       Serial.println("STOP OK: EMERGENCY STOP ACTIVATED");
       return true;
+    } else if (normalized == "LED_ON" || normalized == "LIGHT_ON" || normalized == "FLASH_ON") {
+      ledON();
+      Serial.println("LED_ON OK");
+    } else if (normalized == "LED_OFF" || normalized == "LIGHT_OFF" || normalized == "FLASH_OFF") {
+      ledOFF();
+      Serial.println("LED_OFF OK");
     }
   }
   return false;

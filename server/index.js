@@ -4737,7 +4737,7 @@ app.post("/api/plant-inspect", async (req, res) => {
     // 2. Turn on LED Flash light for illumination during inspection
     try {
       await sendDirectCommandToArduino("LED_ON");
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 300));
     } catch (ledErr) {}
 
     // 3. Capture actual USB camera image
