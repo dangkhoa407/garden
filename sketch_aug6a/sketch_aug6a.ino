@@ -19,7 +19,7 @@
 #define RELAY_LED   2
 #define RELAY_PUMP  3
 
-// ==== Tốc độ xung động cơ (Microseconds) - Giảm xuống 800us để di chuyển cực nhanh & mượt ====
+// ==== Tốc độ xung động cơ (Microseconds) ====
 #define MOTOR_PULSE_US 800
 
 // ==== Thông số ====
@@ -48,6 +48,7 @@ void waitSprayOrSkip(int idx);
 void captureFromPC(int idx);
 void sprayCycle();
 void sprayPlantedRoute(String payload);
+void inspectPlantedRoute(String payload);
 void runSprayPoints();
 bool homeAll();
 bool checkIncomingEmergencyStop();
@@ -79,7 +80,7 @@ bool checkIncomingEmergencyStop() {
   return false;
 }
 
-// ================== MOTOR (TỐC ĐỘ CAO, KHÔNG DELAY THỪA) ==================
+// ================== MOTOR ==================
 bool runMotor(int stepPin, int dirPin, int steps, bool direction) {
   if (emergencyStopRequested || checkIncomingEmergencyStop()) return false;
   digitalWrite(dirPin, direction ? LOW : HIGH);
@@ -174,7 +175,7 @@ bool moveGridTo(int &currentX, int &currentY, int targetX, int targetY) {
   return true;
 }
 
-// ================== PHUN TOÀN BỘ (LỘ TRÌNH ĐÃ LỌC KHAY) ==================
+// ================== PHUN TOÀN BỘ (DÙNG CHUNG ENGINE CHUẨN) ==================
 void sprayPlantedRoute(String payload) {
   bool selected[6] = {false, false, false, false, false, false};
   int count = 0;
@@ -226,6 +227,54 @@ void sprayPlantedRoute(String payload) {
   Serial.println("SPRAY_OFF OK");
   homeAll();
   Serial.println("FULL_SPRAY_PLANTED DONE");
+}
+
+// ================== KIỂM TRA SÂU HẠI (DÙNG CHUNG 100% HÀNH TRÌNH VỚI SPRAY TOÀN BỘ) ==================
+void inspectPlantedRoute(String payload) {
+  bool selected[6] = {false, false, false, false, false, false};
+  int count = 0;
+
+  int start = 0;
+  while (start < payload.length()) {
+    int comma = payload.indexOf(',', start);
+    String token = comma == -1 ? payload.substring(start) : payload.substring(start, comma);
+    token.trim();
+    int idx = token.toInt();
+    if (idx >= 0 && idx <= 5 && !selected[idx]) {
+      selected[idx] = true;
+      count++;
+    }
+    if (comma == -1) break;
+    start = comma + 1;
+  }
+
+  if (count == 0) {
+    Serial.println("INSPECT_PLANTED SKIP");
+    return;
+  }
+
+  if (!homeAll()) return;
+
+  int currentX = 0;
+  int currentY = 0;
+  const int pointX[6] = {0, 1, 0, 1, 0, 1};
+  const int pointY[6] = {0, 0, 1, 1, 2, 2};
+
+  for (int idx = 0; idx < 6; idx++) {
+    if (emergencyStopRequested || checkIncomingEmergencyStop()) {
+      pumpOFF();
+      digitalWrite(EN1_PIN, HIGH);
+      digitalWrite(EN2_PIN, HIGH);
+      return;
+    }
+    if (!selected[idx]) continue;
+    if (!moveGridTo(currentX, currentY, pointX[idx], pointY[idx])) return;
+    captureFromPC(idx);
+    waitSprayOrSkip(idx);
+  }
+
+  homeAll();
+  Serial.println("INSPECT_PLANTED DONE");
 }
 
 // ================== PHUN ĐIỂM (CÓ CHỐNG LẶP & KHÔNG DELAY) ==================
@@ -281,28 +330,9 @@ void waitSprayOrSkip(int idx) {
   }
 }
 
-// ================== CHU TRÌNH KIỂM TRA SÂU / SPRAY POINTS (ĐÃ BỎ DI MOVEMENT LẠI THỪA, TỐC ĐỘ CAO) ==================
+// ================== CHU TRÌNH KIỂM TRA TẤT CẢ 6 ĐIỂM ==================
 void runSprayPoints() {
-  if (!homeAll()) return;
-
-  int currentX = 0;
-  int currentY = 0;
-  const int pointX[6] = {0, 1, 0, 1, 0, 1};
-  const int pointY[6] = {0, 0, 1, 1, 2, 2};
-
-  for (int idx = 0; idx < 6; idx++) {
-    if (emergencyStopRequested || checkIncomingEmergencyStop()) {
-      pumpOFF();
-      digitalWrite(EN1_PIN, HIGH);
-      digitalWrite(EN2_PIN, HIGH);
-      return;
-    }
-    if (!moveGridTo(currentX, currentY, pointX[idx], pointY[idx])) return;
-    captureFromPC(idx);
-    waitSprayOrSkip(idx);
-  }
-
-  homeAll();
+  inspectPlantedRoute("0,1,2,3,4,5");
 }
 
 // ================== DI CHUYỂN TRỰC TIẾP TỚI 1 ĐIỂM / KHAY ==================
@@ -316,6 +346,9 @@ void moveToPoint(int idx) {
   Serial.println(idx);
 
   if (idx >= 0 && idx <= 5) {
+    if (currentGridX == 0 && currentGridY == 0) {
+      homeAll();
+    }
     const int pointX[6] = {0, 1, 0, 1, 0, 1};
     const int pointY[6] = {0, 0, 1, 1, 2, 2};
     moveGridTo(currentGridX, currentGridY, pointX[idx], pointY[idx]);
@@ -356,6 +389,12 @@ void checkSerialCommands() {
       digitalWrite(EN2_PIN, LOW);
       pumpOFF();
       Serial.println("RESET_ERROR OK: SYSTEM RESTORED");
+    } else if (normalized.startsWith("INSPECT_PLANTED:") || normalized.startsWith("CHECK_PESTS_PLANTED:")) {
+      emergencyStopRequested = false;
+      systemError = false;
+      digitalWrite(EN1_PIN, LOW);
+      digitalWrite(EN2_PIN, LOW);
+      inspectPlantedRoute(normalized.substring(normalized.indexOf(':') + 1));
     } else if (normalized == "CHECK_PESTS" || normalized == "RUN" || normalized == "K") {
       emergencyStopRequested = false;
       systemError = false;
