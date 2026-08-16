@@ -2752,7 +2752,8 @@ async function sendDirectCommandToEsp32(cmdString) {
           });
 
           const { pct1, pct2, avg } = parseEsp32Moisture(s1, s2);
-          const lightPct = typeof light === "number" ? Math.min(100, Math.max(0, Math.round((light / 4095) * 100))) : undefined;
+          // Đảo ngược tỉ lệ Cường độ sáng (Quang trở LDR: ánh sáng mạnh -> Voltage giảm -> lightRaw giảm => Cường độ sáng % tăng)
+          const lightPct = typeof light === "number" ? Math.min(100, Math.max(0, Math.round(((4095 - light) / 4095) * 100))) : undefined;
 
           lastEsp32Sensors = {
             soil1Raw: s1,
@@ -2818,7 +2819,7 @@ app.post("/api/esp32/dose", async (req, res) => {
 
   // Chuyển mã bình ("Bình A" -> 'A')
   const pumpLetter = (tankCode.replace(/bình\s*/i, "").trim() || "A").toUpperCase();
-  const durationSec = Math.max(1, Math.round(ml * 60)); // Quy đổi: 1 ml = 60 giây (1 phút)
+  const durationSec = Math.max(1, Math.round((ml * 10) / 6)); // Quy đổi lưu lượng bơm nhu động: 6ml / 10s (1ml ≈ 1.67s)
   const cmdStr = `DOSE ${pumpLetter} ${durationSec}`;
 
   const reqMl = Number(ml);

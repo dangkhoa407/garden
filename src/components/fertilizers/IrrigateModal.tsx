@@ -354,7 +354,7 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
 
     let estDurationSec = 20;
     tanksToDose.forEach((t) => {
-      estDurationSec += Math.max(5, Math.round(t.ml * 5));
+      estDurationSec += Math.max(2, Math.round((t.ml * 10) / 6));
     });
 
     if (onStartIrrigation) {

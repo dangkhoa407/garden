@@ -287,10 +287,10 @@ export default function FertilizersPage() {
     try {
       // 1. TRÍCH XUẤT PHÂN BÓN (DOSE)
       for (const t of tanksToDose) {
-        const expectedSec = Math.round(t.ml * 60);
+        const expectedSec = Math.max(1, Math.round((t.ml * 10) / 6));
         setIrrigateLog((prev) => [
           ...prev,
-          `🧪 Gửi lệnh DOSE: Đang bơm ${t.ml} ml từ ${t.tankCode} (Tốc độ 1 ml/phút => Bơm chạy trong ${expectedSec} giây)...`,
+          `🧪 Gửi lệnh DOSE: Đang bơm ${t.ml} ml từ ${t.tankCode} (Lưu lượng bơm nhu động: 6ml/10s => Bơm chạy trong ${expectedSec}s)...`,
         ]);
         const res = await fetch("/api/esp32/dose", {
           method: "POST",
