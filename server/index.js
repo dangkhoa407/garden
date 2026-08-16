@@ -1905,24 +1905,77 @@ async function runFullGardenInspection() {
   addSystemLog("CHECK_PESTS", `Bắt đầu kiểm tra sâu hại tại các vị trí có cây: ${plantedLabels.join(", ")}. Bỏ qua ${skippedPoints.length} khay trống (${skippedLabels.join(", ")}).`, "PROCESS");
   pushWebNotification(`🐛 Bắt đầu kiểm tra sâu hại tại ${plantedPointIndexes.length} vị trí có cây (${plantedLabels.join(", ")}). Bỏ qua ${skippedPoints.length} khay trống.`, "AI_ANALYSIS");
 
-  const routeCommand = `INSPECT_PLANTED:${plantedPointIndexes.join(",")}`;
-  const doneWait = waitForFullSprayDone(180000);
-  try {
-    await sendDirectCommandToArduino(routeCommand);
-    await doneWait;
-  } catch (err) {
-    console.warn(`[Inspect Route Warning] ${err.message}`);
-    if (process.platform !== "linux" || !ardStatus.connected) {
-      addSystemLog("CHECK_PESTS", `Đã hoàn tất kiểm tra ${plantedPointIndexes.length} khay có cây.`, "SUCCESS");
-      pushWebNotification(`✅ Đã kiểm tra xong ${plantedPointIndexes.length} khay có cây.`, "SUCCESS");
-      return { inspectedPoints: plantedPointIndexes, skippedPoints, results: [] };
+  const results = [];
+
+  for (const pointIdx of plantedPointIndexes) {
+    const trayName = `Khay ${String(pointIdx + 1).padStart(2, "0")}`;
+    const plantAtPoint = plants.find((p) => getPointIndexFromLocation(p.location) === pointIdx);
+    const plantName = plantAtPoint ? plantAtPoint.name : trayName;
+
+    addSystemLog("CHECK_PESTS", `🐛 Đang di chuyển tới ${trayName} (Điểm ${pointIdx + 1}) để chụp ảnh kiểm tra sâu bệnh...`, "PROCESS");
+    pushWebNotification(`🐛 Robot đang di chuyển tới ${trayName} để chụp ảnh kiểm tra sâu bệnh (${plantName})...`, "PROCESS");
+
+    // 1. Gửi lệnh di chuyển tới điểm khay và chờ Arduino phản hồi MOVED:idx
+    const moveWait = waitForArduinoMove(pointIdx, 25000);
+    try {
+      await sendDirectCommandToArduino(`P${pointIdx + 1}`);
+    } catch (mErr) {
+      const waiter = pendingMoveResolvers.get(pointIdx);
+      if (waiter) waiter.reject(mErr);
+      console.warn(`[Inspect Move Warning ${trayName}] ${mErr.message}`);
     }
+    await moveWait.catch((err) => console.warn(`[Inspect Move Wait ${trayName}] ${err.message}`));
+    await new Promise((r) => setTimeout(r, 300));
+
+    // 2. Bật đèn Flash chiếu sáng
+    try {
+      await sendDirectCommandToArduino("LED_ON");
+      await new Promise((r) => setTimeout(r, 300));
+    } catch (lErr) {}
+
+    // 3. Chụp ảnh camera thực tế
+    let capPath = null;
+    try {
+      capPath = await captureImage(true);
+    } catch (cErr) {
+      console.warn(`[Inspect Capture Warning ${trayName}] ${cErr.message}`);
+    }
+
+    // 4. Tắt đèn Flash
+    try {
+      await sendDirectCommandToArduino("LED_OFF");
+    } catch (lErr) {}
+
+    // 5. Lưu kết quả và nhật ký kiểm tra
+    const { inspId, snapshotUrl } = persistSnapshotForHistory(capPath, "pest");
+    results.push({
+      pointIdx,
+      trayName,
+      plantName,
+      snapshotUrl,
+      time: new Date().toLocaleTimeString("vi-VN"),
+    });
+
+    try {
+      const history = readJson("inspection_history.json", []);
+      history.unshift({
+        id: inspId,
+        trayName,
+        plantName,
+        date: new Date().toLocaleDateString("vi-VN"),
+        time: new Date().toLocaleTimeString("vi-VN"),
+        status: "Đã kiểm tra sâu bệnh",
+        detail: `Đã hoàn tất kiểm tra sâu bệnh thực tế tại ${trayName} (${plantName}).`,
+        snapshotUrl,
+      });
+      writeJson("inspection_history.json", history);
+    } catch (e) {}
   }
 
   addSystemLog("CHECK_PESTS", `Hoàn tất kiểm tra sâu bệnh tại ${plantedPointIndexes.length} vị trí có cây. Đã bỏ qua ${skippedPoints.length} khay trống.`, "SUCCESS");
   pushWebNotification(`✅ Đã hoàn tất kiểm tra sâu bệnh tại ${plantedPointIndexes.length} vị trí có cây. Đã bỏ qua ${skippedPoints.length} vị trí trống.`, "SUCCESS");
 
-  return { inspectedPoints: plantedPointIndexes, skippedPoints, results: [] };
+  return { inspectedPoints: plantedPointIndexes, skippedPoints, results };
 }
 
 // Cleanup khi process exit
