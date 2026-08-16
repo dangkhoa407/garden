@@ -31,8 +31,6 @@ int steps02 = (int)(0.3 * stepsPerCm);   // 0.3 cm
 // ==== Thời gian ====
 #define WAIT_SPRAY_MS     45000UL
 #define SPRAY_TIME_MS     1500UL
-#define REST_AFTER_MS        0UL
-#define LOOP_DELAY_MS     90000UL
 #define HOMING_TIMEOUT_MS 6000UL
 #define SPRAY_INTERVAL_MS 86400000UL   // ✅ CHỐNG PHUN LẶP 24H
 
@@ -151,7 +149,7 @@ bool homeAll() {
   return true;
 }
 
-// ================== CAMERA ==================
+// ================== CAMERA (KHÔNG DELAY CỨNG) ==================
 void captureFromPC(int idx) {
   digitalWrite(RELAY_LED, HIGH);
   Serial.print("CAPTURE:");
@@ -175,7 +173,28 @@ bool moveGridTo(int &currentX, int &currentY, int targetX, int targetY) {
   return true;
 }
 
-// ================== PHUN TOÀN BỘ (DÙNG CHUNG ENGINE CHUẨN) ==================
+// ================== PHUN TOÀN BỘ VƯỜN (P1->P2->P3->P4->P5->P6) ==================
+void sprayCycle() {
+  if (!homeAll()) return;
+
+  pumpON();
+
+  if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, true)) return;
+  if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, false)) return;
+  if (!runMotor(STEP2_PIN, DIR2_PIN, steps7, true)) return;
+
+  if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, true)) return;
+  if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, false)) return;
+  if (!runMotor(STEP2_PIN, DIR2_PIN, steps7, true)) return;
+
+  if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, true)) return;
+  if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, false)) return;
+
+  pumpOFF();
+  runMotor(STEP2_PIN, DIR2_PIN, steps14, false);
+  Serial.println("FULL_SPRAY_PLANTED DONE");
+}
+
 void sprayPlantedRoute(String payload) {
   bool selected[6] = {false, false, false, false, false, false};
   int count = 0;
@@ -229,55 +248,7 @@ void sprayPlantedRoute(String payload) {
   Serial.println("FULL_SPRAY_PLANTED DONE");
 }
 
-// ================== KIỂM TRA SÂU HẠI (DÙNG CHUNG 100% HÀNH TRÌNH VỚI SPRAY TOÀN BỘ) ==================
-void inspectPlantedRoute(String payload) {
-  bool selected[6] = {false, false, false, false, false, false};
-  int count = 0;
-
-  int start = 0;
-  while (start < payload.length()) {
-    int comma = payload.indexOf(',', start);
-    String token = comma == -1 ? payload.substring(start) : payload.substring(start, comma);
-    token.trim();
-    int idx = token.toInt();
-    if (idx >= 0 && idx <= 5 && !selected[idx]) {
-      selected[idx] = true;
-      count++;
-    }
-    if (comma == -1) break;
-    start = comma + 1;
-  }
-
-  if (count == 0) {
-    Serial.println("INSPECT_PLANTED SKIP");
-    return;
-  }
-
-  if (!homeAll()) return;
-
-  int currentX = 0;
-  int currentY = 0;
-  const int pointX[6] = {0, 1, 0, 1, 0, 1};
-  const int pointY[6] = {0, 0, 1, 1, 2, 2};
-
-  for (int idx = 0; idx < 6; idx++) {
-    if (emergencyStopRequested || checkIncomingEmergencyStop()) {
-      pumpOFF();
-      digitalWrite(EN1_PIN, HIGH);
-      digitalWrite(EN2_PIN, HIGH);
-      return;
-    }
-    if (!selected[idx]) continue;
-    if (!moveGridTo(currentX, currentY, pointX[idx], pointY[idx])) return;
-    captureFromPC(idx);
-    waitSprayOrSkip(idx);
-  }
-
-  homeAll();
-  Serial.println("INSPECT_PLANTED DONE");
-}
-
-// ================== PHUN ĐIỂM (CÓ CHỐNG LẶP & KHÔNG DELAY) ==================
+// ================== PHUN ĐIỂM / PHÂN TÍCH (KHÔNG DELAY CỨNG) ==================
 void waitSprayOrSkip(int idx) {
   unsigned long start = millis();
   String cmd = "";
@@ -315,10 +286,10 @@ void waitSprayOrSkip(int idx) {
           } else {
             Serial.println("DA PHUN <24H - BO QUA");
           }
-          return;
+          return; // 0ms delay sau khi phun xong
         } 
         else if (cmd == "NO_SPRAY" || cmd.endsWith(":NO_SPRAY") || cmd.indexOf("NO_SPRAY") != -1 || cmd.indexOf("ERROR") != -1) {
-          // KHÔNG PHUN -> THOÁT NGAY ĐỂ SANG ĐIỂM TIẾP THEO 0ms DELAY
+          // KHÔNG PHUN -> CHUYỂN ĐIỂM NGAY 0ms DELAY
           Serial.println("NO_SPRAY OK - CHUYEN DIEM NGAY");
           return;
         }
@@ -330,9 +301,49 @@ void waitSprayOrSkip(int idx) {
   }
 }
 
-// ================== CHU TRÌNH KIỂM TRA TẤT CẢ 6 ĐIỂM ==================
+// ================== CHU TRÌNH KIỂM TRA SÂU (ĐÚNG CHÍNH XÁC THEO LUỒNG ĐỘNG CƠ CỦA BẠN - KHÔNG DELAY CỨNG) ==================
 void runSprayPoints() {
-  inspectPlantedRoute("0,1,2,3,4,5");
+  if (!homeAll()) return;
+
+  // Điểm 0 (Khay 1)
+  captureFromPC(0); 
+  waitSprayOrSkip(0); 
+  if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, true)) return;
+
+  // Điểm 1 (Khay 2)
+  captureFromPC(1); 
+  waitSprayOrSkip(1);
+  if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, false)) return;
+
+  // Điểm 2 (Khay 3)
+  if (!runMotor(STEP2_PIN, DIR2_PIN, steps7, true)) return;
+  captureFromPC(2); 
+  waitSprayOrSkip(2);
+
+  // Điểm 3 (Khay 4)
+  if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, true)) return;
+  captureFromPC(3); 
+  waitSprayOrSkip(3);
+  if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, false)) return;
+
+  // Điểm 4 (Khay 5)
+  if (!runMotor(STEP2_PIN, DIR2_PIN, steps7, true)) return;
+  captureFromPC(4); 
+  waitSprayOrSkip(4);
+
+  // Điểm 5 (Khay 6)
+  if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, true)) return;
+  captureFromPC(5); 
+  waitSprayOrSkip(5);
+  if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, false)) return;
+
+  // Kết thúc - Quay về vị trí Home (0,0)
+  runMotor(STEP2_PIN, DIR2_PIN, steps14, false);
+  Serial.println("INSPECT_PLANTED DONE");
+}
+
+void inspectPlantedRoute(String payload) {
+  runSprayPoints();
 }
 
 // ================== DI CHUYỂN TRỰC TIẾP TỚI 1 ĐIỂM / KHAY ==================
@@ -346,9 +357,6 @@ void moveToPoint(int idx) {
   Serial.println(idx);
 
   if (idx >= 0 && idx <= 5) {
-    if (currentGridX == 0 && currentGridY == 0) {
-      homeAll();
-    }
     const int pointX[6] = {0, 1, 0, 1, 0, 1};
     const int pointY[6] = {0, 0, 1, 1, 2, 2};
     moveGridTo(currentGridX, currentGridY, pointX[idx], pointY[idx]);
@@ -412,7 +420,7 @@ void checkSerialCommands() {
       systemError = false;
       digitalWrite(EN1_PIN, LOW);
       digitalWrite(EN2_PIN, LOW);
-      sprayPlantedRoute("0,1,2,3,4,5");
+      sprayCycle();
     } else if (normalized == "LED_ON" || normalized == "LIGHT_ON" || normalized == "FLASH_ON") {
       ledON();
       Serial.println("LED_ON OK");
