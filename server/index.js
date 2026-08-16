@@ -1223,25 +1223,26 @@ function pushWebNotification(messageText, type = "INFO") {
   console.log(`[Web Alert & Data] ${timestamp} -> ${messageText}`);
 }
 
+// HELPER CHUYỂN ĐỔI CHUỖI VỊ TRÍ ("Khay 01", "Khay 1", "Khay 03") SANG POINT INDEX (0..5)
+function getPointIndexFromLocation(location) {
+  if (!location) return null;
+  const locStr = String(location).trim();
+  const matches = locStr.match(/\d+/g);
+  if (!matches || matches.length === 0) return null;
+  const num = parseInt(matches[0], 10);
+  if (isNaN(num) || num < 1 || num > 6) return null;
+  return num - 1; // Khay 01 -> 0, Khay 02 -> 1, Khay 03 -> 2, Khay 04 -> 3...
+}
+
 // HELPER KIỂM TRA XEM VỊ TRÍ (0->5 TƯƠNG ỨNG ĐIỂM 1->6 / KHAY 01->06) ĐÃ ĐƯỢC THÊM CÂY TRỒNG TRÊN WEB CHƯA
 function hasPlantAtPoint(pointIndex) {
   const plants = readJson("plants.json", []);
   if (!Array.isArray(plants) || plants.length === 0) {
-    console.log(`[Inspection Engine] Danh sách cây trồng (data/plants.json) hiện rỗng (0 cây).`);
     return false;
   }
-
-  const targetNum = pointIndex + 1; // Point index 0..5 -> Point 1..6
-
   return plants.some((p) => {
     if (!p || !p.location) return false;
-    const locStr = String(p.location).trim();
-    // Match tất cả cụm số trong location (VD: "Khay 01" -> 1, "Điểm 2" -> 2, "Vị trí 3" -> 3, "Khay 4" -> 4)
-    const matches = locStr.match(/\d+/g);
-    if (matches) {
-      return matches.some((numStr) => parseInt(numStr, 10) === targetNum);
-    }
-    return false;
+    return getPointIndexFromLocation(p.location) === pointIndex;
   });
 }
 
@@ -1910,11 +1911,7 @@ async function runFullGardenInspection() {
 
   for (const pointIdx of plantedPointIndexes) {
     const trayName = `Khay ${String(pointIdx + 1).padStart(2, "0")}`;
-    const matchingPlant = plants.find((p) => {
-      if (!p || !p.location) return false;
-      const matches = String(p.location).match(/\d+/g);
-      return matches && matches.some((n) => parseInt(n, 10) === pointIdx + 1);
-    });
+    const matchingPlant = plants.find((p) => p && p.location && getPointIndexFromLocation(p.location) === pointIdx);
     const plantName = matchingPlant ? matchingPlant.name : "";
 
     addSystemLog("INSPECT_MOVE", `🐛 Đang điều khiển Robot di chuyển tới ${trayName} (Điểm ${pointIdx + 1}) để kiểm tra sâu bệnh...`, "PROCESS");
