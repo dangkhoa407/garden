@@ -329,15 +329,14 @@ function waitForFullSprayDone(timeoutMs = 120000) {
 }
 
 // =========================================================
-// GEMINI PROMPT & RESPONSE SCHEMA (ĐỒNG BỘ 100% V2.MJS)
+// GEMINI PROMPT & RESPONSE SCHEMA (ĐỒNG BỘ 4 TRẠNG THÁI)
 // =========================================================
 const ALLOWED_STATUSES = new Set([
+  "KHỎE MẠNH",
+  "KHOẺ MẠNH",
   "SÂU",
   "LÁ BỊ SÂU ĂN",
-  "BỆNH",
-  "SÂU VÀ BỆNH",
-  "KHÔNG PHÁT HIỆN SÂU VÀ BỆNH",
-  "KHÔNG CHẮC CHẮN"
+  "BỆNH"
 ]);
 
 const GEMINI_RESPONSE_SCHEMA = {
@@ -346,12 +345,10 @@ const GEMINI_RESPONSE_SCHEMA = {
     status: {
       type: "STRING",
       enum: [
+        "KHỎE MẠNH",
         "SÂU",
         "LÁ BỊ SÂU ĂN",
-        "BỆNH",
-        "SÂU VÀ BỆNH",
-        "KHÔNG PHÁT HIỆN SÂU VÀ BỆNH",
-        "KHÔNG CHẮC CHẮN"
+        "BỆNH"
       ]
     },
     description: { type: "STRING" },
@@ -366,36 +363,25 @@ Bạn là chuyên gia quan sát sâu hại và dấu hiệu bệnh trên rau ăn
 
 Đây là ảnh tại điểm kiểm tra số ${pointIndex + 1}.
 
-Phân loại theo đúng các quy tắc sau:
+Phân loại CHÍNH XÁC vào đúng 1 trong 4 trạng thái sau:
 
-1. Nhìn thấy rõ sâu hoặc côn trùng đang bám hay ăn lá:
-SÂU
+1. KHỎE MẠNH
+- Cây tươi tốt, lá nguyên vẹn, không có sâu hại hay bệnh tật.
 
-2. Không thấy con sâu nhưng lá có lỗ thủng, mép bị ăn hoặc dấu cắn:
-LÁ BỊ SÂU ĂN
+2. SÂU
+- Nhìn thấy rõ con sâu hoặc côn trùng sâu hại sống đang bám hay ăn lá.
 
-3. Có đốm lá, cháy lá, thối lá, nấm, vàng lá, xoăn lá hoặc biến màu:
-BỆNH
+3. LÁ BỊ SÂU ĂN
+- Lá có rách, thủng, khuyết mép do sâu ăn nhưng KHÔNG nhìn thấy con sâu nào trong ảnh.
 
-4. Có cả sâu và bệnh:
-SÂU VÀ BỆNH
-
-5. Không thấy dấu hiệu sâu hoặc bệnh:
-KHÔNG PHÁT HIỆN SÂU VÀ BỆNH
-
-6. Ảnh mờ, tối, quá xa hoặc không đủ bằng chứng:
-KHÔNG CHẮC CHẮN
+4. BỆNH
+- Lá bị đốm, cháy lá, thối lá, nấm, vàng lá, xoăn lá hoặc biến màu.
 
 Yêu cầu bắt buộc:
-
-- Trả đủ status, description và recommendation.
-- Không để trường nào trống.
+- Trường status CHỈ ĐƯỢC CHỌN 1 TRONG 4 GIÁ TRỊ: "KHỎE MẠNH", "SÂU", "LÁ BỊ SÂU ĂN", "BỆNH".
+- Trả đủ status, description và recommendation. Không để trường nào trống.
 - description phải mô tả rõ vật thể và dấu hiệu nhìn thấy.
 - recommendation phải đưa ra khuyến nghị ngắn gọn.
-- Nếu có sâu, dự đoán loại sâu và mật độ ít, trung bình hoặc nhiều.
-- Nếu lá bị sâu ăn hoặc có bệnh, nêu mức độ nhẹ, trung bình hoặc nặng.
-- Ưu tiên biện pháp sinh học, an toàn cho rau ăn lá.
-- Không khẳng định chắc chắn khi ảnh không rõ.
 `.trim();
 }
 
@@ -462,14 +448,11 @@ function extractInspectionStatus(resultText) {
   return text;
 }
 
-// Quyet dinh phun: CHI SPRAY KHI TRONG ANH CO CON SAU SONG (SAU / SAU VA BENH).
-// LA BI SAU AN (khong thay con sau) SE KHONG PHUN DIEM.
+// Quyet dinh phun: CHỈ SPRAY KHI CÓ SÂU SỐNG ("SAU").
+// "KHOE MANH", "LA BI SAU AN", "BENH" -> KHÔNG PHUN ĐIỂM.
 function needSpray(resultText) {
   const status = extractInspectionStatus(resultText);
-  return [
-    "SAU",
-    "SAU VA BENH",
-  ].includes(status);
+  return status === "SAU";
 }
 
 // =========================================================
