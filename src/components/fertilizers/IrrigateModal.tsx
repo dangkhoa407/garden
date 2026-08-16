@@ -933,71 +933,7 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
                 </div>
               )}
 
-              {/* Raw Request Payload & Prompt Textarea */}
-              {rawRequestPayload && (
-                <div className="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/30 space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-on-surface font-bold text-xs">
-                      <span className="material-symbols-outlined text-primary text-base">
-                        upload_file
-                      </span>
-                      <span>Payload & Prompt Gửi Lên Gemini AI ({aiModelName}):</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard.writeText(rawRequestPayload);
-                        alert("Đã sao chép Request Payload & Prompt gửi lên Gemini AI!");
-                      }}
-                      className="px-2.5 py-1 text-[11px] font-bold text-primary hover:bg-primary/10 rounded-lg transition-all flex items-center gap-1 border border-primary/20 active:scale-95"
-                    >
-                      <span className="material-symbols-outlined text-xs">content_copy</span>
-                      Sao chép Payload
-                    </button>
-                  </div>
 
-                  <textarea
-                    readOnly
-                    value={rawRequestPayload}
-                    rows={6}
-                    className="w-full p-3.5 bg-zinc-950 text-cyan-400 font-mono text-xs rounded-xl border border-zinc-800 focus:outline-none resize-y leading-relaxed shadow-inner"
-                    placeholder="Payload và prompt gửi lên Gemini AI sẽ hiển thị ở đây..."
-                  />
-                </div>
-              )}
-
-              {/* Raw Gemini AI Data Textarea */}
-              {rawAiResponse && (
-                <div className="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/30 space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-on-surface font-bold text-xs">
-                      <span className="material-symbols-outlined text-primary text-base">
-                        data_object
-                      </span>
-                      <span>Dữ Liệu Raw Gemini AI Phản Hồi ({aiModelName}):</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard.writeText(rawAiResponse);
-                        alert("Đã sao chép dữ liệu raw từ Gemini AI vào bộ nhớ tạm!");
-                      }}
-                      className="px-2.5 py-1 text-[11px] font-bold text-primary hover:bg-primary/10 rounded-lg transition-all flex items-center gap-1 border border-primary/20 active:scale-95"
-                    >
-                      <span className="material-symbols-outlined text-xs">content_copy</span>
-                      Sao chép Raw
-                    </button>
-                  </div>
-
-                  <textarea
-                    readOnly
-                    value={rawAiResponse}
-                    rows={6}
-                    className="w-full p-3.5 bg-zinc-950 text-emerald-400 font-mono text-xs rounded-xl border border-zinc-800 focus:outline-none resize-y leading-relaxed shadow-inner"
-                    placeholder="Dữ liệu raw trả về từ Gemini AI sẽ hiển thị ở đây..."
-                  />
-                </div>
-              )}
             </div>
           )}
 
