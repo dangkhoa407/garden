@@ -3760,7 +3760,7 @@ app.post("/api/ai/fertilize-analysis", async (req, res) => {
         const errorMsg = `Lỗi chụp ảnh từ USB Camera tại ${trayName}${lastCapError ? `: ${lastCapError.message}` : ""}. Vui lòng kiểm tra kết nối camera!`;
         addSystemLog("AI_FERTILIZE", `❌ ${errorMsg}`, "ALERT");
         pushWebNotification(`❌ ${errorMsg}`, "ERROR");
-        return res.status(500).json({
+        return res.json({
           success: false,
           error: errorMsg,
           recommendations: [],
@@ -3943,30 +3943,43 @@ YÊU CẦU BẮT BUỘC VỀ ĐỊNH DẠNG ĐẦU RA (JSON OBJECT):
     const rawResponse = aiResult ? aiResult.text : "";
     let recommendations = [];
     let overallAssessment = "";
-    let isParsedValid = false;
 
-    if (aiResult && aiResult.text) {
+    if (rawResponse) {
       try {
-        let cleanText = aiResult.text.trim();
-        cleanText = cleanText.replace(/```json/g, "").replace(/```/g, "").trim();
-        const parsed = JSON.parse(cleanText);
-        if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
-          overallAssessment = parsed.overallAssessment || "";
-          if (Array.isArray(parsed.recommendations)) {
-            recommendations = parsed.recommendations;
+        let cleanText = rawResponse.trim();
+        cleanText = cleanText.replace(/```json/gi, "").replace(/```/g, "").trim();
+        let parsed = null;
+        try {
+          parsed = JSON.parse(cleanText);
+        } catch (e1) {
+          const jsonMatch = cleanText.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+          if (jsonMatch) {
+            try { parsed = JSON.parse(jsonMatch[0]); } catch (e2) {}
           }
-          isParsedValid = true;
-        } else if (Array.isArray(parsed)) {
-          recommendations = parsed;
-          isParsedValid = true;
+        }
+
+        if (parsed && typeof parsed === "object") {
+          if (!Array.isArray(parsed)) {
+            overallAssessment = parsed.overallAssessment || parsed.assessment || parsed.analysis || "";
+            if (Array.isArray(parsed.recommendations)) {
+              recommendations = parsed.recommendations;
+            }
+          } else {
+            recommendations = parsed;
+          }
+        }
+
+        if (!overallAssessment) {
+          overallAssessment = cleanText;
         }
       } catch (pErr) {
         console.warn(`[AI Fertilize Parse Error] ${pErr.message}`);
+        overallAssessment = rawResponse;
       }
     }
 
-    if (!isParsedValid) {
-      return res.status(500).json({
+    if (!overallAssessment && recommendations.length === 0) {
+      return res.json({
         success: false,
         error: "Gemini AI không trả về dữ liệu phân tích hợp lệ. Vui lòng thử lại!",
         overallAssessment: "",
@@ -3996,7 +4009,8 @@ YÊU CẦU BẮT BUỘC VỀ ĐỊNH DẠNG ĐẦU RA (JSON OBJECT):
       requestPayload,
     });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error(`[AI Fertilize Exception] ${err.message}`);
+    res.json({ success: false, error: err.message, recommendations: [] });
   }
 });
 
@@ -4710,7 +4724,7 @@ app.post("/api/plant-inspect", async (req, res) => {
     await homingFirst(`Kiểm tra sâu ${trayName}`);
 
     // 1. Send command to Arduino to move camera to tray/point
-    const moveWait = waitForArduinoMove(pointIdx, 5000);
+    const moveWait = waitForArduinoMove(pointIdx, 20000);
     try {
       await sendDirectCommandToArduino(`P${pointIdx + 1}`);
     } catch (moveErr) {
