@@ -279,7 +279,7 @@ function waitForArduinoHoming(timeoutMs = 30000) {
   });
 }
 
-function waitForArduinoMove(pointIndex, timeoutMs = 5000) {
+function waitForArduinoMove(pointIndex, timeoutMs = 20000) {
   return new Promise((resolve, reject) => {
     const key = Number(pointIndex);
     const timer = setTimeout(() => {
@@ -1916,7 +1916,7 @@ async function runFullGardenInspection() {
     pushWebNotification(`🐛 Đang điều khiển Robot di chuyển tới ${trayName} (Điểm ${pointIdx + 1}) để kiểm tra sâu bệnh trên cây ${plantName || ""}...`, "AI_ANALYSIS");
 
     // 1. Gửi lệnh di chuyển tới điểm tương ứng trên Arduino
-    const moveWait = waitForArduinoMove(pointIdx, 5000);
+    const moveWait = waitForArduinoMove(pointIdx, 20000);
     try {
       await sendDirectCommandToArduino(`P${pointIdx + 1}`);
     } catch (moveErr) {
