@@ -483,8 +483,8 @@ const CAMERA_BRIGHTNESS = 105;
 const CAMERA_CONTRAST = 135;
 const CAMERA_SATURATION = 125;
 const CAMERA_SHARPNESS = 140;
-const WARMUP_FRAMES = 15;
-const CHECK_FRAMES = 5;
+const WARMUP_FRAMES = 5;
+const CHECK_FRAMES = 3;
 const TARGET_BRIGHTNESS = 110;
 const JPEG_QUALITY = 85;
 
@@ -3662,6 +3662,8 @@ app.get("/api/pictures/all", (req, res) => {
 // AI SMART FERTILIZE ANALYSIS ENDPOINT (QUÉT CÁC VỊ TRÍ CÓ CÂY THỰC TẾ TRONG /PLANTS + THÔNG TIN CÂY + BÌNH PHÂN => GEMINI JSON)
 app.post("/api/ai/fertilize-analysis", async (req, res) => {
   try {
+    req.setTimeout(180000);
+    res.setTimeout(180000);
     console.log("[AI Fertilize] Bắt đầu quy trình quét các vị trí cây thực tế & phân tích Gemini...");
 
     const plants = readJson("plants.json", []);
@@ -3769,8 +3771,17 @@ app.post("/api/ai/fertilize-analysis", async (req, res) => {
       }
 
       const imgBuf = fs.readFileSync(capPath);
-      const b64 = imgBuf.toString("base64");
-      const dataUrl = `data:image/jpeg;base64,${b64}`;
+      let sendBuf = imgBuf;
+      try {
+        const sharp = require("sharp");
+        sendBuf = await sharp(capPath)
+          .resize(800, 600, { fit: "inside", withoutEnlargement: true })
+          .jpeg({ quality: 80 })
+          .toBuffer();
+      } catch (sErr) {}
+
+      const b64 = sendBuf.toString("base64");
+      const dataUrl = `data:image/jpeg;base64,${imgBuf.toString("base64")}`;
 
       imageParts.push({
         inlineData: {
@@ -4012,6 +4023,38 @@ YÊU CẦU BẮT BUỘC VỀ ĐỊNH DẠNG ĐẦU RA (JSON OBJECT):
     console.error(`[AI Fertilize Exception] ${err.message}`);
     res.json({ success: false, error: err.message, recommendations: [] });
   }
+});
+
+// RASPBERRY PI SYSTEM POWER & REBOOT CONTROL ENDPOINT
+app.post("/api/system/control", async (req, res) => {
+  const { action } = req.body;
+  if (action === "poweroff" || action === "shutdown") {
+    addSystemLog("SYSTEM", "⚠️ Nhận lệnh tắt nguồn Raspberry Pi từ giao diện Web! Đang thực hiện sudo poweroff...", "ALERT");
+    pushWebNotification("⚠️ Đang thực hiện TẮT NGUỒN Raspberry Pi theo yêu cầu...", "ALERT");
+    res.json({
+      success: true,
+      message: "Đã gửi lệnh tắt nguồn Raspberry Pi (sudo poweroff)! Phần cứng sẽ ngắt nguồn trong vài giây.",
+    });
+    setTimeout(() => {
+      execAsync("sudo poweroff || shutdown -h now").catch((e) => console.error(`[Poweroff Error] ${e.message}`));
+    }, 1000);
+    return;
+  }
+
+  if (action === "reboot") {
+    addSystemLog("SYSTEM", "🔄 Nhận lệnh khởi động lại Raspberry Pi từ giao diện Web! Đang thực hiện sudo reboot...", "PROCESS");
+    pushWebNotification("🔄 Đang thực hiện KHỞI ĐỘNG LẠI Raspberry Pi...", "PROCESS");
+    res.json({
+      success: true,
+      message: "Đã gửi lệnh khởi động lại Raspberry Pi (sudo reboot)! Hệ thống sẽ khởi động lại trong vài giây.",
+    });
+    setTimeout(() => {
+      execAsync("sudo reboot || shutdown -r now").catch((e) => console.error(`[Reboot Error] ${e.message}`));
+    }, 1000);
+    return;
+  }
+
+  return res.status(400).json({ success: false, error: "Hành động không hợp lệ!" });
 });
 
 // CAMERA DIAGNOSTICS & TESTING ENDPOINTS FOR DEVICE SETTINGS

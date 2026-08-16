@@ -55,7 +55,10 @@ interface SavedWifiNetwork {
 }
 
 export default function DeviceSettingsPage() {
-  const [activeTab, setActiveTab] = useState<"diagnostics" | "wifi" | "telegram">("diagnostics");
+  const [activeTab, setActiveTab] = useState<"diagnostics" | "wifi" | "telegram" | "raspberry">("diagnostics");
+
+  // Raspberry Pi System Control state
+  const [systemActionBusy, setSystemActionBusy] = useState(false);
 
   // Telegram state
   const [telegramBotToken, setTelegramBotToken] = useState("");
@@ -373,6 +376,53 @@ export default function DeviceSettingsPage() {
     }
   };
 
+  // Raspberry Pi System Handlers
+  const handleShutdownRaspberry = async () => {
+    if (!window.confirm("⚠️ BẠN CÓ CHẮC CHẮN MUỐN TẮT NGUỒN RASPBERRY PI?\n\nHệ thống sẽ thực hiện lệnh 'sudo poweroff' và ngừng hoạt động hoàn toàn cho đến khi được cắm lại nguồn điện.")) {
+      return;
+    }
+    setSystemActionBusy(true);
+    try {
+      const data = await safeFetchJson("/api/system/control", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "poweroff" }),
+      });
+      if (data && data.success) {
+        showToast(data.message || "Đã gửi lệnh tắt nguồn Raspberry Pi (sudo poweroff)!", "success");
+      } else {
+        showToast(data?.error || "Không thể thực hiện tắt nguồn Raspberry Pi", "error");
+      }
+    } catch (e) {
+      showToast("Đã gửi lệnh tắt nguồn Raspberry Pi!", "success");
+    } finally {
+      setSystemActionBusy(false);
+    }
+  };
+
+  const handleRebootRaspberry = async () => {
+    if (!window.confirm("🔄 BẠN CÓ CHẮC CHẮN MUỐN KHỞI ĐỘNG LẠI RASPBERRY PI?\n\nHệ thống sẽ thực hiện lệnh 'sudo reboot' và tự động khởi động lại sau khoảng 1-2 phút.")) {
+      return;
+    }
+    setSystemActionBusy(true);
+    try {
+      const data = await safeFetchJson("/api/system/control", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "reboot" }),
+      });
+      if (data && data.success) {
+        showToast(data.message || "Đã gửi lệnh khởi động lại Raspberry Pi (sudo reboot)!", "success");
+      } else {
+        showToast(data?.error || "Không thể thực hiện khởi động lại Raspberry Pi", "error");
+      }
+    } catch (e) {
+      showToast("Đã gửi lệnh khởi động lại Raspberry Pi!", "success");
+    } finally {
+      setSystemActionBusy(false);
+    }
+  };
+
   useEffect(() => {
     fetchArduinoStatus();
     fetchEsp32Status();
@@ -459,6 +509,17 @@ export default function DeviceSettingsPage() {
         >
           <span className="material-symbols-outlined text-2xl">send</span>
           Cấu Hình Telegram
+        </button>
+
+        <button
+          onClick={() => setActiveTab("raspberry")}
+          className={`flex items-center gap-2 px-6 py-3.5 font-headline-sm text-body-lg font-bold transition-all border-b-2 ${activeTab === "raspberry"
+            ? "border-primary text-primary bg-primary/5 rounded-t-xl"
+            : "border-transparent text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low/50 rounded-t-xl"
+            }`}
+        >
+          <span className="material-symbols-outlined text-2xl">developer_board</span>
+          Raspberry
         </button>
       </div>
 
@@ -1137,6 +1198,93 @@ export default function DeviceSettingsPage() {
                 <li>Sao chép dãy <strong>HTTP API Token</strong> thu được và dán vào ô <em>Telegram Bot Token</em> ở trên.</li>
                 <li>Tìm kiếm <strong>@userinfobot</strong> trên Telegram và nhấn <strong>/start</strong> để lấy dãy số <strong>ID</strong> của bạn, dán vào ô <em>Telegram Chat ID</em>.</li>
               </ol>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* TAB 4: RASPBERRY PI SYSTEM CONTROL */}
+      {activeTab === "raspberry" && (
+        <div className="space-y-lg animate-in fade-in duration-200">
+          <section className="bg-surface-container-lowest rounded-2xl p-lg border border-primary/20 shadow-md space-y-md">
+            <div className="flex items-center gap-3 pb-md border-b border-outline-variant/15">
+              <div className="w-12 h-12 rounded-2xl bg-rose-500/10 flex items-center justify-center text-rose-600">
+                <span className="material-symbols-outlined text-3xl">developer_board</span>
+              </div>
+              <div>
+                <h2 className="font-headline-md text-headline-md text-on-surface font-bold">
+                  Điều Khiển Hệ Thống Raspberry Pi
+                </h2>
+                <p className="font-body-sm text-xs text-on-surface-variant">
+                  Thao tác điều khiển nguồn phần cứng Raspberry Pi 4 trực tiếp từ hệ thống từ xa
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-lg pt-sm">
+              {/* Shutdown Card */}
+              <div className="p-lg bg-surface-container-low rounded-2xl border border-rose-500/30 flex flex-col justify-between space-y-md">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-rose-600 font-bold text-lg">
+                    <span className="material-symbols-outlined text-2xl">power_settings_new</span>
+                    Tắt Nguồn (Shutdown)
+                  </div>
+                  <p className="text-xs text-on-surface-variant leading-relaxed">
+                    Nhấn nút bên dưới để thực hiện lệnh <code className="bg-rose-100 dark:bg-rose-950 px-1.5 py-0.5 rounded font-mono text-rose-700 dark:text-rose-300 font-bold">sudo poweroff</code> trên Raspberry Pi. Hệ thống sẽ ngắt nguồn an toàn.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleShutdownRaspberry}
+                  disabled={systemActionBusy}
+                  className="w-full flex items-center justify-center gap-2 px-6 py-3.5 bg-rose-600 text-white rounded-xl font-bold text-body-md hover:bg-rose-700 transition-all active:scale-95 disabled:opacity-50 shadow-md"
+                >
+                  {systemActionBusy ? (
+                    <>
+                      <span className="material-symbols-outlined text-xl animate-spin">progress_activity</span>
+                      Đang xử lý...
+                    </>
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined text-xl">power_settings_new</span>
+                      Tắt Máy (Shutdown)
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Reboot Card */}
+              <div className="p-lg bg-surface-container-low rounded-2xl border border-amber-500/30 flex flex-col justify-between space-y-md">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-amber-600 font-bold text-lg">
+                    <span className="material-symbols-outlined text-2xl">restart_alt</span>
+                    Khởi Động Lại (Reboot)
+                  </div>
+                  <p className="text-xs text-on-surface-variant leading-relaxed">
+                    Nhấn nút bên dưới để thực hiện lệnh <code className="bg-amber-100 dark:bg-amber-950 px-1.5 py-0.5 rounded font-mono text-amber-700 dark:text-amber-300 font-bold">sudo reboot</code> trên Raspberry Pi. Hệ thống sẽ khởi động lại và tự nạp lại dịch vụ.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleRebootRaspberry}
+                  disabled={systemActionBusy}
+                  className="w-full flex items-center justify-center gap-2 px-6 py-3.5 bg-amber-600 text-white rounded-xl font-bold text-body-md hover:bg-amber-700 transition-all active:scale-95 disabled:opacity-50 shadow-md"
+                >
+                  {systemActionBusy ? (
+                    <>
+                      <span className="material-symbols-outlined text-xl animate-spin">progress_activity</span>
+                      Đang xử lý...
+                    </>
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined text-xl">restart_alt</span>
+                      Khởi Động Lại (Reboot)
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </section>
         </div>
