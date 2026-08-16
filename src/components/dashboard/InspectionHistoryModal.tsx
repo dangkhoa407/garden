@@ -95,7 +95,36 @@ export function InspectionHistoryModal({
 
   if (!isOpen || !mounted) return null;
 
-  const currentTabLogs = logs.filter((l) => l.type === activeTab);
+  const currentTabLogs = logs.filter((l) => {
+    // 1. Tab type matching (PEST, SPRAY, FERTILIZE)
+    const logType = l.type || "PEST";
+    if (logType !== activeTab) return false;
+
+    // 2. Direct plantId match
+    if (l.plantId && l.plantId === plant.id) return true;
+
+    // 3. Location and plant name matching
+    const normPlantLoc = (plant.location || "").toLowerCase().trim(); // e.g. "khay 01"
+    const normPlantName = (plant.name || "").toLowerCase().trim();
+
+    // Extract tray number digits (e.g., "khay 01" -> "1")
+    const trayMatch = normPlantLoc.match(/khay\s*0?(\d+)/i);
+    const trayNum = trayMatch ? trayMatch[1] : null;
+
+    const lTray = ((l as any).trayName || (l as any).location || "").toLowerCase().trim();
+    const lPlantName = ((l as any).plantName || "").toLowerCase().trim();
+
+    if (normPlantLoc && lTray === normPlantLoc) return true;
+    if (normPlantName && lPlantName === normPlantName) return true;
+
+    const searchString = `${l.title || ""} ${l.detail || ""} ${l.telegramCaption || ""} ${lTray} ${lPlantName}`.toLowerCase();
+
+    if (normPlantLoc && searchString.includes(normPlantLoc)) return true;
+    if (trayNum && (searchString.includes(`khay ${trayNum}`) || searchString.includes(`khay 0${trayNum}`) || searchString.includes(`điểm ${trayNum}`) || searchString.includes(`diem ${trayNum}`))) return true;
+    if (normPlantName && searchString.includes(normPlantName)) return true;
+
+    return false;
+  });
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-md flex items-center justify-center p-4">

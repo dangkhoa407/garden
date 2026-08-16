@@ -1874,6 +1874,127 @@ async function runFullGardenSpray() {
   return { sprayedPoints: plantedPointIndexes, skippedPoints };
 }
 
+async function performGeminiPestInspection({ imagePath, pointIdx, plantName, trayName, plantId }) {
+  let formattedResult = "Đã chụp ảnh kiểm tra thực tế camera.";
+  let hasPest = false;
+  let parsedResult = null;
+
+  let imageBase64 = null;
+  if (imagePath && fs.existsSync(imagePath)) {
+    try {
+      let bufferToUse = fs.readFileSync(imagePath);
+      try {
+        bufferToUse = await sharp(imagePath)
+          .resize({ width: 800, height: 600, fit: "inside", withoutEnlargement: true })
+          .jpeg({ quality: 80 })
+          .toBuffer();
+      } catch (sharpErr) {}
+      imageBase64 = bufferToUse.toString("base64");
+    } catch (e) {}
+  }
+
+  const keys = getKeysList();
+  if (keys.length > 0 && imageBase64) {
+    addSystemLog("GEMINI_REQ", `🤖 Đang gửi hình ảnh ${trayName} (${plantName}) tới Gemini AI để phân tích diệp lục & sâu bệnh...`, "PROCESS");
+    pushWebNotification(`🤖 Đang phân tích AI diệp lục & sâu bệnh tại ${trayName} (${plantName})...`, "AI_ANALYSIS");
+
+    const payload = {
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { text: createPrompt(pointIdx) },
+            { inlineData: { mimeType: "image/jpeg", data: imageBase64 } }
+          ]
+        }
+      ],
+      generationConfig: {
+        maxOutputTokens: 1200,
+        thinkingConfig: { thinkingLevel: "minimal" },
+        responseMimeType: "application/json",
+        responseSchema: GEMINI_RESPONSE_SCHEMA
+      }
+    };
+
+    try {
+      const aiResult = await callGeminiApiWithRotation(payload);
+      if (aiResult && aiResult.text) {
+        try {
+          parsedResult = parseGeminiResult(aiResult.text);
+          formattedResult = formatGeminiResult(parsedResult);
+        } catch (pErr) {
+          formattedResult = aiResult.text;
+        }
+      }
+    } catch (aiErr) {
+      console.error(`[Gemini AI Inspect Error ${trayName}] ${aiErr.message}`);
+      formattedResult = `KẾT QUẢ KIỂM TRA CAMERA\nĐã chụp ảnh thực tế tại ${trayName}. Lỗi AI: ${aiErr.message}`;
+    }
+  } else {
+    formattedResult = `KẾT QUẢ KIỂM TRA CAMERA\nĐã chụp ảnh camera thực tế tại ${trayName} (${plantName}).`;
+  }
+
+  hasPest = needSpray(formattedResult);
+  const aiStatusText = parsedResult ? parsedResult.status : (hasPest ? "CÓ SÂU / BỆNH" : "KHÔNG PHÁT HIỆN SÂU VÀ BỆNH");
+
+  if (hasPest) {
+    await sendDirectCommandToArduino("SPRAY").catch(() => {});
+    addSystemLog("ACTUATE", `🚨 Gemini AI phát hiện sâu hại tại ${trayName}! Đã kích hoạt bơm SPRAY.`, "WARNING");
+    pushWebNotification(`🚨 Gemini AI phân tích ${trayName} (${plantName}): [${aiStatusText}]! Đã phun thuốc sinh học.`, "WARNING");
+  } else {
+    addSystemLog("ACTUATE", `🌿 Gemini AI phân tích ${trayName} (${plantName}): [${aiStatusText}] (Cây khỏe).`, "SUCCESS");
+  }
+
+  const telegramCaption = `🐛 KIỂM TRA SÂU BỆNH - ${trayName.toUpperCase()}\n🌱 Cây: ${plantName || "Trồng tại vườn"}\n\n${formattedResult}`;
+  try {
+    if (imagePath && fs.existsSync(imagePath)) {
+      sendTelegramPhoto(imagePath, telegramCaption).catch(() => {});
+    }
+  } catch (tErr) {}
+
+  const { inspId, snapshotUrl } = persistSnapshotForHistory(imagePath, "pest");
+
+  const historyEntry = {
+    id: inspId,
+    plantId: plantId || "",
+    plantName: plantName || "",
+    trayName: trayName || "",
+    location: trayName || "",
+    type: "PEST",
+    timestamp: new Date().toLocaleString("vi-VN"),
+    title: `Kiểm tra sâu hại - ${plantName || trayName}`,
+    detail: formattedResult,
+    telegramCaption: telegramCaption,
+    status: hasPest ? "Phát hiện sâu hại" : "Sức khỏe tốt",
+    image: snapshotUrl,
+    snapshotUrl: snapshotUrl,
+  };
+
+  try {
+    const history = readJson("inspection_history.json", []);
+    history.unshift(historyEntry);
+    if (hasPest) {
+      history.unshift({
+        id: `spray-${Date.now()}`,
+        plantId: plantId || "",
+        plantName: plantName || "",
+        trayName: trayName || "",
+        location: trayName || "",
+        type: "SPRAY",
+        timestamp: new Date().toLocaleString("vi-VN"),
+        title: `Phun sinh học - ${plantName || trayName}`,
+        detail: `Arduino đã phun thuốc sinh học tại ${trayName} sau khi Gemini AI phát hiện sâu hại.`,
+        status: "Đã phun sinh học",
+        image: snapshotUrl,
+        snapshotUrl: snapshotUrl,
+      });
+    }
+    writeJson("inspection_history.json", history);
+  } catch (e) {}
+
+  return { hasPest, formattedResult, snapshotUrl, historyEntry };
+}
+
 async function runFullGardenInspection() {
   const ardStatus = await getRealSerialStatus();
   if (!ardStatus.connected && process.platform === "linux") {
@@ -1946,30 +2067,23 @@ async function runFullGardenInspection() {
       await sendDirectCommandToArduino("LED_OFF");
     } catch (lErr) {}
 
-    // 5. Lưu kết quả và nhật ký kiểm tra
-    const { inspId, snapshotUrl } = persistSnapshotForHistory(capPath, "pest");
+    // 5. Gửi Gemini AI phân tích sâu bệnh & lưu lịch sử kiểm tra
+    const inspResult = await performGeminiPestInspection({
+      imagePath: capPath,
+      pointIdx,
+      plantName,
+      trayName,
+      plantId: plantAtPoint ? plantAtPoint.id : "",
+    });
+
     results.push({
       pointIdx,
       trayName,
       plantName,
-      snapshotUrl,
+      snapshotUrl: inspResult.snapshotUrl,
+      hasPest: inspResult.hasPest,
       time: new Date().toLocaleTimeString("vi-VN"),
     });
-
-    try {
-      const history = readJson("inspection_history.json", []);
-      history.unshift({
-        id: inspId,
-        trayName,
-        plantName,
-        date: new Date().toLocaleDateString("vi-VN"),
-        time: new Date().toLocaleTimeString("vi-VN"),
-        status: "Đã kiểm tra sâu bệnh",
-        detail: `Đã hoàn tất kiểm tra sâu bệnh thực tế tại ${trayName} (${plantName}).`,
-        snapshotUrl,
-      });
-      writeJson("inspection_history.json", history);
-    } catch (e) {}
   }
 
   addSystemLog("CHECK_PESTS", `Hoàn tất kiểm tra sâu bệnh tại ${plantedPointIndexes.length} vị trí có cây. Đã bỏ qua ${skippedPoints.length} khay trống.`, "SUCCESS");
@@ -4883,128 +4997,19 @@ app.post("/api/plant-inspect", async (req, res) => {
       });
     }
     // 3. Perform Gemini AI analysis
-    let formattedResult = "";
-    const keys = getKeysList();
-    if (keys.length === 0) {
-      addSystemLog("GEMINI_ERR", `❌ Chưa thiết lập Gemini API Key trong hệ thống`, "ALERT");
-      pushWebNotification(`❌ Chưa thiết lập Gemini API Key! Vui lòng vào trang 'Cấu hình API' để nhập Key trước khi quét sâu.`, "ALERT");
-      return res.status(400).json({
-        success: false,
-        error: "Chưa cấu hình Gemini API Key! Vui lòng vào trang Cấu hình API trên Web để nhập chìa khóa Gemini.",
-      });
-    }
-
-    let imageBase64 = null;
-    if (imagePathToSend && fs.existsSync(imagePathToSend)) {
-      try {
-        const imgBuf = fs.readFileSync(imagePathToSend);
-        imageBase64 = imgBuf.toString("base64");
-      } catch (e) {}
-    }
-
-    addSystemLog("GEMINI_REQ", `🤖 Đang gửi dữ liệu hình ảnh st01.jpg tới mô hình Gemini AI để phân tích diệp lục & sâu bệnh...`, "PROCESS");
-
-    // Payload theo dung v2.mjs: text truoc, inlineData sau, them thinkingConfig + maxOutputTokens
-    const payload = {
-      contents: [
-        {
-          role: "user",
-          parts: [
-            { text: createPrompt(pointIdx) },
-            ...(imageBase64 ? [{ inlineData: { mimeType: "image/jpeg", data: imageBase64 } }] : [])
-          ]
-        }
-      ],
-      generationConfig: {
-        maxOutputTokens: 1200,
-        thinkingConfig: { thinkingLevel: "minimal" },
-        responseMimeType: "application/json",
-        responseSchema: GEMINI_RESPONSE_SCHEMA
-      }
-    };
-
-    let parsedResult = null;
-    try {
-      const aiResult = await callGeminiApiWithRotation(payload);
-      if (aiResult && aiResult.text) {
-        try {
-          parsedResult = parseGeminiResult(aiResult.text);
-          formattedResult = formatGeminiResult(parsedResult);
-        } catch (pErr) {
-          formattedResult = aiResult.text;
-        }
-      } else {
-        throw new Error("Không nhận được phản hồi nội dung từ Gemini AI API.");
-      }
-    } catch (aiErr) {
-      console.error(`[Gemini AI Inspect Error] ${aiErr.message}`);
-      addSystemLog("GEMINI_ERR", `❌ [Gemini AI Log] Lỗi kết nối API: ${aiErr.message}`, "ALERT");
-      pushWebNotification(`❌ Lỗi gọi Gemini AI API: ${aiErr.message}`, "ALERT");
-      return res.status(500).json({
-        success: false,
-        error: `Lỗi kết nối Gemini AI: ${aiErr.message}`,
-      });
-    }
-
-    const hasPest = needSpray(formattedResult);
-    const aiStatusText = parsedResult ? parsedResult.status : (hasPest ? "CÓ SÂU / BỆNH" : "KHÔNG PHÁT HIỆN SÂU VÀ BỆNH");
-
-    addSystemLog("GEMINI_RES", `🤖 [Gemini AI Log] Phân tích hoàn tất: Tình trạng [${aiStatusText}] | Mô tả: ${parsedResult?.description || "Bình thường"}`, "SUCCESS");
-
-    if (hasPest) {
-      await sendDirectCommandToArduino("SPRAY").catch(() => {});
-      addSystemLog("ACTUATE", `🚨 Lệnh Arduino: SPRAY (Kích hoạt bơm phun thuốc sinh học 1.5s)`, "WARNING");
-      pushWebNotification(`🚨 Gemini AI phân tích ${plantName || trayName}: [${aiStatusText}]! Đã kích hoạt bơm SPRAY.`, "WARNING");
-    } else {
-      await sendDirectCommandToArduino("NO_SPRAY").catch(() => {});
-      addSystemLog("ACTUATE", `🌿 Lệnh Arduino: NO_SPRAY (Cây khỏe mạnh, không cần phun thuốc)`, "SUCCESS");
-      pushWebNotification(`🌿 Gemini AI phân tích ${plantName || trayName}: [${aiStatusText}].`, "SUCCESS");
-    }
-
-    // 4. Format Telegram report
-    const telegramCaption = `🐛 KIỂM TRA SÂU BỆNH - ${trayName.toUpperCase()}\n🌱 Cây: ${plantName || "Trồng tại vườn"}\n\n${formattedResult}`;
-
-    // 5. Send to Telegram
-    try {
-      sendTelegramPhoto(imagePathToSend, telegramCaption).catch(() => {});
-    } catch (tErr) {}
-
-    // 6. Save persistent snapshot file for history log
-    const { inspId, snapshotUrl } = persistSnapshotForHistory(imagePathToSend, "plant-insp");
-
-    // 7. Save to data/inspection_history.json
-    const historyEntry = {
-      id: inspId,
-      plantId: plantId || "",
-      type: "PEST",
-      timestamp: new Date().toLocaleString("vi-VN"),
-      title: `Kiểm tra sâu hại - ${plantName || trayName}`,
-      detail: formattedResult,
-      telegramCaption: telegramCaption,
-      status: hasPest ? "Phát hiện sâu hại" : "Sức khỏe tốt",
-      image: snapshotUrl,
-    };
-
-    const history = readJson("inspection_history.json", []);
-    history.unshift(historyEntry);
-    if (hasPest) {
-      history.unshift({
-        id: `spray-${Date.now()}`,
-        plantId: plantId || "",
-        type: "SPRAY",
-        timestamp: new Date().toLocaleString("vi-VN"),
-        title: `Phun sinh hoc - ${plantName || trayName}`,
-        detail: `Arduino da phun thuoc sinh hoc tai ${trayName} sau khi AI phat hien sau hai.`,
-        status: "Da phun sinh hoc",
-        image: snapshotUrl,
-      });
-    }
-    writeJson("inspection_history.json", history);
+    // 3. Perform Gemini AI analysis & save history log
+    const inspResult = await performGeminiPestInspection({
+      imagePath: imagePathToSend,
+      pointIdx,
+      plantName,
+      trayName,
+      plantId,
+    });
 
     res.json({
       success: true,
       message: `Đã hoàn tất kiểm tra sâu bệnh thực tế tại ${trayName}!`,
-      log: historyEntry,
+      log: inspResult.historyEntry,
     });
   } catch (err) {
     console.error(`[Plant Inspect Error] ${err.message}`);
