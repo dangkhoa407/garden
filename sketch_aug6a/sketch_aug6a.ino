@@ -19,9 +19,6 @@
 #define RELAY_LED   2
 #define RELAY_PUMP  3
 
-// ==== Tốc độ xung động cơ (Microseconds) ====
-#define MOTOR_PULSE_US 800
-
 // ==== Thông số ====
 int stepsPerCm = 80;
 int steps7  = 7  * stepsPerCm;
@@ -31,6 +28,8 @@ int steps02 = (int)(0.3 * stepsPerCm);   // 0.3 cm
 // ==== Thời gian ====
 #define WAIT_SPRAY_MS     45000UL
 #define SPRAY_TIME_MS     1500UL
+#define REST_AFTER_MS        0UL
+#define LOOP_DELAY_MS     90000UL
 #define HOMING_TIMEOUT_MS 6000UL
 #define SPRAY_INTERVAL_MS 86400000UL   // ✅ CHỐNG PHUN LẶP 24H
 
@@ -46,7 +45,6 @@ void waitSprayOrSkip(int idx);
 void captureFromPC(int idx);
 void sprayCycle();
 void sprayPlantedRoute(String payload);
-void inspectPlantedRoute(String payload);
 void runSprayPoints();
 bool homeAll();
 bool checkIncomingEmergencyStop();
@@ -90,9 +88,9 @@ bool runMotor(int stepPin, int dirPin, int steps, bool direction) {
       return false;
     }
     digitalWrite(stepPin, HIGH);
-    delayMicroseconds(MOTOR_PULSE_US);
+    delayMicroseconds(2500);
     digitalWrite(stepPin, LOW);
-    delayMicroseconds(MOTOR_PULSE_US);
+    delayMicroseconds(2500);
   }
   return true;
 }
@@ -107,6 +105,8 @@ void emergencyStop(const char* msg) {
 
   Serial.print("ALERT: ");
   Serial.println(msg);
+  
+  delay(100);   // ✅ cho PC kịp nhận ALERT
 }
 
 // ================== HOMING ==================
@@ -128,11 +128,12 @@ bool homeAxis(int stepPin, int dirPin, int limitPin, const char* errMsg) {
       return false;
     }
     digitalWrite(stepPin, HIGH);
-    delayMicroseconds(MOTOR_PULSE_US);
+    delayMicroseconds(2500);
     digitalWrite(stepPin, LOW);
-    delayMicroseconds(MOTOR_PULSE_US);
+    delayMicroseconds(2500);
   }
 
+  delay(100);
   return runMotor(stepPin, dirPin, steps02, true);
 }
 
@@ -149,7 +150,7 @@ bool homeAll() {
   return true;
 }
 
-// ================== CAMERA (KHÔNG DELAY CỨNG) ==================
+// ================== CAMERA ==================
 void captureFromPC(int idx) {
   digitalWrite(RELAY_LED, HIGH);
   Serial.print("CAPTURE:");
@@ -157,23 +158,7 @@ void captureFromPC(int idx) {
   digitalWrite(RELAY_LED, LOW);
 }
 
-// ================== MOVE GRID HELPER ==================
-bool moveGridTo(int &currentX, int &currentY, int targetX, int targetY) {
-  int deltaX = targetX - currentX;
-  if (deltaX != 0) {
-    if (!runMotor(STEP1_PIN, DIR1_PIN, abs(deltaX) * steps7, deltaX > 0)) return false;
-    currentX = targetX;
-  }
-
-  int deltaY = targetY - currentY;
-  if (deltaY != 0) {
-    if (!runMotor(STEP2_PIN, DIR2_PIN, abs(deltaY) * steps7, deltaY > 0)) return false;
-    currentY = targetY;
-  }
-  return true;
-}
-
-// ================== PHUN TOÀN BỘ VƯỜN (P1->P2->P3->P4->P5->P6) ==================
+// ================== PHUN TOÀN BỘ ==================
 void sprayCycle() {
   if (!homeAll()) return;
 
@@ -192,7 +177,21 @@ void sprayCycle() {
 
   pumpOFF();
   runMotor(STEP2_PIN, DIR2_PIN, steps14, false);
-  Serial.println("FULL_SPRAY_PLANTED DONE");
+}
+
+bool moveGridTo(int &currentX, int &currentY, int targetX, int targetY) {
+  int deltaX = targetX - currentX;
+  if (deltaX != 0) {
+    if (!runMotor(STEP1_PIN, DIR1_PIN, abs(deltaX) * steps7, deltaX > 0)) return false;
+    currentX = targetX;
+  }
+
+  int deltaY = targetY - currentY;
+  if (deltaY != 0) {
+    if (!runMotor(STEP2_PIN, DIR2_PIN, abs(deltaY) * steps7, deltaY > 0)) return false;
+    currentY = targetY;
+  }
+  return true;
 }
 
 void sprayPlantedRoute(String payload) {
@@ -248,7 +247,7 @@ void sprayPlantedRoute(String payload) {
   Serial.println("FULL_SPRAY_PLANTED DONE");
 }
 
-// ================== PHUN ĐIỂM / PHÂN TÍCH (KHÔNG DELAY CỨNG) ==================
+// ================== PHUN ĐIỂM (CÓ CHỐNG LẶP & KHÔNG DELAY) ==================
 void waitSprayOrSkip(int idx) {
   unsigned long start = millis();
   String cmd = "";
@@ -286,10 +285,10 @@ void waitSprayOrSkip(int idx) {
           } else {
             Serial.println("DA PHUN <24H - BO QUA");
           }
-          return; // 0ms delay sau khi phun xong
+          return;
         } 
         else if (cmd == "NO_SPRAY" || cmd.endsWith(":NO_SPRAY") || cmd.indexOf("NO_SPRAY") != -1 || cmd.indexOf("ERROR") != -1) {
-          // KHÔNG PHUN -> CHUYỂN ĐIỂM NGAY 0ms DELAY
+          // KHÔNG PHUN -> THOÁT NGAY ĐỂ SANG ĐIỂM TIẾP THEO 0ms DELAY
           Serial.println("NO_SPRAY OK - CHUYEN DIEM NGAY");
           return;
         }
@@ -301,49 +300,44 @@ void waitSprayOrSkip(int idx) {
   }
 }
 
-// ================== CHU TRÌNH KIỂM TRA SÂU (ĐÚNG CHÍNH XÁC THEO LUỒNG ĐỘNG CƠ CỦA BẠN - KHÔNG DELAY CỨNG) ==================
+// ================== CHU TRÌNH ĐIỂM ==================
 void runSprayPoints() {
   if (!homeAll()) return;
 
-  // Điểm 0 (Khay 1)
+  // Điểm 0
   captureFromPC(0); 
-  waitSprayOrSkip(0); 
+  waitSprayOrSkip(0); // PHUN NGAY TẠI VỊ TRÍ HIỆN TẠI
   if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, true)) return;
 
-  // Điểm 1 (Khay 2)
+  // Điểm 1
   captureFromPC(1); 
   waitSprayOrSkip(1);
   if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, false)) return;
 
-  // Điểm 2 (Khay 3)
+  // Điểm 2
   if (!runMotor(STEP2_PIN, DIR2_PIN, steps7, true)) return;
   captureFromPC(2); 
   waitSprayOrSkip(2);
 
-  // Điểm 3 (Khay 4)
+  // Điểm 3
   if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, true)) return;
   captureFromPC(3); 
   waitSprayOrSkip(3);
   if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, false)) return;
 
-  // Điểm 4 (Khay 5)
+  // Điểm 4
   if (!runMotor(STEP2_PIN, DIR2_PIN, steps7, true)) return;
   captureFromPC(4); 
   waitSprayOrSkip(4);
 
-  // Điểm 5 (Khay 6)
+  // Điểm 5
   if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, true)) return;
   captureFromPC(5); 
   waitSprayOrSkip(5);
   if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, false)) return;
 
-  // Kết thúc - Quay về vị trí Home (0,0)
+  // Kết thúc
   runMotor(STEP2_PIN, DIR2_PIN, steps14, false);
-  Serial.println("INSPECT_PLANTED DONE");
-}
-
-void inspectPlantedRoute(String payload) {
-  runSprayPoints();
 }
 
 // ================== DI CHUYỂN TRỰC TIẾP TỚI 1 ĐIỂM / KHAY ==================
@@ -397,12 +391,6 @@ void checkSerialCommands() {
       digitalWrite(EN2_PIN, LOW);
       pumpOFF();
       Serial.println("RESET_ERROR OK: SYSTEM RESTORED");
-    } else if (normalized.startsWith("INSPECT_PLANTED:") || normalized.startsWith("CHECK_PESTS_PLANTED:")) {
-      emergencyStopRequested = false;
-      systemError = false;
-      digitalWrite(EN1_PIN, LOW);
-      digitalWrite(EN2_PIN, LOW);
-      inspectPlantedRoute(normalized.substring(normalized.indexOf(':') + 1));
     } else if (normalized == "CHECK_PESTS" || normalized == "RUN" || normalized == "K") {
       emergencyStopRequested = false;
       systemError = false;
@@ -420,7 +408,7 @@ void checkSerialCommands() {
       systemError = false;
       digitalWrite(EN1_PIN, LOW);
       digitalWrite(EN2_PIN, LOW);
-      sprayCycle();
+      sprayPlantedRoute("0,1,2,3,4,5");
     } else if (normalized == "LED_ON" || normalized == "LIGHT_ON" || normalized == "FLASH_ON") {
       ledON();
       Serial.println("LED_ON OK");
