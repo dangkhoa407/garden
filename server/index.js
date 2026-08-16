@@ -1881,14 +1881,12 @@ async function runFullGardenInspection() {
   }
 
   const plants = readJson("plants.json", []);
-  
-  // Lọc duy nhất các vị trí (pointIndex 0..5) ĐANG CÓ CÂY TRỒNG trong data/plants.json
-  const plantedPointIndexes = [];
-  for (let idx = 0; idx < 6; idx++) {
-    if (hasPlantAtPoint(idx)) {
-      plantedPointIndexes.push(idx);
-    }
-  }
+  const plantedPointIndexes = [...new Set(
+    plants
+      .filter((plant) => plant && plant.location)
+      .map((plant) => getPointIndexFromLocation(plant.location))
+      .filter((pointIdx) => Number.isInteger(pointIdx) && pointIdx >= 0 && pointIdx <= 5)
+  )].sort((a, b) => a - b);
 
   const skippedPoints = [0, 1, 2, 3, 4, 5].filter((idx) => !plantedPointIndexes.includes(idx));
 
@@ -3808,13 +3806,12 @@ app.post("/api/ai/fertilize-analysis", async (req, res) => {
     const plants = readJson("plants.json", []);
     const fertilizers = readJson("fertilizers.json", []);
 
-    // Lọc duy nhất các vị trí (pointIndex 0..5) ĐANG CÓ CÂY TRỒNG trong data/plants.json
-    const plantedPointIndexes = [];
-    for (let idx = 0; idx < 6; idx++) {
-      if (hasPlantAtPoint(idx)) {
-        plantedPointIndexes.push(idx);
-      }
-    }
+    const plantedPointIndexes = [...new Set(
+      plants
+        .filter((plant) => plant && plant.location)
+        .map((plant) => getPointIndexFromLocation(plant.location))
+        .filter((pointIdx) => Number.isInteger(pointIdx) && pointIdx >= 0 && pointIdx <= 5)
+    )].sort((a, b) => a - b);
 
     if (plantedPointIndexes.length === 0) {
       addSystemLog("AI_FERTILIZE", "Chưa có cây nào được gieo trồng trong /plants. Bỏ qua quét AI.", "WARNING");
