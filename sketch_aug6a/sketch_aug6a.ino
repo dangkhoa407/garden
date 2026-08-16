@@ -19,6 +19,9 @@
 #define RELAY_LED   2
 #define RELAY_PUMP  3
 
+// ==== Tốc độ xung động cơ (Microseconds) - Giảm xuống 800us để di chuyển cực nhanh & mượt ====
+#define MOTOR_PULSE_US 800
+
 // ==== Thông số ====
 int stepsPerCm = 80;
 int steps7  = 7  * stepsPerCm;
@@ -76,7 +79,7 @@ bool checkIncomingEmergencyStop() {
   return false;
 }
 
-// ================== MOTOR ==================
+// ================== MOTOR (TỐC ĐỘ CAO, KHÔNG DELAY THỪA) ==================
 bool runMotor(int stepPin, int dirPin, int steps, bool direction) {
   if (emergencyStopRequested || checkIncomingEmergencyStop()) return false;
   digitalWrite(dirPin, direction ? LOW : HIGH);
@@ -88,9 +91,9 @@ bool runMotor(int stepPin, int dirPin, int steps, bool direction) {
       return false;
     }
     digitalWrite(stepPin, HIGH);
-    delayMicroseconds(2500);
+    delayMicroseconds(MOTOR_PULSE_US);
     digitalWrite(stepPin, LOW);
-    delayMicroseconds(2500);
+    delayMicroseconds(MOTOR_PULSE_US);
   }
   return true;
 }
@@ -105,8 +108,6 @@ void emergencyStop(const char* msg) {
 
   Serial.print("ALERT: ");
   Serial.println(msg);
-  
-  delay(100);   // ✅ cho PC kịp nhận ALERT
 }
 
 // ================== HOMING ==================
@@ -128,12 +129,11 @@ bool homeAxis(int stepPin, int dirPin, int limitPin, const char* errMsg) {
       return false;
     }
     digitalWrite(stepPin, HIGH);
-    delayMicroseconds(2500);
+    delayMicroseconds(MOTOR_PULSE_US);
     digitalWrite(stepPin, LOW);
-    delayMicroseconds(2500);
+    delayMicroseconds(MOTOR_PULSE_US);
   }
 
-  delay(100);
   return runMotor(stepPin, dirPin, steps02, true);
 }
 
@@ -153,34 +153,12 @@ bool homeAll() {
 // ================== CAMERA ==================
 void captureFromPC(int idx) {
   digitalWrite(RELAY_LED, HIGH);
-  delay(200);
   Serial.print("CAPTURE:");
   Serial.println(idx);
-  delay(200);
   digitalWrite(RELAY_LED, LOW);
 }
 
-// ================== PHUN TOÀN BỘ ==================
-void sprayCycle() {
-  if (!homeAll()) return;
-
-  pumpON();
-
-  if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, true)) return;
-  if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, false)) return;
-  if (!runMotor(STEP2_PIN, DIR2_PIN, steps7, true)) return;
-
-  if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, true)) return;
-  if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, false)) return;
-  if (!runMotor(STEP2_PIN, DIR2_PIN, steps7, true)) return;
-
-  if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, true)) return;
-  if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, false)) return;
-
-  pumpOFF();
-  runMotor(STEP2_PIN, DIR2_PIN, steps14, false);
-}
-
+// ================== MOVE GRID HELPER ==================
 bool moveGridTo(int &currentX, int &currentY, int targetX, int targetY) {
   int deltaX = targetX - currentX;
   if (deltaX != 0) {
@@ -196,6 +174,7 @@ bool moveGridTo(int &currentX, int &currentY, int targetX, int targetY) {
   return true;
 }
 
+// ================== PHUN TOÀN BỘ (LỘ TRÌNH ĐÃ LỌC KHAY) ==================
 void sprayPlantedRoute(String payload) {
   bool selected[6] = {false, false, false, false, false, false};
   int count = 0;
@@ -302,44 +281,28 @@ void waitSprayOrSkip(int idx) {
   }
 }
 
-// ================== CHU TRÌNH ĐIỂM ==================
+// ================== CHU TRÌNH KIỂM TRA SÂU / SPRAY POINTS (ĐÃ BỎ DI MOVEMENT LẠI THỪA, TỐC ĐỘ CAO) ==================
 void runSprayPoints() {
   if (!homeAll()) return;
 
-  // Điểm 0
-  captureFromPC(0); 
-  waitSprayOrSkip(0); // PHUN NGAY TẠI VỊ TRÍ HIỆN TẠI
-  if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, true)) return;
+  int currentX = 0;
+  int currentY = 0;
+  const int pointX[6] = {0, 1, 0, 1, 0, 1};
+  const int pointY[6] = {0, 0, 1, 1, 2, 2};
 
-  // Điểm 1
-  captureFromPC(1); 
-  waitSprayOrSkip(1);
-  if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, false)) return;
+  for (int idx = 0; idx < 6; idx++) {
+    if (emergencyStopRequested || checkIncomingEmergencyStop()) {
+      pumpOFF();
+      digitalWrite(EN1_PIN, HIGH);
+      digitalWrite(EN2_PIN, HIGH);
+      return;
+    }
+    if (!moveGridTo(currentX, currentY, pointX[idx], pointY[idx])) return;
+    captureFromPC(idx);
+    waitSprayOrSkip(idx);
+  }
 
-  // Điểm 2
-  if (!runMotor(STEP2_PIN, DIR2_PIN, steps7, true)) return;
-  captureFromPC(2); 
-  waitSprayOrSkip(2);
-
-  // Điểm 3
-  if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, true)) return;
-  captureFromPC(3); 
-  waitSprayOrSkip(3);
-  if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, false)) return;
-
-  // Điểm 4
-  if (!runMotor(STEP2_PIN, DIR2_PIN, steps7, true)) return;
-  captureFromPC(4); 
-  waitSprayOrSkip(4);
-
-  // Điểm 5
-  if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, true)) return;
-  captureFromPC(5); 
-  waitSprayOrSkip(5);
-  if (!runMotor(STEP1_PIN, DIR1_PIN, steps7, false)) return;
-
-  // Kết thúc
-  runMotor(STEP2_PIN, DIR2_PIN, steps14, false);
+  homeAll();
 }
 
 // ================== DI CHUYỂN TRỰC TIẾP TỚI 1 ĐIỂM / KHAY ==================
