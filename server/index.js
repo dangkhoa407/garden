@@ -3952,7 +3952,20 @@ app.post("/api/ai/fertilize-analysis", async (req, res) => {
       });
 
       addSystemLog("AI_FERTILIZE", `[Camera Log] Đã chụp & lưu ảnh thực tế từ camera vào pictures/ cho ${trayName} (${path.basename(capPath)})`, "SUCCESS");
+      pushWebNotification(`📸 ${trayName}: Đã chụp ảnh thành công! (${capturedImages.length}/${plantedPointIndexes.length} vị trí)`, "SUCCESS");
     }
+
+    // 2. BÁO LẠI SAU KHI CHỤP CÂY CUỐI CÙNG XONG ĐỂ TIẾN HÀNH GỬI LÊN GEMINI PHÂN TÍCH
+    const lastTrayName = `Khay ${String(plantedPointIndexes[plantedPointIndexes.length - 1] + 1).padStart(2, "0")}`;
+    addSystemLog(
+      "AI_FERTILIZE",
+      `✅ Đã chụp xong cây cuối cùng (${lastTrayName}). Thu thập đủ ${capturedImages.length}/${plantedPointIndexes.length} ảnh thực tế. Tiến hành gửi dữ liệu lên Gemini AI để phân tích...`,
+      "SUCCESS"
+    );
+    pushWebNotification(
+      `📸 Đã chụp xong cây cuối cùng (${lastTrayName})! Đang truyền dữ liệu ${capturedImages.length} ảnh đến Gemini AI để phân tích...`,
+      "AI_ANALYSIS"
+    );
 
     // 3. KIỂM TRẢ GEMINI API KEY
     const keys = getKeysList();
