@@ -3824,16 +3824,14 @@ app.get("/api/pictures/all", (req, res) => {
   }
 });
 
-// AI SMART FERTILIZE ANALYSIS ENDPOINT (QUÉT CÁC VỊ TRÍ CÓ CÂY THỰC TẾ TRONG /PLANTS + THÔNG TIN CÂY + BÌNH PHÂN => GEMINI JSON)
-app.post("/api/ai/fertilize-analysis", async (req, res) => {
+// 1. ENDPOINT GIẢI QUYẾT BƯỚC 1: QUÉT ROBOT VÀ CHỤP ẢNH TẤT CẢ KHAY CÂY (ĐẾN CÂY CUỐI CÙNG)
+app.post("/api/ai/fertilize-scan", async (req, res) => {
   try {
     req.setTimeout(180000);
     res.setTimeout(180000);
-    console.log("[AI Fertilize] Bắt đầu quy trình quét các vị trí cây thực tế & phân tích Gemini...");
+    console.log("[AI Fertilize Scan] Bắt đầu quy trình di chuyển robot & chụp ảnh các vị trí cây...");
 
     const plants = readJson("plants.json", []);
-    const fertilizers = readJson("fertilizers.json", []);
-
     const plantedPointIndexes = [...new Set(
       plants
         .filter((plant) => plant && plant.location)
@@ -3846,126 +3844,166 @@ app.post("/api/ai/fertilize-analysis", async (req, res) => {
       pushWebNotification("⚠️ Chưa có vị trí nào đang gieo trồng cây trong /plants. Vui lòng thêm cây trước khi quét phân tích!", "WARNING");
       return res.status(400).json({
         success: false,
-        error: "Chưa có cây nào được gieo trồng trong Vườn của tôi (/plants). Vui lòng thêm cây trước khi thực hiện quét phân tích AI!",
-        recommendations: [],
-        plantsCount: 0,
+        error: "Chưa có cây nào được gieo trồng trong Vườn của tôi (/plants). Vui lòng thêm cây trước khi thực hiện quét!",
+        capturedImages: [],
       });
     }
 
     const plantedLabels = plantedPointIndexes.map((idx) => `Khay ${String(idx + 1).padStart(2, "0")}`);
-    addSystemLog("AI_FERTILIZE", `Bắt đầu quét AI phân tích dinh dưỡng tại ${plantedPointIndexes.length} vị trí có cây: ${plantedLabels.join(", ")}`, "PROCESS");
-    pushWebNotification(`🌿 Bắt đầu di chuyển camera quét & phân tích Gemini AI tại ${plantedPointIndexes.length} vị trí có cây (${plantedLabels.join(", ")})...`, "AI_ANALYSIS");
+    addSystemLog("AI_FERTILIZE", `Bắt đầu di chuyển camera quét tại ${plantedPointIndexes.length} vị trí có cây: ${plantedLabels.join(", ")}`, "PROCESS");
+    pushWebNotification(`🌿 Bắt đầu di chuyển camera quét ảnh tại ${plantedPointIndexes.length} vị trí có cây (${plantedLabels.join(", ")})...`, "AI_ANALYSIS");
 
-    // 0. ĐƯA ROBOT VỀ VỊ TRÍ GỐC (HOMING) LẬP TỨC TRƯỚC KHI QUÉT VÀ CHỜ HOMING OK
+    // 0. Homing trước khi di chuyển
     await homingFirst("Tưới phân AI");
     await new Promise((resolve) => setTimeout(resolve, 200));
 
-    // 1. DI CHUYỂN ROBOT QUA CÁC VỊ TRÍ CÓ CÂY & CHỤP ẢNH REAL CHO TẤT CẢ CÂY
-    const imageParts = [];
     const capturedImages = [];
 
     for (const pointIdx of plantedPointIndexes) {
       const trayName = `Khay ${String(pointIdx + 1).padStart(2, "0")}`;
 
-      // A. Gửi lệnh di chuyển vị trí robot đến điểm khay cây và ĐỜI ARDUINO XÁC NHẬN "MOVED:n" (timeout 10s)
       const moveWait = waitForArduinoMove(pointIdx, 10000);
       try {
         await sendDirectCommandToArduino(`P${pointIdx + 1}`);
       } catch (moveErr) {
         const waiter = pendingMoveResolvers.get(pointIdx);
         if (waiter) waiter.resolve();
-        console.warn(`[AI Fertilize Move Warning ${trayName}] ${moveErr.message}`);
       }
-      await moveWait.catch((mErr) => console.warn(`[Move Wait ${trayName}] ${mErr.message}`));
-      // Chờ nhanh 300ms để robot ổn định vị trí
+      await moveWait.catch(() => {});
       await new Promise((resolve) => setTimeout(resolve, 300));
 
-      // B. Bật đèn LED Flash chiếu sáng cây trồng trước khi chụp
       try {
         await sendDirectCommandToArduino("LED_ON");
-        // Chờ nhanh 200ms cho Flash chiếu sáng
         await new Promise((resolve) => setTimeout(resolve, 200));
-      } catch (lErr) {
-        console.warn(`[AI Fertilize Flash Warning ${trayName}] ${lErr.message}`);
-      }
+      } catch (lErr) {}
 
-      // C. Chụp ảnh mới (forceFresh = true) và lưu vào thư mục pictures/ với tên ngẫu nhiên
       let capPath = null;
-      let lastCapError = null;
       for (let capAttempt = 1; capAttempt <= 2; capAttempt++) {
         try {
-          if (capAttempt > 1) {
-            await releaseCameraBeforeCapture();
-          }
+          if (capAttempt > 1) await releaseCameraBeforeCapture();
           capPath = await captureImage(true);
           if (capPath && fs.existsSync(capPath)) break;
         } catch (capErr) {
-          lastCapError = capErr;
-          console.warn(`[AI Fertilize Capture Attempt ${capAttempt} ${trayName}] ${capErr.message}`);
           await new Promise((resolve) => setTimeout(resolve, 200));
         }
       }
 
-      // D. Tắt đèn LED Flash sau khi chụp xong
       try {
         await sendDirectCommandToArduino("LED_OFF");
         await new Promise((resolve) => setTimeout(resolve, 100));
       } catch (lErr) {}
 
-      // E. Nếu không chụp được ảnh mới trực tiếp từ camera, báo lỗi chụp ảnh ngay lập tức (KHÔNG dùng ảnh cũ)
       if (!capPath || !fs.existsSync(capPath)) {
-        const errorMsg = `Lỗi chụp ảnh từ USB Camera tại ${trayName}${lastCapError ? `: ${lastCapError.message}` : ""}. Vui lòng kiểm tra kết nối camera!`;
+        const errorMsg = `Lỗi chụp ảnh từ USB Camera tại ${trayName}. Vui lòng kiểm tra kết nối camera!`;
         addSystemLog("AI_FERTILIZE", `❌ ${errorMsg}`, "ALERT");
         pushWebNotification(`❌ ${errorMsg}`, "ERROR");
         return res.json({
           success: false,
           error: errorMsg,
-          recommendations: [],
           capturedImages,
         });
       }
 
       const imgBuf = fs.readFileSync(capPath);
-      let sendBuf = imgBuf;
-      try {
-        const sharp = require("sharp");
-        sendBuf = await sharp(capPath)
-          .resize(800, 600, { fit: "inside", withoutEnlargement: true })
-          .jpeg({ quality: 80 })
-          .toBuffer();
-      } catch (sErr) {}
-
-      const b64 = sendBuf.toString("base64");
       const dataUrl = `data:image/jpeg;base64,${imgBuf.toString("base64")}`;
-
-      imageParts.push({
-        inlineData: {
-          mimeType: "image/jpeg",
-          data: b64,
-        },
-      });
 
       capturedImages.push({
         trayName,
         imageBase64: dataUrl,
         filePath: path.relative(process.cwd(), capPath),
+        capPath,
       });
 
       addSystemLog("AI_FERTILIZE", `[Camera Log] Đã chụp & lưu ảnh thực tế từ camera vào pictures/ cho ${trayName} (${path.basename(capPath)})`, "SUCCESS");
       pushWebNotification(`📸 ${trayName}: Đã chụp ảnh thành công! (${capturedImages.length}/${plantedPointIndexes.length} vị trí)`, "SUCCESS");
     }
 
-    // 2. BÁO LẠI SAU KHI CHỤP CÂY CUỐI CÙNG XONG ĐỂ TIẾN HÀNH GỬI LÊN GEMINI PHÂN TÍCH
     const lastTrayName = `Khay ${String(plantedPointIndexes[plantedPointIndexes.length - 1] + 1).padStart(2, "0")}`;
     addSystemLog(
       "AI_FERTILIZE",
-      `✅ Đã chụp xong cây cuối cùng (${lastTrayName}). Thu thập đủ ${capturedImages.length}/${plantedPointIndexes.length} ảnh thực tế. Tiến hành gửi dữ liệu lên Gemini AI để phân tích...`,
+      `✅ Đã chụp xong cây cuối cùng (${lastTrayName}). Thu thập đủ ${capturedImages.length}/${plantedPointIndexes.length} ảnh thực tế. Tiến hành chuyển qua Gemini AI để phân tích...`,
       "SUCCESS"
     );
     pushWebNotification(
-      `📸 Đã chụp xong cây cuối cùng (${lastTrayName})! Đang truyền dữ liệu ${capturedImages.length} ảnh đến Gemini AI để phân tích...`,
+      `📸 Đã chụp xong cây cuối cùng (${lastTrayName})! Đang chuyển qua gửi dữ liệu ${capturedImages.length} ảnh đến Gemini AI...`,
       "AI_ANALYSIS"
     );
+
+    return res.json({
+      success: true,
+      message: `Đã chụp xong cây cuối cùng (${lastTrayName})!`,
+      capturedImages,
+    });
+  } catch (err) {
+    console.error(`[AI Fertilize Scan Error] ${err.message}`);
+    res.status(500).json({ success: false, error: err.message, capturedImages: [] });
+  }
+});
+
+// 2. ENDPOINT GIẢI QUYẾT BƯỚC 2: GỬI NỘI DUNG ẢNH ĐÃ CHỤP LÊN GEMINI AI ĐỂ PHÂN TÍCH
+app.post("/api/ai/fertilize-analysis", async (req, res) => {
+  try {
+    req.setTimeout(180000);
+    res.setTimeout(180000);
+    console.log("[AI Fertilize Analysis] Bắt đầu gửi dữ liệu lên Gemini AI...");
+
+    const plants = readJson("plants.json", []);
+    const fertilizers = readJson("fertilizers.json", []);
+
+    const plantedPointIndexes = [...new Set(
+      plants
+        .filter((plant) => plant && plant.location)
+        .map((plant) => getPointIndexFromLocation(plant.location))
+        .filter((pointIdx) => Number.isInteger(pointIdx) && pointIdx >= 0 && pointIdx <= 5)
+    )].sort((a, b) => a - b);
+
+    let capturedImages = (req.body && Array.isArray(req.body.capturedImages)) ? req.body.capturedImages : [];
+    const imageParts = [];
+
+    // Nếu không truyền capturedImages từ bước 1, thực hiện quét nhanh lại nếu cần
+    if (capturedImages.length === 0) {
+      for (const pointIdx of plantedPointIndexes) {
+        const trayName = `Khay ${String(pointIdx + 1).padStart(2, "0")}`;
+        let capPath = null;
+        try { capPath = await captureImage(true); } catch (e) {}
+        if (capPath && fs.existsSync(capPath)) {
+          const imgBuf = fs.readFileSync(capPath);
+          capturedImages.push({
+            trayName,
+            imageBase64: `data:image/jpeg;base64,${imgBuf.toString("base64")}`,
+            filePath: path.relative(process.cwd(), capPath),
+            capPath,
+          });
+        }
+      }
+    }
+
+    for (const item of capturedImages) {
+      let sendBuf = null;
+      if (item.capPath && fs.existsSync(item.capPath)) {
+        sendBuf = fs.readFileSync(item.capPath);
+      } else if (item.imageBase64) {
+        const base64Data = item.imageBase64.replace(/^data:image\/\w+;base64,/, "");
+        sendBuf = Buffer.from(base64Data, "base64");
+      }
+
+      if (sendBuf) {
+        try {
+          const sharp = require("sharp");
+          sendBuf = await sharp(sendBuf)
+            .resize(800, 600, { fit: "inside", withoutEnlargement: true })
+            .jpeg({ quality: 80 })
+            .toBuffer();
+        } catch (sErr) {}
+
+        imageParts.push({
+          inlineData: {
+            mimeType: "image/jpeg",
+            data: sendBuf.toString("base64"),
+          },
+        });
+      }
+    }
 
     // 3. KIỂM TRẢ GEMINI API KEY
     const keys = getKeysList();

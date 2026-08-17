@@ -166,12 +166,36 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
     setCapturedImages([]);
     setAiAnalysisDone(false);
     setAiOverallAssessment("");
-    setAiStatusMsg(`🤖 Đang điều khiển di chuyển camera đến các vị trí cây trong Vườn...`);
+    setAiStatusMsg(`🤖 Đang di chuyển robot camera quét & chụp ảnh các cây trồng...`);
 
     try {
+      // 1. Quét robot & chụp ảnh cho đến cây cuối cùng
+      const scanRes = await fetch("/api/ai/fertilize-scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const scanText = await scanRes.text();
+      let scanData: any = {};
+      try { scanData = JSON.parse(scanText); } catch {
+        scanData = { success: false, error: scanText || "Lỗi di chuyển robot và chụp ảnh." };
+      }
+
+      if (!scanRes.ok || !scanData.success) {
+        alert(scanData.error || "Không thể chụp ảnh thực tế từ robot.");
+        return;
+      }
+
+      if (scanData.capturedImages && Array.isArray(scanData.capturedImages)) {
+        setCapturedImages(scanData.capturedImages);
+      }
+
+      setAiStatusMsg(`📸 Đã chụp xong cây cuối cùng! Đang chuyển qua gửi dữ liệu lên Gemini AI để phân tích...`);
+
+      // 2. Chụp xong cây cuối cùng mới chuyển qua /api/ai/fertilize-analysis để phân tích
       const res = await fetch("/api/ai/fertilize-analysis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ capturedImages: scanData.capturedImages || [] }),
       });
 
       const text = await res.text();
@@ -185,8 +209,6 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
       if (res.ok && data.success && Array.isArray(data.recommendations)) {
         if (data.capturedImages && Array.isArray(data.capturedImages)) {
           setCapturedImages(data.capturedImages);
-        } else {
-          setCapturedImages([]);
         }
 
         if (data.overallAssessment) {
