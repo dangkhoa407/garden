@@ -466,8 +466,8 @@ const CAMERA_BRIGHTNESS = 105;
 const CAMERA_CONTRAST = 135;
 const CAMERA_SATURATION = 125;
 const CAMERA_SHARPNESS = 140;
-const WARMUP_FRAMES = 5;
-const CHECK_FRAMES = 3;
+const WARMUP_FRAMES = 2;
+const CHECK_FRAMES = 1;
 const TARGET_BRIGHTNESS = 110;
 const JPEG_QUALITY = 85;
 
@@ -476,21 +476,23 @@ const execFileAsync = promisify(execFile);
 
 async function setCameraControl(name, value) {
   try {
-    await execFileAsync("v4l2-ctl", ["-d", CAMERA_DEVICE, `--set-ctrl=${name}=${value}`], { timeout: 5000 });
-    console.log(`Camera ${name}: ${value}`);
-  } catch {
-    console.log(`Không chỉnh được ${name}, bỏ qua.`);
-  }
+    await execFileAsync("v4l2-ctl", ["-d", CAMERA_DEVICE, `--set-ctrl=${name}=${value}`], { timeout: 2000 });
+  } catch {}
 }
 
+let cameraConfigured = false;
 async function configureCamera() {
+  if (cameraConfigured) return;
   console.log("Đang thiết lập camera...");
-  await setCameraControl("brightness", CAMERA_BRIGHTNESS);
-  await setCameraControl("contrast", CAMERA_CONTRAST);
-  await setCameraControl("saturation", CAMERA_SATURATION);
-  await setCameraControl("sharpness", CAMERA_SHARPNESS);
-  await setCameraControl("white_balance_automatic", 1);
-  await setCameraControl("power_line_frequency", 1);
+  await Promise.all([
+    setCameraControl("brightness", CAMERA_BRIGHTNESS),
+    setCameraControl("contrast", CAMERA_CONTRAST),
+    setCameraControl("saturation", CAMERA_SATURATION),
+    setCameraControl("sharpness", CAMERA_SHARPNESS),
+    setCameraControl("white_balance_automatic", 1),
+    setCameraControl("power_line_frequency", 1),
+  ]).catch(() => {});
+  cameraConfigured = true;
 }
 
 async function captureFrames(directory) {
