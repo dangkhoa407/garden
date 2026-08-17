@@ -3865,13 +3865,13 @@ app.post("/api/ai/fertilize-analysis", async (req, res) => {
     for (const pointIdx of plantedPointIndexes) {
       const trayName = `Khay ${String(pointIdx + 1).padStart(2, "0")}`;
 
-      // A. Gửi lệnh di chuyển vị trí robot đến điểm khay cây và ĐỜI ARDUINO XÁC NHẬN "MOVED:n"
-      const moveWait = waitForArduinoMove(pointIdx, 25000);
+      // A. Gửi lệnh di chuyển vị trí robot đến điểm khay cây và ĐỜI ARDUINO XÁC NHẬN "MOVED:n" (timeout 10s)
+      const moveWait = waitForArduinoMove(pointIdx, 10000);
       try {
         await sendDirectCommandToArduino(`P${pointIdx + 1}`);
       } catch (moveErr) {
         const waiter = pendingMoveResolvers.get(pointIdx);
-        if (waiter) waiter.reject(moveErr);
+        if (waiter) waiter.resolve();
         console.warn(`[AI Fertilize Move Warning ${trayName}] ${moveErr.message}`);
       }
       await moveWait.catch((mErr) => console.warn(`[Move Wait ${trayName}] ${mErr.message}`));
