@@ -1337,6 +1337,9 @@ async function getOrInitArduinoSerialPort() {
             console.error(`[Arduino Port Error] ${err.message}`);
           });
 
+          // Chờ 2s để xả hết thời gian Reset Bootloader của Arduino (nếu có)
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+
           activeSerialPort.write("NODE_READY\n");
 
           parser.on("data", async (rawLine) => {
@@ -1411,7 +1414,7 @@ async function getOrInitArduinoSerialPort() {
                 return;
               }
 
-              const movedMatch = /^MOVED:(\d+)$/i.exec(line);
+              const movedMatch = /MOVED:(\d+)/i.exec(line);
               if (movedMatch) {
                 const movedIndex = Number(movedMatch[1]);
                 const waiter = pendingMoveResolvers.get(movedIndex);
@@ -1790,11 +1793,21 @@ async function homingFirst(label = "Hệ thống") {
   addSystemLog("HOMING", `[${label}] 🏠 Đang đưa robot về vị trí gốc (Homing) trước khi bắt đầu...`, "PROCESS");
   pushWebNotification(`🏠 [${label}] Đang đưa robot về Home trước khi bắt đầu...`, "PROCESS");
 
-  const homingWait = waitForArduinoHoming(35000);
-  try {
-    await sendDirectCommandToArduino("HOME");
-  } catch (e) {
-    console.warn(`[Homing Send Warning] ${e.message}`);
+  const homingWait = waitForArduinoHoming(15000);
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      console.log(`[Arduino] Gửi lệnh HOME (lần ${attempt})...`);
+      await sendDirectCommandToArduino("HOME");
+    } catch (e) {
+      console.warn(`[Homing Send Warning] ${e.message}`);
+    }
+
+    const startAck = await Promise.race([
+      homingWait,
+      new Promise((res) => setTimeout(() => res(false), 700)),
+    ]);
+    if (startAck) break;
   }
 
   const homingOk = await homingWait;
@@ -3841,19 +3854,9 @@ app.post("/api/ai/fertilize-analysis", async (req, res) => {
     addSystemLog("AI_FERTILIZE", `Bắt đầu quét AI phân tích dinh dưỡng tại ${plantedPointIndexes.length} vị trí có cây: ${plantedLabels.join(", ")}`, "PROCESS");
     pushWebNotification(`🌿 Bắt đầu di chuyển camera quét & phân tích Gemini AI tại ${plantedPointIndexes.length} vị trí có cây (${plantedLabels.join(", ")})...`, "AI_ANALYSIS");
 
-    // 0. ĐƯA ROBOT VỀ VỊ TRÍ GỐC (HOMING) TRƯỚC KHI QUÉT VÀ CHỜ HOMING OK
-    addSystemLog("AI_FERTILIZE", "🏠 Đang đưa robot về vị trí gốc (Homing) trước khi bắt đầu quét dinh dưỡng...", "PROCESS");
-    pushWebNotification("🏠 Đang đưa robot về vị trí gốc (Homing) trước khi quét phân tích...", "PROCESS");
-    const homeWait = waitForArduinoHoming(35000);
-    try {
-      await sendDirectCommandToArduino("HOME");
-    } catch (homeErr) {
-      if (pendingHomingResolver) pendingHomingResolver.resolve();
-      console.warn(`[AI Fertilize Homing Warning] ${homeErr.message}`);
-    }
-    await homeWait.catch(() => {});
-    // Chờ thêm 500ms để robot hoàn toàn đứng yên tại gốc trước khi bắt đầu di chuyển qua các điểm cây
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    // 0. ĐƯA ROBOT VỀ VỊ TRÍ GỐC (HOMING) LẬP TỨC TRƯỚC KHI QUÉT VÀ CHỜ HOMING OK
+    await homingFirst("Tưới phân AI");
+    await new Promise((resolve) => setTimeout(resolve, 200));
 
     // 1. DI CHUYỂN ROBOT QUA CÁC VỊ TRÍ CÓ CÂY & CHỤP ẢNH REAL CHO TẤT CẢ CÂY
     const imageParts = [];
@@ -5139,4 +5142,5 @@ initScheduleRunner();
 app.listen(PORT, () => {
   console.log(`✅ GrowHub Node.js Express Backend running on http://localhost:${PORT}`);
   console.log(`📁 Persistent JSON database path: ${dataDir}`);
+  getOrInitArduinoSerialPort().catch((e) => console.warn(`[Arduino Init Startup] ${e.message}`));
 });
