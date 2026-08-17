@@ -3824,6 +3824,96 @@ app.get("/api/pictures/all", (req, res) => {
   }
 });
 
+// ENDPOINT HỖ TRỢ BƯỚC 1: HOMING ROBOT TRƯỚC KHI QUÉT CÁC KHAY
+app.post("/api/ai/scan-homing", async (req, res) => {
+  try {
+    req.setTimeout(30000);
+    res.setTimeout(30000);
+    await homingFirst("Tưới phân AI");
+    res.json({ success: true, message: "Homing hoàn tất" });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ENDPOINT HỖ TRỢ BƯỚC 1: QUÉT & CHỤP ẢNH ĐƠN LẺ TỪNG KHAY (MỖI CALL ~4S - KHÔNG BAO GIỜ TIMEOUT PROXY)
+app.post("/api/ai/scan-single-tray", async (req, res) => {
+  try {
+    req.setTimeout(30000);
+    res.setTimeout(30000);
+    const { pointIdx, totalTrays, currentStep } = req.body || {};
+    if (!Number.isInteger(pointIdx) || pointIdx < 0 || pointIdx > 5) {
+      return res.status(400).json({ success: false, error: "Vị trí khay không hợp lệ (0-5)" });
+    }
+
+    const trayName = `Khay ${String(pointIdx + 1).padStart(2, "0")}`;
+
+    // A. Gửi lệnh di chuyển vị trí robot đến điểm khay cây
+    const moveWait = waitForArduinoMove(pointIdx, 10000);
+    try {
+      await sendDirectCommandToArduino(`P${pointIdx + 1}`);
+    } catch (moveErr) {
+      const waiter = pendingMoveResolvers.get(pointIdx);
+      if (waiter) waiter.resolve();
+    }
+    await moveWait.catch(() => {});
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    // B. Bật LED Flash
+    try {
+      await sendDirectCommandToArduino("LED_ON");
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    } catch (lErr) {}
+
+    // C. Chụp ảnh
+    let capPath = null;
+    for (let capAttempt = 1; capAttempt <= 2; capAttempt++) {
+      try {
+        if (capAttempt > 1) await releaseCameraBeforeCapture();
+        capPath = await captureImage(true);
+        if (capPath && fs.existsSync(capPath)) break;
+      } catch (capErr) {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      }
+    }
+
+    // D. Tắt LED Flash
+    try {
+      await sendDirectCommandToArduino("LED_OFF");
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    } catch (lErr) {}
+
+    if (!capPath || !fs.existsSync(capPath)) {
+      const errorMsg = `Lỗi chụp ảnh từ USB Camera tại ${trayName}. Vui lòng kiểm tra kết nối camera!`;
+      addSystemLog("AI_FERTILIZE", `❌ ${errorMsg}`, "ALERT");
+      pushWebNotification(`❌ ${errorMsg}`, "ERROR");
+      return res.json({ success: false, error: errorMsg });
+    }
+
+    const imgBuf = fs.readFileSync(capPath);
+    const dataUrl = `data:image/jpeg;base64,${imgBuf.toString("base64")}`;
+
+    const capturedImage = {
+      trayName,
+      imageBase64: dataUrl,
+      filePath: path.relative(process.cwd(), capPath),
+      capPath,
+    };
+
+    addSystemLog("AI_FERTILIZE", `[Camera Log] Đã chụp & lưu ảnh thực tế từ camera vào pictures/ cho ${trayName} (${path.basename(capPath)})`, "SUCCESS");
+    pushWebNotification(`📸 ${trayName}: Đã chụp ảnh thành công! (${currentStep || pointIdx + 1}/${totalTrays || 6} vị trí)`, "SUCCESS");
+
+    return res.json({
+      success: true,
+      capturedImage,
+      trayName,
+    });
+  } catch (err) {
+    console.error(`[Scan Single Tray Error] ${err.message}`);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // 1. ENDPOINT GIẢI QUYẾT BƯỚC 1: QUÉT ROBOT VÀ CHỤP ẢNH TẤT CẢ KHAY CÂY (ĐẾN CÂY CUỐI CÙNG)
 app.post("/api/ai/fertilize-scan", async (req, res) => {
   try {

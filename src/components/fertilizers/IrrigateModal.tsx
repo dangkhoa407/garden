@@ -166,36 +166,71 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
     setCapturedImages([]);
     setAiAnalysisDone(false);
     setAiOverallAssessment("");
-    setAiStatusMsg(`🤖 Đang di chuyển robot camera quét & chụp ảnh các cây trồng...`);
+    setAiStatusMsg(`🤖 Đang kiểm tra danh sách các vị trí khay cây...`);
 
     try {
-      // 1. Quét robot & chụp ảnh cho đến cây cuối cùng
-      const scanRes = await fetch("/api/ai/fertilize-scan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
-      const scanText = await scanRes.text();
-      let scanData: any = {};
-      try { scanData = JSON.parse(scanText); } catch {
-        scanData = { success: false, error: scanText || "Lỗi di chuyển robot và chụp ảnh." };
-      }
+      // 1. Lấy danh sách cây trong /plants
+      const plantsRes = await fetch("/api/plants");
+      const plantsData = await plantsRes.json();
+      const plantsList = Array.isArray(plantsData) ? plantsData : (plantsData.plants || []);
 
-      if (!scanRes.ok || !scanData.success) {
-        alert(scanData.error || "Không thể chụp ảnh thực tế từ robot.");
+      const pointIndexes: number[] = Array.from(new Set(
+        plantsList
+          .filter((p: any) => p && p.location)
+          .map((p: any) => {
+            const m = String(p.location).match(/\d+/);
+            return m ? parseInt(m[0], 10) - 1 : -1;
+          })
+          .filter((idx: number) => idx >= 0 && idx <= 5)
+      )).sort((a: any, b: any) => a - b);
+
+      if (pointIndexes.length === 0) {
+        alert("Chưa có vị trí cây nào được gieo trồng trong Vườn. Vui lòng thêm cây trước!");
+        setIsAnalyzingAi(false);
         return;
       }
 
-      if (scanData.capturedImages && Array.isArray(scanData.capturedImages)) {
-        setCapturedImages(scanData.capturedImages);
+      // 2. Homing robot trước khi di chuyển
+      setAiStatusMsg(`🏠 Đang đưa robot về vị trí gốc (Homing)...`);
+      await fetch("/api/ai/scan-homing", { method: "POST" }).catch(() => {});
+
+      // 3. Lần lượt gửi request quét đơn lẻ từng khay một (mỗi request chỉ mất 3-4s, KHÔNG BAO GIỜ TIMEOUT)
+      const collectedImages: any[] = [];
+      const total = pointIndexes.length;
+
+      for (let i = 0; i < total; i++) {
+        const pointIdx = pointIndexes[i];
+        const trayLabel = `Khay ${String(pointIdx + 1).padStart(2, "0")}`;
+        setAiStatusMsg(`📸 Đang di chuyển & chụp ảnh ${trayLabel} (${i + 1}/${total})...`);
+
+        const trayRes = await fetch("/api/ai/scan-single-tray", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pointIdx, totalTrays: total, currentStep: i + 1 }),
+        });
+
+        const trayText = await trayRes.text();
+        let trayData: any = {};
+        try { trayData = JSON.parse(trayText); } catch {
+          trayData = { success: false, error: trayText || `Lỗi di chuyển/chụp tại ${trayLabel}` };
+        }
+
+        if (!trayRes.ok || !trayData.success || !trayData.capturedImage) {
+          throw new Error(trayData.error || `Lỗi chụp ảnh tại ${trayLabel}`);
+        }
+
+        collectedImages.push(trayData.capturedImage);
+        setCapturedImages([...collectedImages]);
       }
 
-      setAiStatusMsg(`📸 Đã chụp xong cây cuối cùng! Đang chuyển qua gửi dữ liệu lên Gemini AI để phân tích...`);
+      // 4. CHỤP XONG CÂY CUỐI CÙNG! Chuyển qua gửi toàn bộ dữ liệu ảnh lên Gemini AI
+      const lastTrayLabel = `Khay ${String(pointIndexes[total - 1] + 1).padStart(2, "0")}`;
+      setAiStatusMsg(`📸 Đã chụp xong cây cuối cùng (${lastTrayLabel})! Đang gửi dữ liệu lên Gemini AI để phân tích...`);
 
-      // 2. Chụp xong cây cuối cùng mới chuyển qua /api/ai/fertilize-analysis để phân tích
       const res = await fetch("/api/ai/fertilize-analysis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ capturedImages: scanData.capturedImages || [] }),
+        body: JSON.stringify({ capturedImages: collectedImages }),
       });
 
       const text = await res.text();
