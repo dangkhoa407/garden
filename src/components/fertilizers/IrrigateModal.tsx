@@ -174,7 +174,7 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
       const plantsData = await plantsRes.json();
       const plantsList = Array.isArray(plantsData) ? plantsData : (plantsData.plants || []);
 
-      const pointIndexes: number[] = Array.from(new Set(
+      const pointIndexes: number[] = Array.from(new Set<number>(
         plantsList
           .filter((p: any) => p && p.location)
           .map((p: any) => {
@@ -182,7 +182,7 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
             return m ? parseInt(m[0], 10) - 1 : -1;
           })
           .filter((idx: number) => idx >= 0 && idx <= 5)
-      )).sort((a: any, b: any) => a - b);
+      )).sort((a: number, b: number) => a - b);
 
       if (pointIndexes.length === 0) {
         alert("Chưa có vị trí cây nào được gieo trồng trong Vườn. Vui lòng thêm cây trước!");
