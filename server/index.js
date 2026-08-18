@@ -2916,7 +2916,29 @@ app.post("/api/esp32/roof", async (req, res) => {
   }
 
   addSystemLog("ESP32_ROOF", `Gửi lệnh rèm: ${action}`, "SENT");
-  const sent = await sendDirectCommandToEsp32(action);
+
+  // Mirror đúng pattern của STATUS polling:
+  // Nếu port đang mở → write trực tiếp (KHÔNG qua sendDirectCommandToEsp32 để tránh lỗi require)
+  // Nếu port chưa mở → fallback sang sendDirectCommandToEsp32 để tự dò cổng
+  let sent = false;
+  try {
+    if (activeEsp32Port && activeEsp32Port.isOpen) {
+      activeEsp32Port.write(`${action}\n`);
+      sent = true;
+      console.log(`[ESP32 Roof] Direct write: ${action}`);
+    } else {
+      console.log(`[ESP32 Roof] Port chưa mở, thử sendDirectCommandToEsp32: ${action}`);
+      sent = await sendDirectCommandToEsp32(action);
+    }
+  } catch (err) {
+    console.warn(`[ESP32 Roof Error] ${err.message} — thử fallback`);
+    try {
+      sent = await sendDirectCommandToEsp32(action);
+    } catch (e2) {
+      console.warn(`[ESP32 Roof Fallback Error] ${e2.message}`);
+    }
+  }
+
   return res.json({
     success: true,
     action,
