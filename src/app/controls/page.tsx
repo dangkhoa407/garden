@@ -285,10 +285,12 @@ export default function ControlsPage() {
       ]);
 
       // Cập nhật trạng thái cuối sau khi server xác nhận
-      if (action === "SUN CLOSE") setSunStatus("Đã che");
-      else if (action === "SUN OPEN") setSunStatus("Đã mở");
-      else if (action === "RAIN CLOSE") setRainStatus("Đã che");
-      else if (action === "RAIN OPEN") setRainStatus("Đã mở");
+      // Kéo Che → SUN OPEN / RAIN OPEN → "Đã che"
+      // Thu Lại → SUN CLOSE / RAIN CLOSE → "Đã mở"
+      if (action === "SUN OPEN") setSunStatus("Đã che");
+      else if (action === "SUN CLOSE") setSunStatus("Đã mở");
+      else if (action === "RAIN OPEN") setRainStatus("Đã che");
+      else if (action === "RAIN CLOSE") setRainStatus("Đã mở");
     } catch (err) {
       setActiveToast(`Lỗi gửi lệnh rèm [${action}]: Không kết nối được server`);
       // Reset về null nếu lỗi
@@ -656,11 +658,11 @@ export default function ControlsPage() {
             <div className="grid grid-cols-2 gap-3">
               <button
                 id="btn-sun-close"
-                onClick={() => sendRoofCommand("SUN CLOSE")}
+                onClick={() => sendRoofCommand("SUN OPEN")}
                 disabled={sendingRoof !== null}
                 className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm shadow-sm transition-all active:scale-[0.97] disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {sendingRoof === "SUN CLOSE" ? (
+                {sendingRoof === "SUN OPEN" ? (
                   <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
                 ) : (
                   <span className="material-symbols-outlined text-lg">dark_mode</span>
@@ -669,11 +671,11 @@ export default function ControlsPage() {
               </button>
               <button
                 id="btn-sun-open"
-                onClick={() => sendRoofCommand("SUN OPEN")}
+                onClick={() => sendRoofCommand("SUN CLOSE")}
                 disabled={sendingRoof !== null}
                 className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-white hover:bg-amber-50 text-amber-700 border border-amber-300 font-bold text-sm shadow-sm transition-all active:scale-[0.97] disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {sendingRoof === "SUN OPEN" ? (
+                {sendingRoof === "SUN CLOSE" ? (
                   <span className="w-4 h-4 rounded-full border-2 border-amber-500 border-t-transparent animate-spin" />
                 ) : (
                   <span className="material-symbols-outlined text-lg">light_mode</span>
@@ -709,11 +711,11 @@ export default function ControlsPage() {
             <div className="grid grid-cols-2 gap-3">
               <button
                 id="btn-rain-close"
-                onClick={() => sendRoofCommand("RAIN CLOSE")}
+                onClick={() => sendRoofCommand("RAIN OPEN")}
                 disabled={sendingRoof !== null}
                 className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-bold text-sm shadow-sm transition-all active:scale-[0.97] disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {sendingRoof === "RAIN CLOSE" ? (
+                {sendingRoof === "RAIN OPEN" ? (
                   <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
                 ) : (
                   <span className="material-symbols-outlined text-lg">umbrella</span>
@@ -722,11 +724,11 @@ export default function ControlsPage() {
               </button>
               <button
                 id="btn-rain-open"
-                onClick={() => sendRoofCommand("RAIN OPEN")}
+                onClick={() => sendRoofCommand("RAIN CLOSE")}
                 disabled={sendingRoof !== null}
                 className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-white hover:bg-sky-50 text-sky-700 border border-sky-300 font-bold text-sm shadow-sm transition-all active:scale-[0.97] disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {sendingRoof === "RAIN OPEN" ? (
+                {sendingRoof === "RAIN CLOSE" ? (
                   <span className="w-4 h-4 rounded-full border-2 border-sky-500 border-t-transparent animate-spin" />
                 ) : (
                   <span className="material-symbols-outlined text-lg">cloud_off</span>
