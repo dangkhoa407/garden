@@ -2908,6 +2908,24 @@ app.post("/api/esp32/dose", async (req, res) => {
   });
 });
 
+app.post("/api/esp32/roof", async (req, res) => {
+  const { action } = req.body;
+  const VALID_ROOF_CMDS = ["RAIN OPEN", "RAIN CLOSE", "SUN OPEN", "SUN CLOSE", "STOP ROOF"];
+  if (!action || !VALID_ROOF_CMDS.includes(action)) {
+    return res.status(400).json({ success: false, error: `Lệnh rèm không hợp lệ: ${action}. Phải là một trong: ${VALID_ROOF_CMDS.join(", ")}` });
+  }
+
+  addSystemLog("ESP32_ROOF", `Gửi lệnh rèm: ${action}`, "SENT");
+  const sent = await sendDirectCommandToEsp32(action);
+  return res.json({
+    success: true,
+    action,
+    sentToHardware: sent,
+    timestamp: new Date().toLocaleTimeString("vi-VN"),
+    message: sent ? `Đã gửi lệnh "${action}" xuống ESP32` : `Lệnh "${action}" đã ghi nhận (ESP32 chưa kết nối)`,
+  });
+});
+
 // =========================================================
 // REAL USB CAMERA API ENDPOINTS (/dev/video0) - 25-30 FPS ULTRA SMOOTH STREAM ENGINE
 // =========================================================

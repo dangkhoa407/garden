@@ -33,6 +33,9 @@ interface SystemLog {
 export default function ControlsPage() {
   const { controls, updateControls } = useGarden();
   const [sendingCmd, setSendingCmd] = useState<string | null>(null);
+  const [sendingRoof, setSendingRoof] = useState<string | null>(null);
+  const [sunStatus, setSunStatus] = useState<"Đã che" | "Đang chạy" | "Đã mở" | null>(null);
+  const [rainStatus, setRainStatus] = useState<"Đã che" | "Đang chạy" | "Đã mở" | null>(null);
   const [activeToast, setActiveToast] = useState<string | null>(null);
   const [logs, setLogs] = useState<SystemLog[]>([]);
   const [logFilter, setLogFilter] = useState<"ALL" | "ERRORS" | "AI" | "SERIAL">("ALL");
@@ -252,6 +255,47 @@ export default function ControlsPage() {
       setActiveToast("Lỗi kiểm tra: Không thể phản hồi từ server Backend!");
     } finally {
       setCheckingStatus(false);
+    }
+  };
+
+  const sendRoofCommand = async (action: string) => {
+    setSendingRoof(action);
+    setActiveToast(null);
+
+    // Cập nhật trạng thái "Đang chạy" ngay khi bấm
+    if (action === "SUN CLOSE" || action === "SUN OPEN") setSunStatus("Đang chạy");
+    if (action === "RAIN CLOSE" || action === "RAIN OPEN") setRainStatus("Đang chạy");
+
+    try {
+      const res = await fetch("/api/esp32/roof", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const data = await res.json();
+      setActiveToast(data.message || `Đã gửi lệnh: ${action}`);
+      setLogs((prev) => [
+        {
+          timestamp: data.timestamp || new Date().toLocaleTimeString("vi-VN"),
+          command: "ESP32_ROOF",
+          label: `Lệnh rèm: ${action} — ${data.sentToHardware ? "✅ Gửi thành công" : "⚠️ ESP32 chưa kết nối"}`,
+          status: data.sentToHardware ? "SENT" : "WARNING",
+        },
+        ...prev,
+      ]);
+
+      // Cập nhật trạng thái cuối sau khi server xác nhận
+      if (action === "SUN CLOSE") setSunStatus("Đã che");
+      else if (action === "SUN OPEN") setSunStatus("Đã mở");
+      else if (action === "RAIN CLOSE") setRainStatus("Đã che");
+      else if (action === "RAIN OPEN") setRainStatus("Đã mở");
+    } catch (err) {
+      setActiveToast(`Lỗi gửi lệnh rèm [${action}]: Không kết nối được server`);
+      // Reset về null nếu lỗi
+      if (action === "SUN CLOSE" || action === "SUN OPEN") setSunStatus(null);
+      if (action === "RAIN CLOSE" || action === "RAIN OPEN") setRainStatus(null);
+    } finally {
+      setSendingRoof(null);
     }
   };
 
@@ -570,6 +614,127 @@ export default function ControlsPage() {
               Đưa bộ phân theo dõi vườn rau về vị trí gốc
             </p>
           </button>
+        </div>
+      </section>
+
+      {/* === ĐIỀU KHIỂN RÈM CHE NẮNG & MƯA === */}
+      <section className="bg-surface-container-lowest rounded-2xl p-lg border border-sky-200/40 shadow-md">
+        <div className="flex items-center gap-3 mb-md pb-sm border-b border-outline-variant/15">
+          <div className="w-10 h-10 rounded-xl bg-sky-500/10 flex items-center justify-center text-sky-600">
+            <span className="material-symbols-outlined text-2xl">blinds</span>
+          </div>
+          <div>
+            <h2 className="font-headline-md text-headline-md text-on-surface font-bold">Điều Khiển Rèm Che</h2>
+            <p className="text-xs text-on-surface-variant mt-0.5">Gửi lệnh trực tiếp đến ESP32 — Rèm Nắng &amp; Rèm Mưa</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-lg">
+          {/* RÈM NẮNG */}
+          <div className="p-4 bg-amber-50/60 border border-amber-200/80 rounded-2xl space-y-3">
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-2xl text-amber-600">wb_sunny</span>
+                <span className="font-bold text-amber-900 text-base">Rèm Che Nắng</span>
+              </div>
+              {/* Badge trạng thái rèm nắng */}
+              {sunStatus && (
+                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${
+                  sunStatus === "Đang chạy"
+                    ? "bg-amber-200 text-amber-800"
+                    : sunStatus === "Đã che"
+                    ? "bg-orange-100 text-orange-800"
+                    : "bg-emerald-100 text-emerald-800"
+                }`}>
+                  {sunStatus === "Đang chạy" && <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />}
+                  {sunStatus === "Đã che" && <span className="w-2 h-2 rounded-full bg-orange-500" />}
+                  {sunStatus === "Đã mở" && <span className="w-2 h-2 rounded-full bg-emerald-500" />}
+                  {sunStatus}
+                </span>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                id="btn-sun-close"
+                onClick={() => sendRoofCommand("SUN CLOSE")}
+                disabled={sendingRoof !== null}
+                className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm shadow-sm transition-all active:scale-[0.97] disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {sendingRoof === "SUN CLOSE" ? (
+                  <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                ) : (
+                  <span className="material-symbols-outlined text-lg">dark_mode</span>
+                )}
+                Kéo Che
+              </button>
+              <button
+                id="btn-sun-open"
+                onClick={() => sendRoofCommand("SUN OPEN")}
+                disabled={sendingRoof !== null}
+                className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-white hover:bg-amber-50 text-amber-700 border border-amber-300 font-bold text-sm shadow-sm transition-all active:scale-[0.97] disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {sendingRoof === "SUN OPEN" ? (
+                  <span className="w-4 h-4 rounded-full border-2 border-amber-500 border-t-transparent animate-spin" />
+                ) : (
+                  <span className="material-symbols-outlined text-lg">light_mode</span>
+                )}
+                Thu Lại
+              </button>
+            </div>
+          </div>
+
+          {/* RÈM MƯA */}
+          <div className="p-4 bg-sky-50/60 border border-sky-200/80 rounded-2xl space-y-3">
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-2xl text-sky-600">water_drop</span>
+                <span className="font-bold text-sky-900 text-base">Rèm Che Mưa</span>
+              </div>
+              {/* Badge trạng thái rèm mưa */}
+              {rainStatus && (
+                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${
+                  rainStatus === "Đang chạy"
+                    ? "bg-sky-200 text-sky-800"
+                    : rainStatus === "Đã che"
+                    ? "bg-blue-100 text-blue-800"
+                    : "bg-emerald-100 text-emerald-800"
+                }`}>
+                  {rainStatus === "Đang chạy" && <span className="w-2 h-2 rounded-full bg-sky-500 animate-ping" />}
+                  {rainStatus === "Đã che" && <span className="w-2 h-2 rounded-full bg-blue-500" />}
+                  {rainStatus === "Đã mở" && <span className="w-2 h-2 rounded-full bg-emerald-500" />}
+                  {rainStatus}
+                </span>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                id="btn-rain-close"
+                onClick={() => sendRoofCommand("RAIN CLOSE")}
+                disabled={sendingRoof !== null}
+                className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-bold text-sm shadow-sm transition-all active:scale-[0.97] disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {sendingRoof === "RAIN CLOSE" ? (
+                  <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                ) : (
+                  <span className="material-symbols-outlined text-lg">umbrella</span>
+                )}
+                Kéo Che
+              </button>
+              <button
+                id="btn-rain-open"
+                onClick={() => sendRoofCommand("RAIN OPEN")}
+                disabled={sendingRoof !== null}
+                className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-white hover:bg-sky-50 text-sky-700 border border-sky-300 font-bold text-sm shadow-sm transition-all active:scale-[0.97] disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {sendingRoof === "RAIN OPEN" ? (
+                  <span className="w-4 h-4 rounded-full border-2 border-sky-500 border-t-transparent animate-spin" />
+                ) : (
+                  <span className="material-symbols-outlined text-lg">cloud_off</span>
+                )}
+                Thu Lại
+              </button>
+            </div>
+          </div>
         </div>
       </section>
 
