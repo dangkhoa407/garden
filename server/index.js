@@ -2698,6 +2698,13 @@ let lastEsp32Sensors = {
   lastUpdate: new Date().toLocaleTimeString("vi-VN"),
 };
 
+// Trạng thái rèm nhận từ ESP32 (cập nhật khi nhận DONE message)
+// sun/rain: null | "che" | "mo" | "chay"
+let esp32RoofStatus = {
+  sun: null,
+  rain: null,
+};
+
 function parseEsp32Moisture(soil1Raw, soil2Raw) {
   // Quy định độ ẩm của 2 cảm biến:
   // Mức 3171 là 0%, mức 1307 là 100%
@@ -2781,7 +2788,6 @@ async function sendDirectCommandToEsp32(cmdString) {
           });
 
           const { pct1, pct2, avg } = parseEsp32Moisture(s1, s2);
-          // Đảo ngược tỉ lệ Cường độ sáng (Quang trở LDR: ánh sáng mạnh -> Voltage giảm -> lightRaw giảm => Cường độ sáng % tăng)
           const lightPct = typeof light === "number" ? Math.min(100, Math.max(0, Math.round(((4095 - light) / 4095) * 100))) : undefined;
 
           lastEsp32Sensors = {
@@ -2801,6 +2807,19 @@ async function sendDirectCommandToEsp32(cmdString) {
             lastUpdate: new Date().toLocaleTimeString("vi-VN"),
           };
         }
+
+        // Cập nhật trạng thái rèm khi ESP32 báo hoàn thành
+        // DONE,SUN_OPENED  = rèm nắng đã kéo che xong  (Kéo Che → SUN OPEN → SUN_OPENED)
+        // DONE,SUN_CLOSED  = rèm nắng đã thu lại xong  (Thu Lại → SUN CLOSE → SUN_CLOSED)
+        // DONE,RAIN_OPENED = rèm mưa đã kéo che xong
+        // DONE,RAIN_CLOSED = rèm mưa đã thu lại xong
+        if (line === "DONE,SUN_OPENED")  esp32RoofStatus.sun  = "che";
+        if (line === "DONE,SUN_CLOSED")  esp32RoofStatus.sun  = "mo";
+        if (line === "DONE,RAIN_OPENED") esp32RoofStatus.rain = "che";
+        if (line === "DONE,RAIN_CLOSED") esp32RoofStatus.rain = "mo";
+        if (line === "ACTION,SUN_CLOSING" || line === "ACTION,SUN_OPENING")   esp32RoofStatus.sun  = "chay";
+        if (line === "ACTION,RAIN_CLOSING" || line === "ACTION,RAIN_OPENING") esp32RoofStatus.rain = "chay";
+        if (line === "DONE,ROOF_STOPPED") { esp32RoofStatus.sun = null; esp32RoofStatus.rain = null; }
       });
 
       activeEsp32Port.write(`${cmdString}\n`);
@@ -2824,6 +2843,16 @@ setInterval(async () => {
 }, 1500);
 
 // NOTE: /api/esp32/sensors is defined above at line ~1338 (unified endpoint)
+
+// Trạng thái rèm ESP32 — frontend poll sau khi gửi lệnh
+app.get("/api/esp32/roof-status", (req, res) => {
+  res.json({
+    success: true,
+    sun: esp32RoofStatus.sun,   // null | "che" | "mo" | "chay"
+    rain: esp32RoofStatus.rain,
+    timestamp: new Date().toLocaleTimeString("vi-VN"),
+  });
+});
 
 app.post("/api/esp32/command", async (req, res) => {
   const { command } = req.body;

@@ -262,9 +262,11 @@ export default function ControlsPage() {
     setSendingRoof(action);
     setActiveToast(null);
 
-    // Cập nhật trạng thái "Đang chạy" ngay khi bấm
-    if (action === "SUN CLOSE" || action === "SUN OPEN") setSunStatus("Đang chạy");
-    if (action === "RAIN CLOSE" || action === "RAIN OPEN") setRainStatus("Đang chạy");
+    // Bật "Đang chạy" ngay khi bấm
+    const isSun = action === "SUN CLOSE" || action === "SUN OPEN";
+    const isRain = action === "RAIN CLOSE" || action === "RAIN OPEN";
+    if (isSun) setSunStatus("Đang chạy");
+    if (isRain) setRainStatus("Đang chạy");
 
     try {
       const res = await fetch("/api/esp32/roof", {
@@ -284,22 +286,47 @@ export default function ControlsPage() {
         ...prev,
       ]);
 
-      // Cập nhật trạng thái cuối sau khi server xác nhận
-      // Kéo Che → SUN OPEN / RAIN OPEN → "Đã che"
-      // Thu Lại → SUN CLOSE / RAIN CLOSE → "Đã mở"
-      if (action === "SUN OPEN") setSunStatus("Đã che");
-      else if (action === "SUN CLOSE") setSunStatus("Đã mở");
-      else if (action === "RAIN OPEN") setRainStatus("Đã che");
-      else if (action === "RAIN CLOSE") setRainStatus("Đã mở");
+      if (!data.sentToHardware) {
+        // ESP32 chưa kết nối — reset badge
+        if (isSun) setSunStatus(null);
+        if (isRain) setRainStatus(null);
+        return;
+      }
+
+      // ESP32 đã nhận lệnh → poll cho đến khi nhận DONE (tối đa 60s)
+      const pollKey = isSun ? "sun" : "rain";
+      const maxAttempts = 75; // 75 × 800ms = 60s
+      let attempts = 0;
+      const poll = setInterval(async () => {
+        attempts++;
+        try {
+          const sr = await fetch("/api/esp32/roof-status");
+          const sd = await sr.json();
+          const roofVal: string | null = sd[pollKey];
+
+          if (roofVal === "che" || roofVal === "mo") {
+            clearInterval(poll);
+            const label = roofVal === "che" ? "Đã che" : "Đã mở";
+            if (isSun) setSunStatus(label as "Đã che" | "Đã mở");
+            if (isRain) setRainStatus(label as "Đã che" | "Đã mở");
+          } else if (attempts >= maxAttempts) {
+            clearInterval(poll);
+            // Timeout — giữ lại trạng thái cuối cùng server biết
+            if (isSun) setSunStatus(null);
+            if (isRain) setRainStatus(null);
+          }
+        } catch { clearInterval(poll); }
+      }, 800);
+
     } catch (err) {
       setActiveToast(`Lỗi gửi lệnh rèm [${action}]: Không kết nối được server`);
-      // Reset về null nếu lỗi
-      if (action === "SUN CLOSE" || action === "SUN OPEN") setSunStatus(null);
-      if (action === "RAIN CLOSE" || action === "RAIN OPEN") setRainStatus(null);
+      if (isSun) setSunStatus(null);
+      if (isRain) setRainStatus(null);
     } finally {
       setSendingRoof(null);
     }
   };
+
 
   const sendRobotCommand = async (cmdKey: string, labelName: string) => {
     setSendingCmd(cmdKey);
