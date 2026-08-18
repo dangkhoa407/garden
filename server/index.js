@@ -2387,36 +2387,44 @@ app.post("/api/esp32/roof", async (req, res) => {
   }
 
   const timestamp = new Date().toLocaleTimeString("vi-VN");
+  const actionLabels = {
+    "RAIN CLOSE": "Kéo bạt che mưa (tự dừng theo công tắc hành trình)",
+    "RAIN OPEN": "Thu bạt che mưa (tự dừng theo công tắc hành trình)",
+    "SUN CLOSE": "Kéo lưới che nắng (tự dừng theo công tắc hành trình)",
+    "SUN OPEN": "Thu lưới che nắng (tự dừng theo công tắc hành trình)",
+    "STOP ROOF": "Dừng khẩn cấp động cơ mái che",
+  };
 
+  // Ghi trực tiếp vào activeEsp32Port — giống pattern STATUS polling
+  // (KHÔNG qua sendDirectCommandToArduino vì rèm là ESP32, không phải Arduino)
+  let sent = false;
   try {
-    await sendDirectCommandToArduino(action);
-
-    const actionLabels = {
-      "RAIN CLOSE": "Kéo bạt che mưa (tự dừng theo công tắc hành trình)",
-      "RAIN OPEN": "Thu bạt che mưa (tự dừng theo công tắc hành trình)",
-      "SUN CLOSE": "Kéo lưới che nắng (tự dừng theo công tắc hành trình)",
-      "SUN OPEN": "Thu lưới che nắng (tự dừng theo công tắc hành trình)",
-      "STOP ROOF": "Dừng khẩn cấp động cơ mái che",
-    };
-
-    addSystemLog("ESP32_ROOF", `Đã phát lệnh Mái Che: ${actionLabels[action] || action}`, "SUCCESS");
-    pushWebNotification(`⛺ Mái che ESP32: ${actionLabels[action] || action}`, "INFO");
-
-    return res.json({
-      success: true,
-      message: `Đã phát lệnh ${action} xuống ESP32 thành công!`,
-      action,
-      timestamp,
-    });
+    if (activeEsp32Port && activeEsp32Port.isOpen) {
+      activeEsp32Port.write(`${action}\n`);
+      sent = true;
+      console.log(`[ESP32 Roof] Direct write OK: ${action}`);
+    } else {
+      // Fallback: thử dò và mở cổng ESP32 lại
+      sent = await sendDirectCommandToEsp32(action);
+      console.log(`[ESP32 Roof] Fallback sendDirect: ${action} → sent=${sent}`);
+    }
   } catch (err) {
-    console.warn(`[ESP32 Roof Direct Send Warning] ${err.message}`);
-    return res.json({
-      success: true,
-      message: `Đã phát lệnh ${action} (chế độ mô phỏng)!`,
-      action,
-      timestamp,
-    });
+    console.warn(`[ESP32 Roof Error] ${err.message}`);
+    try { sent = await sendDirectCommandToEsp32(action); } catch (e2) {}
   }
+
+  addSystemLog("ESP32_ROOF", `Lệnh mái che: ${actionLabels[action] || action} — ${sent ? "✅ Gửi OK" : "⚠️ Chưa kết nối"}`, sent ? "SUCCESS" : "WARNING");
+  if (sent) pushWebNotification(`⛺ Mái che ESP32: ${actionLabels[action] || action}`, "INFO");
+
+  return res.json({
+    success: true,
+    sentToHardware: sent,
+    message: sent
+      ? `Đã gửi lệnh "${action}" xuống ESP32`
+      : `Lệnh "${action}" đã ghi nhận (ESP32 chưa kết nối)`,
+    action,
+    timestamp,
+  });
 });
 
 // REAL 7-DAY SENSOR TELEMETRY HISTORY ENDPOINT
