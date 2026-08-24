@@ -3,7 +3,12 @@
 import { useState, useRef, useEffect } from "react";
 import { useGarden } from "@/context/GardenContext";
 
-export function ChatInterface() {
+interface ChatInterfaceProps {
+  onTogglePanel?: () => void;
+  showPanel?: boolean;
+}
+
+export function ChatInterface({ onTogglePanel, showPanel }: ChatInterfaceProps = {}) {
   const { chatHistory, sendAiMessage, resetChatHistory, updateControls, triggerQuickAction } = useGarden();
   const [inputVal, setInputVal] = useState("");
   const [isTyping, setIsTyping] = useState(false);
@@ -62,38 +67,55 @@ export function ChatInterface() {
   };
 
   return (
-    <div className="bg-surface-container-lowest rounded-2xl card-shadow border border-outline-variant/20 flex flex-col h-full overflow-hidden">
+    <div className="bg-surface-container-lowest lg:rounded-2xl lg:card-shadow border-0 lg:border border-outline-variant/20 flex flex-col h-full overflow-hidden">
       {/* Header */}
-      <div className="p-md border-b border-outline-variant/20 flex items-center justify-between bg-surface/60 backdrop-blur-sm flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <div className="w-10 h-10 rounded-full bg-primary text-on-primary flex items-center justify-center font-bold shadow-sm">
-              <span className="material-symbols-outlined text-xl icon-filled">
+      <div className="px-3 py-2 sm:p-md border-b border-outline-variant/20 flex items-center justify-between bg-surface/60 backdrop-blur-sm flex-shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="relative shrink-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-primary text-on-primary flex items-center justify-center font-bold shadow-sm">
+              <span className="material-symbols-outlined text-lg sm:text-xl icon-filled">
                 psychology
               </span>
             </div>
-            <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white" />
+            <span className="absolute bottom-0 right-0 w-2.5 h-2.5 sm:w-3 sm:h-3 bg-emerald-500 rounded-full border-2 border-white" />
           </div>
-          <div>
-            <h3 className="font-body-lg font-bold text-on-surface flex items-center gap-1.5">
-              GrowAI Botanical Assistant
-              <span className="bg-primary/10 text-primary font-label-caps text-[10px] px-2 py-0.5 rounded-full font-bold uppercase">
-                REAL PERSISTENCE
+          <div className="min-w-0">
+            <h3 className="font-bold text-on-surface flex items-center gap-1 text-sm sm:text-base">
+              <span className="truncate">GrowAI Assistant</span>
+              <span className="bg-primary/10 text-primary text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded-full font-bold uppercase shrink-0 hidden xs:inline">
+                LIVE
               </span>
             </h3>
-            <p className="font-body-sm text-xs text-on-surface-variant">
-              Theo dõi & Chẩn đoán sức khỏe vườn rau thời gian thực (Lưu trữ API)
+            <p className="text-[11px] sm:text-xs text-on-surface-variant truncate">
+              Chẩn đoán sức khỏe vườn rau thời gian thực
             </p>
           </div>
         </div>
 
-        <button
-          onClick={() => resetChatHistory()}
-          className="text-on-surface-variant hover:text-primary p-2 rounded-full hover:bg-surface-container-high transition-colors"
-          title="Làm mới cuộc trò chuyện"
-        >
-          <span className="material-symbols-outlined text-xl">refresh</span>
-        </button>
+        <div className="flex items-center gap-1 shrink-0">
+          {/* Mobile: toggle garden data panel */}
+          {onTogglePanel && (
+            <button
+              type="button"
+              onClick={onTogglePanel}
+              className={`lg:hidden p-1.5 rounded-xl text-xs font-semibold flex items-center gap-1 transition-colors ${
+                showPanel
+                  ? "bg-primary/15 text-primary"
+                  : "text-on-surface-variant hover:text-primary hover:bg-surface-container-high"
+              }`}
+              title="Dữ liệu vườn"
+            >
+              <span className="material-symbols-outlined text-lg">monitoring</span>
+            </button>
+          )}
+          <button
+            onClick={() => resetChatHistory()}
+            className="text-on-surface-variant hover:text-primary p-1.5 rounded-full hover:bg-surface-container-high transition-colors"
+            title="Làm mới cuộc trò chuyện"
+          >
+            <span className="material-symbols-outlined text-xl">refresh</span>
+          </button>
+        </div>
       </div>
 
       {/* Messages Scroll Area */}
@@ -244,7 +266,7 @@ export function ChatInterface() {
           e.preventDefault();
           handleSend();
         }}
-        className="p-md bg-surface border-t border-outline-variant/20 flex items-center gap-sm flex-shrink-0"
+        className="px-2 py-2 sm:p-md bg-surface border-t border-outline-variant/20 flex items-center gap-1.5 sm:gap-sm flex-shrink-0"
       >
         <input
           type="file"

@@ -8,5 +8,9 @@
   "targetHumidity": 70,
   "soilMoisture": 95,
   "temperature": 28,
-  "phValue": 6.2
+  "phValue": 6.2,
+  "autoRainEnabled": false,
+  "autoSunEnabled": true,
+  "autoSunOpenThreshold": 70,
+  "autoSunCloseThreshold": 30
 }

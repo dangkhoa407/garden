@@ -446,11 +446,11 @@ export default function DeviceSettingsPage() {
       {/* Page Title */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="font-display-lg text-display-lg font-bold text-on-surface mb-1 flex items-center gap-3">
-            <span className="material-symbols-outlined text-primary text-4xl">settings_suggest</span>
+          <h1 className="font-bold text-on-surface mb-1 flex items-center gap-2 text-2xl sm:text-3xl md:text-display-lg">
+            <span className="material-symbols-outlined text-primary text-3xl md:text-4xl">settings_suggest</span>
             Cài đặt thiết bị
           </h1>
-          <p className="font-body-lg text-body-lg text-on-surface-variant">
+          <p className="text-sm md:font-body-lg md:text-body-lg text-on-surface-variant">
             Quản lý kết nối phần cứng Arduino, ESP32 và cấu hình Wi-Fi mạng nội bộ
           </p>
         </div>
@@ -477,49 +477,53 @@ export default function DeviceSettingsPage() {
       )}
 
       {/* Navigation Tabs */}
-      <div className="flex border-b border-outline-variant/20 gap-2">
+      <div className="flex border-b border-outline-variant/20 gap-1 overflow-x-auto scrollbar-hide">
         <button
           onClick={() => setActiveTab("diagnostics")}
-          className={`flex items-center gap-2 px-6 py-3.5 font-headline-sm text-body-lg font-bold transition-all border-b-2 ${activeTab === "diagnostics"
+          className={`flex items-center gap-1.5 px-3 sm:px-5 py-3 font-bold transition-all border-b-2 whitespace-nowrap shrink-0 text-sm sm:text-base ${activeTab === "diagnostics"
             ? "border-primary text-primary bg-primary/5 rounded-t-xl"
             : "border-transparent text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low/50 rounded-t-xl"
             }`}
         >
-          <span className="material-symbols-outlined text-2xl">sensors</span>
-          Chẩn Đoán Kết Nối
+          <span className="material-symbols-outlined text-xl sm:text-2xl">sensors</span>
+          <span className="hidden sm:inline">Chẩn Đoán Kết Nối</span>
+          <span className="inline sm:hidden text-xs">Kết Nối</span>
         </button>
 
         <button
           onClick={() => setActiveTab("wifi")}
-          className={`flex items-center gap-2 px-6 py-3.5 font-headline-sm text-body-lg font-bold transition-all border-b-2 ${activeTab === "wifi"
+          className={`flex items-center gap-1.5 px-3 sm:px-5 py-3 font-bold transition-all border-b-2 whitespace-nowrap shrink-0 text-sm sm:text-base ${activeTab === "wifi"
             ? "border-primary text-primary bg-primary/5 rounded-t-xl"
             : "border-transparent text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low/50 rounded-t-xl"
             }`}
         >
-          <span className="material-symbols-outlined text-2xl">wifi</span>
-          Cấu Hình Wi-Fi
+          <span className="material-symbols-outlined text-xl sm:text-2xl">wifi</span>
+          <span className="hidden sm:inline">Cấu Hình Wi-Fi</span>
+          <span className="inline sm:hidden text-xs">Wi-Fi</span>
         </button>
 
         <button
           onClick={() => setActiveTab("telegram")}
-          className={`flex items-center gap-2 px-6 py-3.5 font-headline-sm text-body-lg font-bold transition-all border-b-2 ${activeTab === "telegram"
+          className={`flex items-center gap-1.5 px-3 sm:px-5 py-3 font-bold transition-all border-b-2 whitespace-nowrap shrink-0 text-sm sm:text-base ${activeTab === "telegram"
             ? "border-primary text-primary bg-primary/5 rounded-t-xl"
             : "border-transparent text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low/50 rounded-t-xl"
             }`}
         >
-          <span className="material-symbols-outlined text-2xl">send</span>
-          Cấu Hình Telegram
+          <span className="material-symbols-outlined text-xl sm:text-2xl">send</span>
+          <span className="hidden sm:inline">Cấu Hình Telegram</span>
+          <span className="inline sm:hidden text-xs">Telegram</span>
         </button>
 
         <button
           onClick={() => setActiveTab("raspberry")}
-          className={`flex items-center gap-2 px-6 py-3.5 font-headline-sm text-body-lg font-bold transition-all border-b-2 ${activeTab === "raspberry"
+          className={`flex items-center gap-1.5 px-3 sm:px-5 py-3 font-bold transition-all border-b-2 whitespace-nowrap shrink-0 text-sm sm:text-base ${activeTab === "raspberry"
             ? "border-primary text-primary bg-primary/5 rounded-t-xl"
             : "border-transparent text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low/50 rounded-t-xl"
             }`}
         >
-          <span className="material-symbols-outlined text-2xl">developer_board</span>
-          Raspberry
+          <span className="material-symbols-outlined text-xl sm:text-2xl">developer_board</span>
+          <span className="hidden sm:inline">Raspberry</span>
+          <span className="inline sm:hidden text-xs">RPi</span>
         </button>
       </div>
 
@@ -528,14 +532,14 @@ export default function DeviceSettingsPage() {
         <div className="space-y-xl animate-in fade-in duration-200">
           {/* SECTION 1: ARDUINO CONNECTION DIAGNOSTICS */}
           <section className="bg-surface-container-lowest rounded-2xl p-lg border border-primary/20 shadow-md space-y-md">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-md border-b border-outline-variant/15">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-md border-b border-outline-variant/15">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
                   <span className="material-symbols-outlined text-3xl">developer_board</span>
                 </div>
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <h2 className="font-headline-md text-headline-md text-on-surface font-bold">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <h2 className="font-bold text-lg md:text-headline-md text-on-surface">
                       1. Chuẩn đoán Arduino
                     </h2>
                     {arduinoStatus.connected ? (
@@ -636,14 +640,14 @@ export default function DeviceSettingsPage() {
 
           {/* SECTION 2: ESP32 CONNECTION DIAGNOSTICS */}
           <section className="bg-surface-container-lowest rounded-2xl p-lg border border-primary/20 shadow-md space-y-md">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-md border-b border-outline-variant/15">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-md border-b border-outline-variant/15">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-600">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-600 shrink-0">
                   <span className="material-symbols-outlined text-3xl">memory</span>
                 </div>
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <h2 className="font-headline-md text-headline-md text-on-surface font-bold">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <h2 className="font-bold text-lg md:text-headline-md text-on-surface">
                       2. Chuẩn đoán ESP32
                     </h2>
                     {esp32Status.connected ? (

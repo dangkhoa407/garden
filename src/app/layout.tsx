@@ -156,7 +156,12 @@ export default function RootLayout({
                 onCloseMobile={() => setIsOpenMobile(false)}
               />
               <Header onOpenMobileMenu={() => setIsOpenMobile(true)} />
-              <main className="md:ml-64 pt-16 px-container-margin-mobile md:px-container-margin-desktop pb-3 md:pb-md flex-1 h-[calc(100vh-3.5rem)] overflow-hidden">
+              {/* Mobile: fixed inset so chat fills exactly between header and bottom nav */}
+              <main className="
+                fixed top-14 bottom-16 left-0 right-0 overflow-hidden
+                md:static md:bottom-auto md:top-auto md:right-auto md:left-auto
+                md:ml-64 md:pt-16 md:px-container-margin-desktop md:pb-md md:flex-1
+              ">
                 {children}
               </main>
               <MobileNav />

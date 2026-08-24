@@ -1,3 +1,13 @@
 {
-  "selectedCameraDevice": "1080P Web Camera"
+  "selectedCameraDevice": "1080P Web Camera",
+  "geminiApiKeys": [
+    {
+      "id": "key-1787119315040",
+      "key": "234234324",
+      "status": "error",
+      "failCount": 3,
+      "addedAt": "2026-08-19T06:01:55.040Z",
+      "lastError": "API key not valid. Please pass a valid API key."
+    }
+  ]
 }

@@ -1,22 +1,32 @@
 [
   {
-    "id": "fert-1786441986514",
-    "name": "NPK",
-    "tankCode": "Bình B",
+    "id": "fert-1787119378485",
+    "name": "KALI",
+    "tankCode": "Bình C",
     "capacityMl": 6,
-    "currentMl": 5.1,
+    "currentMl": 6,
     "price": 50000,
-    "addedDate": "11/8/2026",
+    "addedDate": "19/8/2026",
     "status": "Sẵn sàng"
   },
   {
-    "id": "fert-1786349085279",
-    "name": "123",
+    "id": "fert-1787119373377",
+    "name": "LÂN",
+    "tankCode": "Bình B",
+    "capacityMl": 6,
+    "currentMl": 6,
+    "price": 50000,
+    "addedDate": "19/8/2026",
+    "status": "Sẵn sàng"
+  },
+  {
+    "id": "fert-1787119368843",
+    "name": "NPK",
     "tankCode": "Bình A",
     "capacityMl": 6,
-    "currentMl": 4.8,
+    "currentMl": 6,
     "price": 50000,
-    "addedDate": "10/8/2026",
+    "addedDate": "19/8/2026",
     "status": "Sẵn sàng"
   }
 ]

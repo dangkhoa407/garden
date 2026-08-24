@@ -2704,6 +2704,8 @@ let esp32RoofStatus = {
   sun: null,
   rain: null,
 };
+let lastAutoSunAction = null; // null | "SUN OPEN" | "SUN CLOSE"
+let lastAutoRainAction = null; // null | "RAIN OPEN" | "RAIN CLOSE"
 
 function parseEsp32Moisture(soil1Raw, soil2Raw) {
   // Quy định độ ẩm của 2 cảm biến:
@@ -2806,6 +2808,63 @@ async function sendDirectCommandToEsp32(cmdString) {
             lightPercent: lightPct,
             lastUpdate: new Date().toLocaleTimeString("vi-VN"),
           };
+
+          // Tự động kiểm tra logic đóng/mở rèm tự động từ cấu hình controls.json
+          try {
+            const controlsConfig = readJson("controls.json", {});
+
+            // 1. TỰ ĐỘNG RÈM NẮNG
+            if (controlsConfig.autoSunEnabled && typeof lightPct === "number") {
+              const openThresh = typeof controlsConfig.autoSunOpenThreshold === "number" ? controlsConfig.autoSunOpenThreshold : 70;
+              const closeThresh = typeof controlsConfig.autoSunCloseThreshold === "number" ? controlsConfig.autoSunCloseThreshold : 30;
+
+              if (lightPct >= openThresh && lastAutoSunAction !== "SUN OPEN") {
+                lastAutoSunAction = "SUN OPEN";
+                if (activeEsp32Port && activeEsp32Port.isOpen) {
+                  activeEsp32Port.write("SUN OPEN\n");
+                } else {
+                  sendDirectCommandToEsp32("SUN OPEN");
+                }
+                addSystemLog("AUTO_ROOF", `TỰ ĐỘNG RÈM NẮNG: Ánh sáng ${lightPct}% >= ${openThresh}% ➔ Kéo che rèm nắng (SUN OPEN)`, "SUCCESS");
+                pushWebNotification(`☀️ TỰ ĐỘNG RÈM NẮNG: Ánh sáng (${lightPct}%) vượt ngưỡng ${openThresh}%. Đang kéo rèm che nắng...`, "INFO");
+              } else if (lightPct <= closeThresh && lastAutoSunAction !== "SUN CLOSE") {
+                lastAutoSunAction = "SUN CLOSE";
+                if (activeEsp32Port && activeEsp32Port.isOpen) {
+                  activeEsp32Port.write("SUN CLOSE\n");
+                } else {
+                  sendDirectCommandToEsp32("SUN CLOSE");
+                }
+                addSystemLog("AUTO_ROOF", `TỰ ĐỘNG RÈM NẮNG: Ánh sáng ${lightPct}% <= ${closeThresh}% ➔ Thu rèm nắng lại (SUN CLOSE)`, "SUCCESS");
+                pushWebNotification(`🌤️ TỰ ĐỘNG RÈM NẮNG: Ánh sáng (${lightPct}%) dưới ngưỡng ${closeThresh}%. Đang thu rèm nắng lại...`, "INFO");
+              }
+            }
+
+            // 2. TỰ ĐỘNG RÈM MƯA
+            if (controlsConfig.autoRainEnabled && typeof rain === "number") {
+              const isRaining = rain < 2800;
+              if (isRaining && lastAutoRainAction !== "RAIN OPEN") {
+                lastAutoRainAction = "RAIN OPEN";
+                if (activeEsp32Port && activeEsp32Port.isOpen) {
+                  activeEsp32Port.write("RAIN OPEN\n");
+                } else {
+                  sendDirectCommandToEsp32("RAIN OPEN");
+                }
+                addSystemLog("AUTO_ROOF", `TỰ ĐỘNG RÈM MƯA: Phát hiện CÓ MƯA (Raw: ${rain}) ➔ Mở rèm mưa che (RAIN OPEN)`, "WARNING");
+                pushWebNotification(`🌧️ TỰ ĐỘNG RÈM MƯA: Cảm biến phát hiện CÓ MƯA! Đang mở rèm che mưa...`, "WARNING");
+              } else if (!isRaining && lastAutoRainAction !== "RAIN CLOSE") {
+                lastAutoRainAction = "RAIN CLOSE";
+                if (activeEsp32Port && activeEsp32Port.isOpen) {
+                  activeEsp32Port.write("RAIN CLOSE\n");
+                } else {
+                  sendDirectCommandToEsp32("RAIN CLOSE");
+                }
+                addSystemLog("AUTO_ROOF", `TỰ ĐỘNG RÈM MƯA: Cảm biến báo HẾT MƯA (Raw: ${rain}) ➔ Thu rèm mưa lại (RAIN CLOSE)`, "SUCCESS");
+                pushWebNotification(`☀️ TỰ ĐỘNG RÈM MƯA: Hết mưa! Đang thu rèm mưa lại...`, "SUCCESS");
+              }
+            }
+          } catch (autoErr) {
+            console.warn(`[Auto Roof Error] ${autoErr.message}`);
+          }
         }
 
         // Cập nhật trạng thái rèm khi ESP32 báo hoàn thành

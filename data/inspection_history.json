@@ -1,5 +1,45 @@
 [
   {
+    "id": "pest-1787119412443-lsug8s",
+    "plantId": "plant-1787119333459",
+    "plantName": "RAU MÁ",
+    "trayName": "Khay 01",
+    "location": "Khay 01",
+    "type": "PEST",
+    "timestamp": "13:03:32 19/8/2026",
+    "title": "Kiểm tra sâu hại - RAU MÁ",
+    "detail": "KẾT QUẢ KIỂM TRA CAMERA\nĐã chụp ảnh thực tế tại Khay 01. Lỗi AI: Tất cả 1 API Key trong danh sách đều gặp lỗi với các mô hình Gemini: API key not valid. Please pass a valid API key.",
+    "telegramCaption": "🐛 KIỂM TRA SÂU BỆNH - KHAY 01\n🌱 Cây: RAU MÁ\n\nKẾT QUẢ KIỂM TRA CAMERA\nĐã chụp ảnh thực tế tại Khay 01. Lỗi AI: Tất cả 1 API Key trong danh sách đều gặp lỗi với các mô hình Gemini: API key not valid. Please pass a valid API key.",
+    "status": "Sức khỏe tốt",
+    "image": "/api/snapshots/pest-1787119412443-lsug8s.jpg",
+    "snapshotUrl": "/api/snapshots/pest-1787119412443-lsug8s.jpg"
+  },
+  {
+    "id": "insp-1787119411134",
+    "type": "FERTILIZE",
+    "timestamp": "13:03:31 19/8/2026",
+    "title": "Tưới phân bón Bình A",
+    "detail": "Đã trích xuất 2 ml phân bón từ Bình A vào hệ thống tưới.",
+    "dosage": "2 ml (Bình A)",
+    "status": "Đã tưới phân",
+    "createdAt": "2026-08-19T06:03:31.134Z"
+  },
+  {
+    "id": "pest-1787119362827-naw7r2",
+    "plantId": "plant-1787119333459",
+    "plantName": "RAU MÁ",
+    "trayName": "Khay 01",
+    "location": "Khay 01",
+    "type": "PEST",
+    "timestamp": "13:02:42 19/8/2026",
+    "title": "Kiểm tra sâu hại - RAU MÁ",
+    "detail": "KẾT QUẢ KIỂM TRA CAMERA\nĐã chụp ảnh thực tế tại Khay 01. Lỗi AI: Tất cả 1 API Key trong danh sách đều gặp lỗi với các mô hình Gemini: API key not valid. Please pass a valid API key.",
+    "telegramCaption": "🐛 KIỂM TRA SÂU BỆNH - KHAY 01\n🌱 Cây: RAU MÁ\n\nKẾT QUẢ KIỂM TRA CAMERA\nĐã chụp ảnh thực tế tại Khay 01. Lỗi AI: Tất cả 1 API Key trong danh sách đều gặp lỗi với các mô hình Gemini: API key not valid. Please pass a valid API key.",
+    "status": "Sức khỏe tốt",
+    "image": "/api/snapshots/pest-1787119362827-naw7r2.jpg",
+    "snapshotUrl": "/api/snapshots/pest-1787119362827-naw7r2.jpg"
+  },
+  {
     "id": "insp-1786506926922",
     "plantId": "plant-1786414787818",
     "type": "SPRAY",

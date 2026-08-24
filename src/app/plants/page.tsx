@@ -96,16 +96,16 @@ export default function PlantsPage() {
       {/* Header section */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-md">
         <div>
-          <h2 className="font-display-lg text-display-lg font-bold text-primary mb-1">
+          <h2 className="font-bold text-primary mb-1 text-2xl sm:text-3xl md:text-display-lg">
             Quản Lý Vườn Cây
           </h2>
-          <p className="font-body-lg text-body-lg text-on-surface-variant">
+          <p className="text-sm md:font-body-lg md:text-body-lg text-on-surface-variant">
             Danh sách tất cả cây trồng đang được theo dõi và lưu trữ trong hệ thống
           </p>
         </div>
         <button
           onClick={() => setShowAddModal(true)}
-          className="bg-primary text-on-primary px-5 py-3 rounded-xl font-body-lg font-semibold hover:bg-primary-container transition-all shadow-sm flex items-center justify-center gap-2 active:scale-95"
+          className="bg-primary text-on-primary px-4 py-2.5 sm:px-5 sm:py-3 rounded-xl font-semibold hover:bg-primary-container transition-all shadow-sm flex items-center justify-center gap-2 active:scale-95 text-sm sm:text-base w-full sm:w-auto"
         >
           <span className="material-symbols-outlined">add</span>
           Thêm cây mới

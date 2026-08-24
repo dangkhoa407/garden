@@ -1,38 +1,14 @@
 [
   {
-    "id": "plant-1",
-    "name": "Cải bẹ xanh",
-    "days": 14,
-    "status": "Phát triển tốt",
-    "statusColor": "text-primary bg-primary/10",
-    "progress": 45,
+    "name": "RAU MÁ",
+    "days": 1,
+    "status": "1 ngày",
+    "statusColor": "text-emerald-700 bg-emerald-500/10 dark:text-emerald-300 dark:bg-emerald-500/20",
+    "progress": 5,
     "category": "Rau ăn lá",
     "location": "Khay 01",
-    "createdDate": "23/7/2026",
-    "image": "https://images.unsplash.com/photo-1540420773420-3366772f4999?q=80&w=400&auto=format&fit=crop"
-  },
-  {
-    "id": "plant-2",
-    "name": "Xà lách thủy canh",
-    "days": 22,
-    "status": "Chuẩn bị thu hoạch",
-    "statusColor": "text-secondary bg-secondary-container/50",
-    "progress": 90,
-    "category": "Thủy canh",
-    "location": "Khay 02",
-    "createdDate": "15/7/2026",
-    "image": "https://images.unsplash.com/photo-1622206151226-18ca2c9ab4a1?q=80&w=400&auto=format&fit=crop"
-  },
-  {
-    "id": "plant-3",
-    "name": "Cà chua bi",
-    "days": 45,
-    "status": "Đang ra hoa",
-    "statusColor": "text-tertiary-container bg-tertiary-fixed/40",
-    "progress": 60,
-    "category": "Cây lấy quả",
-    "location": "Khay 03",
-    "createdDate": "22/6/2026",
-    "image": "https://images.unsplash.com/photo-1592841200221-a6898f307baa?q=80&w=400&auto=format&fit=crop"
+    "createdDate": "20/8/2026",
+    "image": "https://images.unsplash.com/photo-1530836369250-ef72a3f5cda8?q=80&w=400&auto=format&fit=crop",
+    "id": "plant-1787119333459"
   }
 ]

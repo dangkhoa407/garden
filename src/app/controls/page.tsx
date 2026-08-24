@@ -166,7 +166,97 @@ export default function ControlsPage() {
     }
   };
 
+  const [autoSunEnabled, setAutoSunEnabled] = useState(false);
+  const [autoSunOpenThreshold, setAutoSunOpenThreshold] = useState(70);
+  const [autoSunCloseThreshold, setAutoSunCloseThreshold] = useState(30);
+
+  const [autoRainEnabled, setAutoRainEnabled] = useState(false);
+
+  const [showSunModal, setShowSunModal] = useState(false);
+  const [tempOpenThreshold, setTempOpenThreshold] = useState(70);
+  const [tempCloseThreshold, setTempCloseThreshold] = useState(30);
+
+  const fetchControlsConfig = async () => {
+    try {
+      const res = await fetch("/api/controls");
+      if (res.ok) {
+        const data = await res.json();
+        if (typeof data.autoSunEnabled === "boolean") setAutoSunEnabled(data.autoSunEnabled);
+        if (typeof data.autoSunOpenThreshold === "number") {
+          setAutoSunOpenThreshold(data.autoSunOpenThreshold);
+          setTempOpenThreshold(data.autoSunOpenThreshold);
+        }
+        if (typeof data.autoSunCloseThreshold === "number") {
+          setAutoSunCloseThreshold(data.autoSunCloseThreshold);
+          setTempCloseThreshold(data.autoSunCloseThreshold);
+        }
+        if (typeof data.autoRainEnabled === "boolean") setAutoRainEnabled(data.autoRainEnabled);
+      }
+    } catch (err) {}
+  };
+
+  const handleToggleSunAuto = async () => {
+    if (!autoSunEnabled) {
+      setTempOpenThreshold(autoSunOpenThreshold);
+      setTempCloseThreshold(autoSunCloseThreshold);
+      setShowSunModal(true);
+    } else {
+      setAutoSunEnabled(false);
+      setActiveToast("Đã tắt chế độ đóng mở rèm nắng tự động");
+      try {
+        await fetch("/api/controls", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ autoSunEnabled: false }),
+        });
+      } catch (e) {}
+    }
+  };
+
+  const handleSaveSunModal = async () => {
+    if (tempOpenThreshold <= tempCloseThreshold) {
+      setActiveToast("⚠️ Ngưỡng MỞ rèm (nắng gắt) phải lớn hơn ngưỡng ĐÓNG rèm (ánh sáng yếu)!");
+      return;
+    }
+    setAutoSunOpenThreshold(tempOpenThreshold);
+    setAutoSunCloseThreshold(tempCloseThreshold);
+    setAutoSunEnabled(true);
+    setShowSunModal(false);
+    setActiveToast(`☀️ Đã bật rèm nắng tự động (Mở: ≥${tempOpenThreshold}%, Đóng: ≤${tempCloseThreshold}%)`);
+
+    try {
+      await fetch("/api/controls", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          autoSunEnabled: true,
+          autoSunOpenThreshold: tempOpenThreshold,
+          autoSunCloseThreshold: tempCloseThreshold,
+        }),
+      });
+    } catch (e) {}
+  };
+
+  const handleToggleRainAuto = async () => {
+    const newStatus = !autoRainEnabled;
+    setAutoRainEnabled(newStatus);
+    if (newStatus) {
+      setActiveToast("🌧️ Đã bật chế độ đóng mở rèm mưa tự động!");
+    } else {
+      setActiveToast("Đã tắt chế độ đóng mở rèm mưa tự động");
+    }
+
+    try {
+      await fetch("/api/controls", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ autoRainEnabled: newStatus }),
+      });
+    } catch (e) {}
+  };
+
   useEffect(() => {
+    fetchControlsConfig();
     fetchArduinoStatus();
     fetchEsp32Sensors();
     // Tự động quét trạng thái thiết bị mỗi 2 giây
@@ -375,10 +465,10 @@ export default function ControlsPage() {
   return (
     <div className="space-y-xl max-w-5xl mx-auto pb-12">
       <div>
-        <h1 className="font-display-lg text-display-lg font-bold text-on-surface mb-1">
+        <h1 className="font-bold text-on-surface mb-1 text-2xl sm:text-3xl md:text-display-lg">
           Điều Khiển Vườn Rau
         </h1>
-        <p className="font-body-lg text-body-lg text-on-surface-variant">
+        <p className="text-sm md:font-body-lg md:text-body-lg text-on-surface-variant">
           Tại đây có thể thực hiện các thao tác trên hệ thông vườn rau
         </p>
       </div>
@@ -682,6 +772,8 @@ export default function ControlsPage() {
                 </span>
               )}
             </div>
+
+            {/* Nút điều khiển thủ công */}
             <div className="grid grid-cols-2 gap-3">
               <button
                 id="btn-sun-close"
@@ -710,6 +802,59 @@ export default function ControlsPage() {
                 Thu Lại
               </button>
             </div>
+
+            {/* NÚT 1: TỰ ĐỘNG RÈM NẮNG */}
+            <div className="pt-2 border-t border-amber-200/60">
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  id="btn-auto-sun-toggle"
+                  type="button"
+                  onClick={handleToggleSunAuto}
+                  className={`flex-1 flex items-center justify-between px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all shadow-sm ${
+                    autoSunEnabled
+                      ? "bg-amber-500 text-white hover:bg-amber-600 shadow-amber-500/20"
+                      : "bg-white text-amber-800 border border-amber-300 hover:bg-amber-100/50"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-base">
+                      {autoSunEnabled ? "wb_sunny" : "partly_cloudy_day"}
+                    </span>
+                    <span>Tự Động Rèm Nắng</span>
+                  </div>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+                    autoSunEnabled ? "bg-white/20 text-white" : "bg-amber-100 text-amber-700"
+                  }`}>
+                    {autoSunEnabled ? "Đang Bật" : "Tắt"}
+                  </span>
+                </button>
+
+                {autoSunEnabled && (
+                  <button
+                    type="button"
+                    title="Cấu hình lại ngưỡng ánh sáng"
+                    onClick={() => {
+                      setTempOpenThreshold(autoSunOpenThreshold);
+                      setTempCloseThreshold(autoSunCloseThreshold);
+                      setShowSunModal(true);
+                    }}
+                    className="p-2.5 rounded-xl bg-amber-200/70 text-amber-900 hover:bg-amber-300 transition-colors shadow-sm"
+                  >
+                    <span className="material-symbols-outlined text-base">settings</span>
+                  </button>
+                )}
+              </div>
+
+              {autoSunEnabled && (
+                <div className="mt-2 text-[11px] text-amber-800/90 font-medium bg-amber-100/60 px-3 py-1.5 rounded-lg flex items-center justify-between">
+                  <span>Mở che: <strong className="text-amber-950">≥ {autoSunOpenThreshold}%</strong></span>
+                  <span>|</span>
+                  <span>Thu lại: <strong className="text-amber-950">≤ {autoSunCloseThreshold}%</strong></span>
+                  <span>|</span>
+                  <span>Hiện tại: <strong className="text-amber-950">{esp32Sensors.lightPercent ?? 80}%</strong></span>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* RÈM MƯA */}
@@ -735,6 +880,8 @@ export default function ControlsPage() {
                 </span>
               )}
             </div>
+
+            {/* Nút điều khiển thủ công */}
             <div className="grid grid-cols-2 gap-3">
               <button
                 id="btn-rain-close"
@@ -763,9 +910,167 @@ export default function ControlsPage() {
                 Thu Lại
               </button>
             </div>
+
+            {/* NÚT 2: TỰ ĐỘNG RÈM MƯA */}
+            <div className="pt-2 border-t border-sky-200/60">
+              <button
+                id="btn-auto-rain-toggle"
+                type="button"
+                onClick={handleToggleRainAuto}
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all shadow-sm ${
+                  autoRainEnabled
+                    ? "bg-sky-500 text-white hover:bg-sky-600 shadow-sky-500/20"
+                    : "bg-white text-sky-800 border border-sky-300 hover:bg-sky-100/50"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-base">
+                    {autoRainEnabled ? "water_drop" : "rainy"}
+                  </span>
+                  <span>Tự Động Rèm Mưa</span>
+                </div>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+                  autoRainEnabled ? "bg-white/20 text-white" : "bg-sky-100 text-sky-700"
+                }`}>
+                  {autoRainEnabled ? "Đang Bật" : "Tắt"}
+                </span>
+              </button>
+
+              {autoRainEnabled && (
+                <div className="mt-2 text-[11px] text-sky-800/90 font-medium bg-sky-100/60 px-3 py-1.5 rounded-lg flex items-center justify-between">
+                  <span>Có mưa ➔ Mở che | Hết mưa ➔ Đóng lại</span>
+                  <span className="font-bold text-sky-950">
+                    {esp32Sensors.rainRaw !== undefined && esp32Sensors.rainRaw < 2800 ? "🌧️ Đang có mưa" : "☀️ Không mưa"}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </section>
+
+      {/* POPUP CONFIG MODAL CHO RÈM NẮNG TỰ ĐỘNG */}
+      {showSunModal && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-amber-100 space-y-5 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-600">
+                  <span className="material-symbols-outlined text-2xl">wb_sunny</span>
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-lg">Cấu Hình Rèm Nắng Tự Động</h3>
+                  <p className="text-xs text-slate-500">Cài đặt ngưỡng ánh sáng tự động kích hoạt rèm</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSunModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100 transition-colors"
+              >
+                <span className="material-symbols-outlined text-xl">close</span>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* NGƯỠNG MỞ RÈM */}
+              <div className="p-4 bg-amber-50/50 rounded-2xl border border-amber-200/60 space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-amber-900">
+                  <span className="flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-amber-600 text-base">light_mode</span>
+                    Ngưỡng Cường Độ Ánh Sáng MỞ Rèm (%)
+                  </span>
+                  <span className="text-sm font-extrabold px-2.5 py-0.5 bg-amber-200 text-amber-950 rounded-lg">
+                    ≥ {tempOpenThreshold}%
+                  </span>
+                </div>
+                <p className="text-[11px] text-amber-700/80 leading-relaxed">
+                  Khi ánh sáng vượt quá ngưỡng này (nắng gắt), hệ thống tự động <strong>kéo rèm che nắng</strong>.
+                </p>
+                <div className="flex items-center gap-3 pt-1">
+                  <input
+                    type="range"
+                    min="10"
+                    max="100"
+                    step="5"
+                    value={tempOpenThreshold}
+                    onChange={(e) => setTempOpenThreshold(Number(e.target.value))}
+                    className="flex-1 accent-amber-500 h-2 bg-amber-200 rounded-lg cursor-pointer"
+                  />
+                  <input
+                    type="number"
+                    min="10"
+                    max="100"
+                    value={tempOpenThreshold}
+                    onChange={(e) => setTempOpenThreshold(Math.min(100, Math.max(10, Number(e.target.value))))}
+                    className="w-16 px-2 py-1 text-center font-bold text-amber-900 text-xs border border-amber-300 rounded-lg bg-white"
+                  />
+                </div>
+              </div>
+
+              {/* NGƯỠNG ĐÓNG RÈM */}
+              <div className="p-4 bg-amber-50/50 rounded-2xl border border-amber-200/60 space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-amber-900">
+                  <span className="flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-amber-600 text-base">dark_mode</span>
+                    Ngưỡng Cường Độ Ánh Sáng ĐÓNG Rèm (%)
+                  </span>
+                  <span className="text-sm font-extrabold px-2.5 py-0.5 bg-amber-200 text-amber-950 rounded-lg">
+                    ≤ {tempCloseThreshold}%
+                  </span>
+                </div>
+                <p className="text-[11px] text-amber-700/80 leading-relaxed">
+                  Khi ánh sáng giảm xuống dưới ngưỡng này (trời dịu/tối), hệ thống tự động <strong>thu rèm nắng lại</strong>.
+                </p>
+                <div className="flex items-center gap-3 pt-1">
+                  <input
+                    type="range"
+                    min="0"
+                    max="90"
+                    step="5"
+                    value={tempCloseThreshold}
+                    onChange={(e) => setTempCloseThreshold(Number(e.target.value))}
+                    className="flex-1 accent-amber-500 h-2 bg-amber-200 rounded-lg cursor-pointer"
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    max="90"
+                    value={tempCloseThreshold}
+                    onChange={(e) => setTempCloseThreshold(Math.min(90, Math.max(0, Number(e.target.value))))}
+                    className="w-16 px-2 py-1 text-center font-bold text-amber-900 text-xs border border-amber-300 rounded-lg bg-white"
+                  />
+                </div>
+              </div>
+
+              {tempOpenThreshold <= tempCloseThreshold && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs font-medium flex items-center gap-2">
+                  <span className="material-symbols-outlined text-base text-red-500">warning</span>
+                  <span>Ngưỡng MỞ (nắng gắt) phải lớn hơn ngưỡng ĐÓNG (ánh sáng yếu)!</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowSunModal(false)}
+                className="px-4 py-2.5 rounded-xl font-bold text-xs text-slate-600 hover:bg-slate-100 transition-colors"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveSunModal}
+                disabled={tempOpenThreshold <= tempCloseThreshold}
+                className="px-5 py-2.5 rounded-xl font-bold text-xs bg-amber-500 hover:bg-amber-600 text-white shadow-md shadow-amber-500/30 transition-all active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Lưu &amp; Bật Tự Động
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* REAL-TIME SYSTEM LOG & HARDWARE DIAGNOSTICS TERMINAL */}
       <section className="bg-zinc-950 rounded-2xl p-md sm:p-lg border border-zinc-800 shadow-2xl overflow-hidden font-mono">
