@@ -2352,6 +2352,12 @@ app.get("/api/esp32/sensors", (req, res) => {
     avgSoilPercent: 0, floatLow: false, floatHigh: false, running: false,
     temperature: 28.0, humidity: 70.0, rainRaw: 4095, lightRaw: 3276, lightPercent: 80,
   };
+  // Quy đổi rain raw về %: 1800=0% (khô), 1300=100% (mưa lớn)
+  const rainRawVal = live.rainRaw;
+  const rainPctVal = (rainRawVal !== undefined && rainRawVal !== null)
+    ? Math.max(0, Math.min(100, Math.round(((1800 - rainRawVal) / (1800 - 1300)) * 100)))
+    : null;
+
   return res.json({
     success: true,
     data: {
@@ -2365,7 +2371,8 @@ app.get("/api/esp32/sensors", (req, res) => {
       running: live.running,
       temperature: live.temperature !== undefined ? live.temperature : null,
       humidity: live.humidity !== undefined ? live.humidity : null,
-      rainRaw: live.rainRaw !== undefined ? live.rainRaw : null,
+      rainRaw: rainRawVal !== undefined ? rainRawVal : null,
+      rainPercent: rainPctVal,
       lightRaw: live.lightRaw !== undefined ? live.lightRaw : null,
       lightPercent: live.lightPercent !== undefined ? live.lightPercent : null,
       lastUpdate: live.lastUpdate,
@@ -2840,26 +2847,30 @@ async function sendDirectCommandToEsp32(cmdString) {
             }
 
             // 2. TỰ ĐỘNG RÈM MƯA
+            // Quy đổi rain raw về %: 1800=0% (khô), 1300=100% (mưa lớn)
             if (controlsConfig.autoRainEnabled && typeof rain === "number") {
-              const isRaining = rain < 2800;
-              if (isRaining && lastAutoRainAction !== "RAIN OPEN") {
+              const rainPct = Math.max(0, Math.min(100, Math.round(((1800 - rain) / (1800 - 1300)) * 100)));
+              const closeThreshRain = typeof controlsConfig.autoRainCloseThreshold === "number" ? controlsConfig.autoRainCloseThreshold : 50;
+              const openThreshRain  = typeof controlsConfig.autoRainOpenThreshold  === "number" ? controlsConfig.autoRainOpenThreshold  : 20;
+
+              if (rainPct >= closeThreshRain && lastAutoRainAction !== "RAIN OPEN") {
                 lastAutoRainAction = "RAIN OPEN";
                 if (activeEsp32Port && activeEsp32Port.isOpen) {
                   activeEsp32Port.write("RAIN OPEN\n");
                 } else {
                   sendDirectCommandToEsp32("RAIN OPEN");
                 }
-                addSystemLog("AUTO_ROOF", `TỰ ĐỘNG RÈM MƯA: Phát hiện CÓ MƯA (Raw: ${rain}) ➔ Mở rèm mưa che (RAIN OPEN)`, "WARNING");
-                pushWebNotification(`🌧️ TỰ ĐỘNG RÈM MƯA: Cảm biến phát hiện CÓ MƯA! Đang mở rèm che mưa...`, "WARNING");
-              } else if (!isRaining && lastAutoRainAction !== "RAIN CLOSE") {
+                addSystemLog("AUTO_ROOF", `TỰ ĐỘNG RÈM MƯA: Độ mưa ${rainPct}% >= ${closeThreshRain}% (Raw: ${rain}) ➔ Kéo rèm che mưa (RAIN OPEN)`, "WARNING");
+                pushWebNotification(`🌧️ TỰ ĐỘNG RÈM MƯA: Cảm biến ${rainPct}% (raw: ${rain}). Đang kéo rèm che mưa...`, "WARNING");
+              } else if (rainPct <= openThreshRain && lastAutoRainAction !== "RAIN CLOSE") {
                 lastAutoRainAction = "RAIN CLOSE";
                 if (activeEsp32Port && activeEsp32Port.isOpen) {
                   activeEsp32Port.write("RAIN CLOSE\n");
                 } else {
                   sendDirectCommandToEsp32("RAIN CLOSE");
                 }
-                addSystemLog("AUTO_ROOF", `TỰ ĐỘNG RÈM MƯA: Cảm biến báo HẾT MƯA (Raw: ${rain}) ➔ Thu rèm mưa lại (RAIN CLOSE)`, "SUCCESS");
-                pushWebNotification(`☀️ TỰ ĐỘNG RÈM MƯA: Hết mưa! Đang thu rèm mưa lại...`, "SUCCESS");
+                addSystemLog("AUTO_ROOF", `TỰ ĐỘNG RÈM MƯA: Độ mưa ${rainPct}% <= ${openThreshRain}% (Raw: ${rain}) ➔ Thu rèm mưa lại (RAIN CLOSE)`, "SUCCESS");
+                pushWebNotification(`☀️ TỰ ĐỘNG RÈM MƯA: Trời tạnh (${rainPct}%). Đang thu rèm mưa lại...`, "SUCCESS");
               }
             }
           } catch (autoErr) {

@@ -9,8 +9,10 @@
   "soilMoisture": 95,
   "temperature": 28,
   "phValue": 6.2,
-  "autoRainEnabled": false,
+  "autoRainEnabled": true,
   "autoSunEnabled": true,
-  "autoSunOpenThreshold": 70,
-  "autoSunCloseThreshold": 30
+  "autoSunOpenThreshold": 95,
+  "autoSunCloseThreshold": 30,
+  "autoRainCloseThreshold": 50,
+  "autoRainOpenThreshold": 20
 }
