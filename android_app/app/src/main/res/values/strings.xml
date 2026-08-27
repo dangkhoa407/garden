@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">Quản lý vườn rau</string>
+    <string name="title_prompt">HÃY NHẬP ĐỊA CHỈ TRUY CẬP VÀO HỆ THỐNG</string>
+    <string name="subtitle_prompt">Nhập URL hoặc địa chỉ IP của hệ thống (ví dụ: http://192.168.1.100:3000 hoặc https://yourdomain.com)</string>
+    <string name="url_hint">http://192.168.1.xxx hoặc https://...</string>
+    <string name="btn_connect">KẾT NỐI HỆ THỐNG</string>
+    <string name="btn_change_url">Đổi địa chỉ URL</string>
+    <string name="error_invalid_url">Vui lòng nhập đúng định dạng địa chỉ URL!</string>
+</resources>
