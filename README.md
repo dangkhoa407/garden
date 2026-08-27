@@ -17,8 +17,8 @@
 | --: | -------------------------- | -------------------- |
 |   1 | `NGUYỄN THÀNH ĐĂNG KHOA  ` | Phần mền / AI / IOT  |
 |   2 | `BÙI LƯƠNG THÁI BÌNH     ` | Cơ khí / IOT         |
-|   3 | `                        ` | Phần mềm / AI        |
-|   4 | `[HỌ VÀ TÊN THÀNH VIÊN 4]` | Cơ khí / Tự động hóa |
+|   3 | `NGUYỄN NHẬT MINH        ` | Cơ khí / ESP         |
+|   4 | `ĐÀO DUY TÂN             ` | Cơ khí / Tự động hóa |
 
 
 ---
