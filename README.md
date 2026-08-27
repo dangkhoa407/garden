@@ -12,11 +12,10 @@
 ### Thành viên
 
 | STT | Họ và tên                  | Vai trò              |
-| --: | -------------------------- | -------------------- |
-|   1 | `NGUYỄN THÀNH ĐĂNG KHOA  ` | Phần mền / AI / IOT  |
-|   2 | `BÙI LƯƠNG THÁI BÌNH     ` | Cơ khí / IOT         |
-|   3 | `NGUYỄN NHẬT MINH        ` | Cơ khí / ESP         |
-|   4 | `ĐÀO DUY TÂN             ` | Cơ khí / Tự động hóa |
+| --: | -------------------------- | Leader               |
+|   2 | `BÙI LƯƠNG THÁI BÌNH     ` | Member               |
+|   3 | `NGUYỄN NHẬT MINH        ` | Member               |
+|   4 | `ĐÀO DUY TÂN             ` | Member               |
 
 
 ---
