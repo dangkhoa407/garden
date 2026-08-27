@@ -12,10 +12,12 @@
 ### Thành viên
 
 | STT | Họ và tên                  | Vai trò              |
-| --: | -------------------------- | Leader               |
+| --: | -------------------------- | -------------------- |
+|   1 | `NGUYỄN THÀNH ĐĂNG KHOA  ` | Leader               |
 |   2 | `BÙI LƯƠNG THÁI BÌNH     ` | Member               |
 |   3 | `NGUYỄN NHẬT MINH        ` | Member               |
 |   4 | `ĐÀO DUY TÂN             ` | Member               |
+
 
 
 ---
