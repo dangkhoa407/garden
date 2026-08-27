@@ -40,6 +40,7 @@ Các chức năng chính của mô hình:
 * Điều khiển cơ cấu chuyển động.
 * Điều khiển cơ cấu phun.
 * Theo dõi trạng thái hệ thống thông qua giao diện Web.
+* Đóng mở rèm che mưa, che nắng tự động
 * Hỗ trợ giám sát hệ thống từ xa.
 
 ---
