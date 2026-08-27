@@ -7,8 +7,6 @@
 
 **Cuộc thi:** Sáng tạo dành cho Thanh thiếu niên, Nhi đồng toàn quốc
 
-**Lĩnh vực:** Updating
-
 **Đơn vị:** `Trường THPT Số 3 Phù Cát`
 
 ### Thành viên
