@@ -1,6 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+
+interface CapturedImage {
+  trayName?: string;
+  imageBase64?: string;
+  filePath?: string;
+}
 
 interface PendingSchedule {
   id: string;
@@ -14,12 +20,14 @@ interface PendingSchedule {
     ml: number;
     reason?: string;
   }>;
+  capturedImages?: CapturedImage[];
   customDosages?: Array<{
     tankCode: string;
     ml: number;
   }>;
   timestamp: string;
   status: "pending" | "executing" | "completed";
+  createdAt?: number;
 }
 
 interface Fertilizer {
@@ -39,6 +47,10 @@ export function ScheduleConfirmModal() {
   const [executeStep, setExecuteStep] = useState<"idle" | "dose" | "well" | "water" | "done">("idle");
   const [executeLogs, setExecuteLogs] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [countdown, setCountdown] = useState<number>(60);
+  const [selectedPreviewImage, setSelectedPreviewImage] = useState<string | null>(null);
+
+  const confirmTriggeredRef = useRef(false);
 
   // Poll for pending schedule confirmation every 3 seconds
   useEffect(() => {
@@ -66,6 +78,30 @@ export function ScheduleConfirmModal() {
       clearInterval(interval);
     };
   }, []);
+
+  // Handle 60-second Countdown & Auto confirm
+  useEffect(() => {
+    if (!pendingItem || isExecuting || isSubmitting) return;
+
+    confirmTriggeredRef.current = false;
+    setCountdown(60);
+
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          if (!confirmTriggeredRef.current) {
+            confirmTriggeredRef.current = true;
+            handleConfirmExecute(true);
+          }
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [pendingItem?.id, isExecuting, isSubmitting]);
 
   // Fetch fertilizers database
   useEffect(() => {
@@ -126,12 +162,16 @@ export function ScheduleConfirmModal() {
     });
   };
 
-  const handleConfirmExecute = async () => {
+  const handleConfirmExecute = async (isAuto = false) => {
     if (isSubmitting || isExecuting) return;
     setIsSubmitting(true);
     setIsExecuting(true);
     setExecuteStep("dose");
-    setExecuteLogs(["🚀 Đã xác nhận lịch trình! Bắt đầu chu trình tưới..."]);
+    setExecuteLogs([
+      isAuto
+        ? "⏰ Đã hết 60s chờ xác nhận. Hệ thống TỰ ĐỘNG KÍCH HOẠT chu trình tưới phân bón!"
+        : "🚀 Đã xác nhận thủ công từ Web! Bắt đầu chu trình tưới...",
+    ]);
 
     const activeDosages = Object.entries(selectedTanks)
       .filter(([_, val]) => val.enabled && val.ml > 0)
@@ -245,13 +285,21 @@ export function ScheduleConfirmModal() {
               <h3 className="text-lg font-bold mt-0.5">{pendingItem.title}</h3>
             </div>
           </div>
-          <button
-            onClick={handleDismiss}
-            disabled={isExecuting}
-            className="text-white/80 hover:text-white hover:bg-white/20 p-1.5 rounded-lg transition-colors"
-          >
-            <span className="material-symbols-outlined text-xl">close</span>
-          </button>
+          <div className="flex items-center gap-2">
+            {!isExecuting && (
+              <div className="flex items-center gap-1.5 bg-amber-500/20 text-amber-200 border border-amber-500/30 text-xs px-2.5 py-1 rounded-full font-bold animate-pulse">
+                <span className="material-symbols-outlined text-xs">timer</span>
+                Tự động xác nhận sau: {countdown}s
+              </div>
+            )}
+            <button
+              onClick={handleDismiss}
+              disabled={isExecuting}
+              className="text-white/80 hover:text-white hover:bg-white/20 p-1.5 rounded-lg transition-colors"
+            >
+              <span className="material-symbols-outlined text-xl">close</span>
+            </button>
+          </div>
         </div>
 
         {/* Modal Content */}
@@ -268,6 +316,67 @@ export function ScheduleConfirmModal() {
               <p className="text-sm text-on-surface-variant leading-relaxed font-body">
                 {pendingItem.overallAssessment}
               </p>
+            </div>
+          )}
+
+          {/* Captured Camera Images Gallery */}
+          {pendingItem.capturedImages && pendingItem.capturedImages.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs font-bold text-on-surface">
+                <span className="flex items-center gap-1.5 text-primary">
+                  <span className="material-symbols-outlined text-base">photo_camera</span>
+                  Hình ảnh camera thực tế đã quét ({pendingItem.capturedImages.length} vị trí):
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto p-2 bg-surface-variant/20 rounded-xl border border-outline-variant/30">
+                {pendingItem.capturedImages.map((img, idx) => {
+                  const src = img.imageBase64 || (img.filePath ? `/${img.filePath}` : "");
+                  return (
+                    <div
+                      key={idx}
+                      onClick={() => src && setSelectedPreviewImage(src)}
+                      className="relative group rounded-lg overflow-hidden border border-outline-variant/40 bg-black/20 aspect-video cursor-pointer hover:border-primary transition-all shadow-sm"
+                    >
+                      {src ? (
+                        <img
+                          src={src}
+                          alt={img.trayName || `Vị trí ${idx + 1}`}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-xs text-white/60">
+                          Khay {idx + 1}
+                        </div>
+                      )}
+                      <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-1 text-[11px] font-bold text-white text-center truncate">
+                        {img.trayName || `Khay ${String(idx + 1).padStart(2, "0")}`}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Image Preview Lightbox */}
+          {selectedPreviewImage && (
+            <div
+              className="fixed inset-0 z-[10000] bg-black/80 flex items-center justify-center p-4"
+              onClick={() => setSelectedPreviewImage(null)}
+            >
+              <div className="relative max-w-3xl max-h-[85vh] overflow-hidden rounded-2xl border border-white/20 shadow-2xl">
+                <img
+                  src={selectedPreviewImage}
+                  alt="Camera Preview"
+                  className="w-full h-full object-contain max-h-[80vh]"
+                />
+                <button
+                  onClick={() => setSelectedPreviewImage(null)}
+                  className="absolute top-3 right-3 bg-black/60 text-white p-2 rounded-full hover:bg-black transition-colors"
+                >
+                  <span className="material-symbols-outlined text-xl">close</span>
+                </button>
+              </div>
             </div>
           )}
 
@@ -434,12 +543,12 @@ export function ScheduleConfirmModal() {
               Bỏ qua lần này
             </button>
             <button
-              onClick={handleConfirmExecute}
+              onClick={() => handleConfirmExecute(false)}
               disabled={isSubmitting}
               className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-primary hover:opacity-95 text-white text-sm font-bold shadow-lg shadow-primary/20 flex items-center gap-2 transition-all"
             >
               <span className="material-symbols-outlined text-lg">water_drop</span>
-              Xác nhận & Bắt đầu tưới
+              Xác nhận & Bắt đầu tưới ({countdown}s)
             </button>
           </div>
         )}

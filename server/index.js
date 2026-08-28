@@ -4068,22 +4068,19 @@ app.post("/api/ai/fertilize-scan", async (req, res) => {
     res.setTimeout(180000);
     console.log("[AI Fertilize Scan] Bắt đầu quy trình di chuyển robot & chụp ảnh các vị trí cây...");
 
-    const plants = readJson("plants.json", []);
-    const plantedPointIndexes = [...new Set(
-      plants
-        .filter((plant) => plant && plant.location)
-        .map((plant) => getPointIndexFromLocation(plant.location))
-        .filter((pointIdx) => Number.isInteger(pointIdx) && pointIdx >= 0 && pointIdx <= 5)
-    )].sort((a, b) => a - b);
+    const reqLoc = req.body && req.body.location ? String(req.body.location).trim() : "";
+    let plantedPointIndexes = [];
+
+    if (reqLoc && !reqLoc.includes("Toàn bộ")) {
+      const pIdx = getPointIndexFromLocation(reqLoc);
+      if (Number.isInteger(pIdx) && pIdx >= 0 && pIdx <= 5) {
+        plantedPointIndexes = [pIdx];
+      }
+    }
 
     if (plantedPointIndexes.length === 0) {
-      addSystemLog("AI_FERTILIZE", "Chưa có cây nào được gieo trồng trong /plants. Bỏ qua quét AI.", "WARNING");
-      pushWebNotification("⚠️ Chưa có vị trí nào đang gieo trồng cây trong /plants. Vui lòng thêm cây trước khi quét phân tích!", "WARNING");
-      return res.status(400).json({
-        success: false,
-        error: "Chưa có cây nào được gieo trồng trong Vườn của tôi (/plants). Vui lòng thêm cây trước khi thực hiện quét!",
-        capturedImages: [],
-      });
+      // Khi chọn "Toàn bộ khu vườn" hoặc không chỉ định khay đơn lẻ, quét toàn bộ 6 vị trí khay (Khay 01 - Khay 06)
+      plantedPointIndexes = [0, 1, 2, 3, 4, 5];
     }
 
     const plantedLabels = plantedPointIndexes.map((idx) => `Khay ${String(idx + 1).padStart(2, "0")}`);
@@ -5375,13 +5372,15 @@ async function runFullAiFertilizeCycle(item, stepNum, totalSteps, currentTimeStr
   await sendTelegramText(`⏰ LỊCH TỚI GIỜ [Bước ${stepNum}/${totalSteps}]:\n📌 Tên: ${item.title}\n🤖 Hành động: Quét camera & Gemini AI phân tích thành công. Vui lòng mở ứng dụng Web để xác nhận!`);
 
   try {
-    // Bước 1: Quét camera tại các vị trí khay cây
-    addSystemLog("AI_FERTILIZE", `[Lịch trình AI] Bắt đầu bước 1: Di chuyển camera quét & chụp ảnh khay cây...`, "PROCESS");
+    // Bước 1: Quét camera tại các vị trí khay cây (Mặc định quét toàn bộ 6 khay hoặc theo vị trí lịch)
+    const targetLoc = item.location || "Toàn bộ khu vườn";
+    addSystemLog("AI_FERTILIZE", `[Lịch trình AI] Bắt đầu bước 1: Di chuyển camera quét & chụp ảnh các vị trí (${targetLoc})...`, "PROCESS");
     let capturedImages = [];
     try {
       const scanRes = await fetch(`http://localhost:${PORT}/api/ai/fertilize-scan`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ location: targetLoc }),
       }).then((r) => r.json());
       if (scanRes.success && Array.isArray(scanRes.capturedImages)) {
         capturedImages = scanRes.capturedImages;
@@ -5391,7 +5390,7 @@ async function runFullAiFertilizeCycle(item, stepNum, totalSteps, currentTimeStr
     }
 
     // Bước 2: Phân tích AI Gemini
-    addSystemLog("AI_FERTILIZE", `[Lịch trình AI] Bắt đầu bước 2: Gửi dữ liệu ảnh sang Gemini AI phân tích...`, "PROCESS");
+    addSystemLog("AI_FERTILIZE", `[Lịch trình AI] Bắt đầu bước 2: Gửi dữ liệu ${capturedImages.length} ảnh sang Gemini AI phân tích...`, "PROCESS");
     let overallAssessment = "";
     let recommendations = [];
     try {
@@ -5408,21 +5407,48 @@ async function runFullAiFertilizeCycle(item, stepNum, totalSteps, currentTimeStr
       console.warn(`[Sched AI Analysis Warning] ${aiErr.message}`);
     }
 
-    // Bước 3: Đẩy thông báo pending lên hệ thống để hiển thị popup xác nhận realtime trên web
+    // Bước 3: Đẩy thông báo pending lên hệ thống để hiển thị popup xác nhận realtime trên web (kèm 60s tự động xác nhận)
+    const pendingId = `pending-${Date.now()}`;
     currentPendingSchedule = {
-      id: `pending-${Date.now()}`,
+      id: pendingId,
       scheduleId: item.id,
       title: item.title,
       actionType: item.actionType || "FERTILIZE_AI",
       overallAssessment: overallAssessment || "Gemini AI đã quan sát toàn bộ hình ảnh camera thực tế và hoàn tất đánh giá tổng quan.",
       recommendations,
+      capturedImages,
       customDosages: item.customDosages || [],
       timestamp: currentTimeStr,
       status: "pending",
+      createdAt: Date.now(),
     };
 
-    pushWebNotification(`⏰ Lịch trình tưới phân AI [${item.title}] đã tới giờ! Vui lòng xác nhận trên ứng dụng Web.`, "AI_ANALYSIS");
-    addSystemLog("AI_FERTILIZE", `[Lịch trình AI] Đã kích hoạt popup xác nhận realtime trên giao diện web cho lịch "${item.title}".`, "SUCCESS");
+    pushWebNotification(`⏰ Lịch trình tưới phân AI [${item.title}] đã tới giờ! Vui lòng xác nhận trên ứng dụng Web (Tự động chạy sau 60s).`, "AI_ANALYSIS");
+    addSystemLog("AI_FERTILIZE", `[Lịch trình AI] Đã kích hoạt popup xác nhận realtime trên giao diện web cho lịch "${item.title}". Hẹn giờ tự động tưới sau 60s nếu không có thao tác.`, "SUCCESS");
+
+    // Hẹn giờ 60 giây tự động xác nhận từ Server nếu người dùng không mở web
+    setTimeout(async () => {
+      if (currentPendingSchedule && currentPendingSchedule.id === pendingId && currentPendingSchedule.status === "pending") {
+        addSystemLog("AI_FERTILIZE", `⏱ Hết 60s chờ xác nhận từ Web. Hệ thống TỰ ĐỘNG thực thi tưới phân bón theo đề xuất AI cho lịch "${item.title}".`, "PROCESS");
+        pushWebNotification(`⏱ Hết 60s! Tự động thực thi tưới phân bón AI cho lịch [${item.title}]`, "PROCESS");
+
+        currentPendingSchedule.status = "executing";
+        const recsToDose = (currentPendingSchedule.recommendations || []).filter((r) => r.tankCode && r.ml > 0);
+        for (const rec of recsToDose) {
+          try {
+            await fetch(`http://localhost:${PORT}/api/esp32/dose`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ tankCode: rec.tankCode, ml: rec.ml }),
+            });
+            const expectedSec = Math.max(1, Math.round((rec.ml * 10) / 6));
+            await new Promise((r) => setTimeout(r, expectedSec * 1000 + 500));
+          } catch (e) {}
+        }
+        await runIrrigationCycleHelper();
+        currentPendingSchedule = null;
+      }
+    }, 60000);
   } catch (err) {
     console.error(`[Scheduled AI Fertilize Error] ${err.message}`);
     addSystemLog("AI_FERTILIZE", `❌ Lỗi thực thi lịch tưới phân AI: ${err.message}`, "ALERT");
@@ -5434,20 +5460,49 @@ async function runFullCustomFertilizeCycle(item, stepNum, totalSteps, currentTim
   await sendTelegramText(`⏰ LỊCH TỚI GIỜ [Bước ${stepNum}/${totalSteps}]:\n📌 Tên: ${item.title}\n🧪 Hành động: Tưới Phân Tùy Chỉnh. Vui lòng mở ứng dụng Web để xác nhận!`);
 
   try {
+    const pendingId = `pending-${Date.now()}`;
     currentPendingSchedule = {
-      id: `pending-${Date.now()}`,
+      id: pendingId,
       scheduleId: item.id,
       title: item.title,
       actionType: item.actionType || "FERTILIZE_CUSTOM",
       overallAssessment: "Lịch trình tưới phân bón tùy chỉnh đã tới giờ theo cài đặt của bạn.",
       recommendations: [],
+      capturedImages: [],
       customDosages: item.customDosages || [{ tankCode: "Bình A", ml: 2.0 }, { tankCode: "Bình B", ml: 2.0 }],
       timestamp: currentTimeStr,
       status: "pending",
+      createdAt: Date.now(),
     };
 
-    pushWebNotification(`⏰ Lịch trình tưới phân tùy chỉnh [${item.title}] đã tới giờ! Vui lòng xác nhận trên web.`, "PROCESS");
-    addSystemLog("AI_FERTILIZE", `[Lịch tùy chỉnh] Đã kích hoạt popup xác nhận realtime trên giao diện web cho lịch "${item.title}".`, "SUCCESS");
+    pushWebNotification(`⏰ Lịch trình tưới phân tùy chỉnh [${item.title}] đã tới giờ! Vui lòng xác nhận trên web (Tự động chạy sau 60s).`, "PROCESS");
+    addSystemLog("AI_FERTILIZE", `[Lịch tùy chỉnh] Đã kích hoạt popup xác nhận realtime trên giao diện web cho lịch "${item.title}". Hẹn giờ tự động tưới sau 60s nếu không có thao tác.`, "SUCCESS");
+
+    // Hẹn giờ 60 giây tự động xác nhận từ Server
+    setTimeout(async () => {
+      if (currentPendingSchedule && currentPendingSchedule.id === pendingId && currentPendingSchedule.status === "pending") {
+        addSystemLog("AI_FERTILIZE", `⏱ Hết 60s chờ xác nhận từ Web. Hệ thống TỰ ĐỘNG thực thi tưới phân bón tùy chỉnh cho lịch "${item.title}".`, "PROCESS");
+        pushWebNotification(`⏱ Hết 60s! Tự động thực thi tưới phân tùy chỉnh cho lịch [${item.title}]`, "PROCESS");
+
+        currentPendingSchedule.status = "executing";
+        const customDoses = currentPendingSchedule.customDosages || [];
+        for (const dose of customDoses) {
+          if (dose.tankCode && dose.ml > 0) {
+            try {
+              await fetch(`http://localhost:${PORT}/api/esp32/dose`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ tankCode: dose.tankCode, ml: dose.ml }),
+              });
+              const expectedSec = Math.max(1, Math.round((dose.ml * 10) / 6));
+              await new Promise((r) => setTimeout(r, expectedSec * 1000 + 500));
+            } catch (e) {}
+          }
+        }
+        await runIrrigationCycleHelper();
+        currentPendingSchedule = null;
+      }
+    }, 60000);
   } catch (err) {
     console.error(`[Scheduled Custom Fertilize Error] ${err.message}`);
     addSystemLog("AI_FERTILIZE", `❌ Lỗi thực thi lịch tưới phân tùy chỉnh: ${err.message}`, "ALERT");
