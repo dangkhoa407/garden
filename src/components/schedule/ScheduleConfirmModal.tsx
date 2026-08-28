@@ -79,29 +79,31 @@ export function ScheduleConfirmModal() {
     };
   }, []);
 
-  // Handle 60-second Countdown & Auto confirm
+  // Handle Realtime 60-second Countdown & Auto confirm calculated from pendingItem.createdAt
   useEffect(() => {
     if (!pendingItem || isExecuting || isSubmitting) return;
 
     confirmTriggeredRef.current = false;
-    setCountdown(60);
 
-    const timer = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          if (!confirmTriggeredRef.current) {
-            confirmTriggeredRef.current = true;
-            handleConfirmExecute(true);
-          }
-          return 0;
+    const updateRemainingTime = () => {
+      const createdAt = pendingItem.createdAt || Date.now();
+      const elapsedSeconds = Math.floor((Date.now() - createdAt) / 1000);
+      const remaining = Math.max(0, 60 - elapsedSeconds);
+      setCountdown(remaining);
+
+      if (remaining <= 0) {
+        if (!confirmTriggeredRef.current) {
+          confirmTriggeredRef.current = true;
+          handleConfirmExecute(true);
         }
-        return prev - 1;
-      });
-    }, 1000);
+      }
+    };
+
+    updateRemainingTime();
+    const timer = setInterval(updateRemainingTime, 1000);
 
     return () => clearInterval(timer);
-  }, [pendingItem?.id, isExecuting, isSubmitting]);
+  }, [pendingItem?.id, pendingItem?.createdAt, isExecuting, isSubmitting]);
 
   // Fetch fertilizers database
   useEffect(() => {
