@@ -234,78 +234,81 @@ export default function FertilizersPage() {
         .map(([code, item]) => ({ tankCode: code, ml: item.ml }));
     }
 
-    if (tanksToDose.length === 0) {
-      alert("❌ Chưa chọn bình phân nào! Vui lòng tích chọn bình phân cần sử dụng.");
-      setIsIrrigating(false);
-      return;
-    }
+    if (tanksToDose.length > 0) {
+      // Kiểm tra dung tích bình phân trước khi trích xuất
+      let currentFertilizersList: any[] = fertilizers || [];
+      try {
+        const fRes = await fetch("/api/fertilizers");
+        if (fRes.ok) {
+          const freshList = await fRes.json();
+          if (Array.isArray(freshList)) currentFertilizersList = freshList;
+        }
+      } catch (e) {}
 
-    // Kiểm tra dung tích bình phân trước khi trích xuất
-    let currentFertilizersList: any[] = fertilizers || [];
-    try {
-      const fRes = await fetch("/api/fertilizers");
-      if (fRes.ok) {
-        const freshList = await fRes.json();
-        if (Array.isArray(freshList)) currentFertilizersList = freshList;
+      let insufficientTank: { name: string; tankCode: string; required: number; remaining: number } | null = null;
+
+      for (const t of tanksToDose) {
+        const fertItem = currentFertilizersList.find(
+          (f: any) => f.tankCode === t.tankCode || f.name === t.tankCode || f.code === t.tankCode
+        );
+        const remainingMl = fertItem
+          ? fertItem.currentMl !== undefined
+            ? Number(fertItem.currentMl)
+            : Number(fertItem.capacityMl || 0)
+          : 0;
+
+        if (remainingMl < t.ml) {
+          insufficientTank = {
+            name: fertItem?.name || t.tankCode,
+            tankCode: t.tankCode,
+            required: t.ml,
+            remaining: remainingMl,
+          };
+          break;
+        }
       }
-    } catch (e) {}
 
-    let insufficientTank: { name: string; tankCode: string; required: number; remaining: number } | null = null;
-
-    for (const t of tanksToDose) {
-      const fertItem = currentFertilizersList.find(
-        (f: any) => f.tankCode === t.tankCode || f.name === t.tankCode || f.code === t.tankCode
-      );
-      const remainingMl = fertItem
-        ? fertItem.currentMl !== undefined
-          ? Number(fertItem.currentMl)
-          : Number(fertItem.capacityMl || 0)
-        : 0;
-
-      if (remainingMl < t.ml) {
-        insufficientTank = {
-          name: fertItem?.name || t.tankCode,
-          tankCode: t.tankCode,
-          required: t.ml,
-          remaining: remainingMl,
-        };
-        break;
+      if (insufficientTank) {
+        setIsIrrigating(false);
+        alert(
+          `⚠️ KHÔNG THỂ TRÍCH XUẤT PHÂN BÓN!\n\n` +
+          `Bình phân [${insufficientTank.tankCode} - ${insufficientTank.name}] hiện chỉ còn ${insufficientTank.remaining} ml.\n` +
+          `Lượng phân cần trích xuất: ${insufficientTank.required} ml.\n\n` +
+          `Lượng phân trong bình không đủ để trích xuất! Vui lòng châm thêm phân bón trước khi thực hiện.`
+        );
+        return;
       }
-    }
-
-    if (insufficientTank) {
-      setIsIrrigating(false);
-      alert(
-        `⚠️ KHÔNG THỂ TRÍCH XUẤT PHÂN BÓN!\n\n` +
-        `Bình phân [${insufficientTank.tankCode} - ${insufficientTank.name}] hiện chỉ còn ${insufficientTank.remaining} ml.\n` +
-        `Lượng phân cần trích xuất: ${insufficientTank.required} ml.\n\n` +
-        `Lượng phân trong bình không đủ để trích xuất! Vui lòng châm thêm phân bón trước khi thực hiện.`
-      );
-      return;
     }
 
     try {
       // 1. TRÍCH XUẤT PHÂN BÓN (DOSE)
-      for (const t of tanksToDose) {
-        const expectedSec = Math.max(1, Math.round((t.ml * 10) / 6));
-        setIrrigateLog((prev) => [
-          ...prev,
-          `🧪 Gửi lệnh DOSE: Đang bơm ${t.ml} ml từ ${t.tankCode} (Lưu lượng bơm nhu động: 6ml/10s => Bơm chạy trong ${expectedSec}s)...`,
-        ]);
-        const res = await fetch("/api/esp32/dose", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tankCode: t.tankCode, ml: t.ml }),
-        });
-        const data = await res.json();
-        const actualSec = data.durationSec || expectedSec;
-        setIrrigateLog((prev) => [
-          ...prev,
-          `✅ Đã trích xuất thành công ${t.ml} ml từ ${t.tankCode}! (Lệnh: ${data.command || "DOSE"}, Thời gian: ${actualSec}s)`,
-        ]);
+      if (tanksToDose.length > 0) {
+        for (const t of tanksToDose) {
+          const expectedSec = Math.max(1, Math.round((t.ml * 10) / 6));
+          setIrrigateLog((prev) => [
+            ...prev,
+            `🧪 Gửi lệnh DOSE: Đang bơm ${t.ml} ml từ ${t.tankCode} (Lưu lượng bơm nhu động: 6ml/10s => Bơm chạy trong ${expectedSec}s)...`,
+          ]);
+          const res = await fetch("/api/esp32/dose", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tankCode: t.tankCode, ml: t.ml }),
+          });
+          const data = await res.json();
+          const actualSec = data.durationSec || expectedSec;
+          setIrrigateLog((prev) => [
+            ...prev,
+            `✅ Đã trích xuất thành công ${t.ml} ml từ ${t.tankCode}! (Lệnh: ${data.command || "DOSE"}, Thời gian: ${actualSec}s)`,
+          ]);
 
-        // Đợi thời gian bơm phân
-        await new Promise((r) => setTimeout(r, actualSec * 1000 + 500));
+          // Đợi thời gian bơm phân
+          await new Promise((r) => setTimeout(r, actualSec * 1000 + 500));
+        }
+      } else {
+        setIrrigateLog((prev) => [
+          ...prev,
+          "ℹ️ Không chọn bình phân nào: Bỏ qua kích hoạt bơm nhu động.",
+        ]);
       }
 
       // 2. BƠM NƯỚC VÀO BỒN TRỘN (WELL ON - ĐỢI PHAO CAO BẬT)

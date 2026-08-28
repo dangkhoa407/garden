@@ -6,6 +6,7 @@ import { Header } from "@/components/layout/Header";
 import { MobileNav } from "@/components/layout/MobileNav";
 import { usePathname, useRouter } from "next/navigation";
 import { GardenProvider } from "@/context/GardenContext";
+import { ScheduleConfirmModal } from "@/components/schedule/ScheduleConfirmModal";
 import "./globals.css";
 
 function checkIsLoggedIn(): boolean {
@@ -52,7 +53,7 @@ export default function RootLayout({
           <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
           <link
             rel="stylesheet"
-            href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=block"
+            href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=block font-display=swap"
           />
         </head>
         <body suppressHydrationWarning className="bg-background text-on-background min-h-screen flex items-center justify-center">
@@ -79,7 +80,7 @@ export default function RootLayout({
           <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
           <link
             rel="stylesheet"
-            href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=block"
+            href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=block font-display=swap"
           />
         </head>
         <body suppressHydrationWarning className="bg-background text-on-background min-h-screen flex items-center justify-center">
@@ -106,7 +107,7 @@ export default function RootLayout({
           <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
           <link
             rel="stylesheet"
-            href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=block"
+            href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=block font-display=swap"
           />
         </head>
         <body suppressHydrationWarning className="bg-background text-on-background min-h-screen flex items-center justify-center">
@@ -136,7 +137,7 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
           rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=block"
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=block font-display=swap"
         />
       </head>
       <body
@@ -146,6 +147,7 @@ export default function RootLayout({
         }`}
       >
         <GardenProvider>
+          <ScheduleConfirmModal />
           {isLoginPage ? (
             <main className="w-full min-h-screen">{children}</main>
           ) : isAiChatPage ? (

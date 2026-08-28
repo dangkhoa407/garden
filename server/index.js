@@ -5293,6 +5293,167 @@ app.post("/api/plant-inspect", async (req, res) => {
   }
 });
 
+let currentPendingSchedule = null;
+
+app.get("/api/schedules/pending", (req, res) => {
+  res.json({ success: true, item: currentPendingSchedule });
+});
+
+app.post("/api/schedules/pending/dismiss", (req, res) => {
+  currentPendingSchedule = null;
+  res.json({ success: true });
+});
+
+async function runIrrigationCycleHelper() {
+  const controls = readJson("controls.json", {});
+  const targetMoisture = typeof controls.targetHumidity === "number" ? controls.targetHumidity : 70;
+
+  addSystemLog("IRRIGATE_AUTO", "💧 WELL ON: Bật bơm giếng nạp nước vào bồn trộn...", "PROCESS");
+  pushWebNotification("💧 Đang bật bơm giếng nạp nước vào bồn trộn...", "PROCESS");
+
+  try {
+    if (activeEsp32Port && activeEsp32Port.isOpen) {
+      activeEsp32Port.write("WELL ON\n");
+    } else {
+      await sendDirectCommandToEsp32("WELL ON");
+    }
+  } catch (e) {}
+
+  let floatHighTriggered = false;
+  for (let i = 0; i < 15; i++) {
+    await new Promise((r) => setTimeout(r, 2000));
+    try {
+      if (lastEsp32Sensors && lastEsp32Sensors.floatHigh) {
+        floatHighTriggered = true;
+        addSystemLog("IRRIGATE_AUTO", "✅ Phao cao đã bật! Bồn trộn đã đầy nước.", "SUCCESS");
+        break;
+      }
+    } catch (e) {}
+  }
+
+  try {
+    if (activeEsp32Port && activeEsp32Port.isOpen) {
+      activeEsp32Port.write("WELL OFF\n");
+    } else {
+      await sendDirectCommandToEsp32("WELL OFF");
+    }
+  } catch (e) {}
+
+  addSystemLog("IRRIGATE_AUTO", `🌿 WATER ON: Bật bơm tưới vườn... (Mục tiêu độ ẩm đất: ${targetMoisture}%)`, "PROCESS");
+  pushWebNotification(`🌿 Đang bật bơm tưới vườn (Mục tiêu độ ẩm đất: ${targetMoisture}%)...`, "PROCESS");
+
+  try {
+    if (activeEsp32Port && activeEsp32Port.isOpen) {
+      activeEsp32Port.write("WATER ON\n");
+    } else {
+      await sendDirectCommandToEsp32("WATER ON");
+    }
+  } catch (e) {}
+
+  for (let i = 0; i < 15; i++) {
+    await new Promise((r) => setTimeout(r, 2000));
+    try {
+      const currentAvg = lastEsp32Sensors?.avgSoilPercent || 0;
+      if (currentAvg >= targetMoisture || (lastEsp32Sensors && lastEsp32Sensors.floatLow)) {
+        addSystemLog("IRRIGATE_AUTO", `🎉 Độ ẩm đất đạt ${currentAvg}% >= ${targetMoisture}% hoặc phao đáy báo cạn. Hoàn tất tưới!`, "SUCCESS");
+        break;
+      }
+    } catch (e) {}
+  }
+
+  try {
+    if (activeEsp32Port && activeEsp32Port.isOpen) {
+      activeEsp32Port.write("WATER OFF\n");
+    } else {
+      await sendDirectCommandToEsp32("WATER OFF");
+    }
+  } catch (e) {}
+}
+
+async function runFullAiFertilizeCycle(item, stepNum, totalSteps, currentTimeStr) {
+  pushWebNotification(`⏰ Lịch [Bước ${stepNum}/${totalSteps}]: Kích hoạt Tưới Phân AI Gemini ("${item.title}")`, "AI_ANALYSIS");
+  await sendTelegramText(`⏰ LỊCH TỚI GIỜ [Bước ${stepNum}/${totalSteps}]:\n📌 Tên: ${item.title}\n🤖 Hành động: Quét camera & Gemini AI phân tích thành công. Vui lòng mở ứng dụng Web để xác nhận!`);
+
+  try {
+    // Bước 1: Quét camera tại các vị trí khay cây
+    addSystemLog("AI_FERTILIZE", `[Lịch trình AI] Bắt đầu bước 1: Di chuyển camera quét & chụp ảnh khay cây...`, "PROCESS");
+    let capturedImages = [];
+    try {
+      const scanRes = await fetch(`http://localhost:${PORT}/api/ai/fertilize-scan`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      }).then((r) => r.json());
+      if (scanRes.success && Array.isArray(scanRes.capturedImages)) {
+        capturedImages = scanRes.capturedImages;
+      }
+    } catch (scanErr) {
+      console.warn(`[Sched AI Scan Warning] ${scanErr.message}`);
+    }
+
+    // Bước 2: Phân tích AI Gemini
+    addSystemLog("AI_FERTILIZE", `[Lịch trình AI] Bắt đầu bước 2: Gửi dữ liệu ảnh sang Gemini AI phân tích...`, "PROCESS");
+    let overallAssessment = "";
+    let recommendations = [];
+    try {
+      const aiRes = await fetch(`http://localhost:${PORT}/api/ai/fertilize-analysis`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ capturedImages }),
+      }).then((r) => r.json());
+      if (aiRes.success) {
+        overallAssessment = aiRes.overallAssessment || "";
+        recommendations = aiRes.recommendations || [];
+      }
+    } catch (aiErr) {
+      console.warn(`[Sched AI Analysis Warning] ${aiErr.message}`);
+    }
+
+    // Bước 3: Đẩy thông báo pending lên hệ thống để hiển thị popup xác nhận realtime trên web
+    currentPendingSchedule = {
+      id: `pending-${Date.now()}`,
+      scheduleId: item.id,
+      title: item.title,
+      actionType: item.actionType || "FERTILIZE_AI",
+      overallAssessment: overallAssessment || "Gemini AI đã quan sát toàn bộ hình ảnh camera thực tế và hoàn tất đánh giá tổng quan.",
+      recommendations,
+      customDosages: item.customDosages || [],
+      timestamp: currentTimeStr,
+      status: "pending",
+    };
+
+    pushWebNotification(`⏰ Lịch trình tưới phân AI [${item.title}] đã tới giờ! Vui lòng xác nhận trên ứng dụng Web.`, "AI_ANALYSIS");
+    addSystemLog("AI_FERTILIZE", `[Lịch trình AI] Đã kích hoạt popup xác nhận realtime trên giao diện web cho lịch "${item.title}".`, "SUCCESS");
+  } catch (err) {
+    console.error(`[Scheduled AI Fertilize Error] ${err.message}`);
+    addSystemLog("AI_FERTILIZE", `❌ Lỗi thực thi lịch tưới phân AI: ${err.message}`, "ALERT");
+  }
+}
+
+async function runFullCustomFertilizeCycle(item, stepNum, totalSteps, currentTimeStr) {
+  pushWebNotification(`⏰ Lịch [Bước ${stepNum}/${totalSteps}]: Kích hoạt Tưới Phân Tùy Chỉnh ("${item.title}")`, "PROCESS");
+  await sendTelegramText(`⏰ LỊCH TỚI GIỜ [Bước ${stepNum}/${totalSteps}]:\n📌 Tên: ${item.title}\n🧪 Hành động: Tưới Phân Tùy Chỉnh. Vui lòng mở ứng dụng Web để xác nhận!`);
+
+  try {
+    currentPendingSchedule = {
+      id: `pending-${Date.now()}`,
+      scheduleId: item.id,
+      title: item.title,
+      actionType: item.actionType || "FERTILIZE_CUSTOM",
+      overallAssessment: "Lịch trình tưới phân bón tùy chỉnh đã tới giờ theo cài đặt của bạn.",
+      recommendations: [],
+      customDosages: item.customDosages || [{ tankCode: "Bình A", ml: 2.0 }, { tankCode: "Bình B", ml: 2.0 }],
+      timestamp: currentTimeStr,
+      status: "pending",
+    };
+
+    pushWebNotification(`⏰ Lịch trình tưới phân tùy chỉnh [${item.title}] đã tới giờ! Vui lòng xác nhận trên web.`, "PROCESS");
+    addSystemLog("AI_FERTILIZE", `[Lịch tùy chỉnh] Đã kích hoạt popup xác nhận realtime trên giao diện web cho lịch "${item.title}".`, "SUCCESS");
+  } catch (err) {
+    console.error(`[Scheduled Custom Fertilize Error] ${err.message}`);
+    addSystemLog("AI_FERTILIZE", `❌ Lỗi thực thi lịch tưới phân tùy chỉnh: ${err.message}`, "ALERT");
+  }
+}
+
 function initScheduleRunner() {
   console.log("[Schedule Runner] Khởi động trình tự động hóa lịch trình vườn...");
 
@@ -5363,43 +5524,9 @@ function initScheduleRunner() {
                   await sendTelegramText(`⏰ LỊCH TỰ ĐỘNG [Bước ${stepNum}/${totalSteps}]:\n📌 Tên: ${item.title}\n🐛 Hành động: Kiểm tra sâu hại (chỉ kiểm tra các vị trí có cây trong /plants)\n⏱ Thời gian: ${currentTimeStr}`);
                   await runFullGardenInspection().catch((e) => console.warn(`[Sched Inspect Err] ${e.message}`));
                 } else if (act === "FERTILIZE_AI" || act === "FERTILIZE") {
-                  pushWebNotification(`⏰ Lịch [Bước ${stepNum}/${totalSteps}]: Kích hoạt Tưới Phân AI Gemini ("${item.title}")`, "AI_ANALYSIS");
-                  await sendTelegramText(`⏰ LỊCH TỰ ĐỘNG [Bước ${stepNum}/${totalSteps}]:\n📌 Tên: ${item.title}\n🤖 Hành động: Tưới Phân AI (Quét camera & Gemini AI phân tích)\n⏱ Thời gian: ${currentTimeStr}`);
-                  try {
-                    const aiRes = await fetch(`http://localhost:${PORT}/api/ai/fertilize-analysis`, {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                    }).then((r) => r.json());
-                    if (aiRes.success && Array.isArray(aiRes.recommendations) && aiRes.recommendations.length > 0) {
-                      for (const rec of aiRes.recommendations) {
-                        if (rec.tankCode && rec.ml > 0) {
-                          await fetch(`http://localhost:${PORT}/api/esp32/dose`, {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ tankCode: rec.tankCode, ml: rec.ml }),
-                          }).catch(() => {});
-                        }
-                      }
-                    }
-                  } catch (aiErr) {
-                    console.warn(`[Sched AI Fertilize Err] ${aiErr.message}`);
-                  }
+                  await runFullAiFertilizeCycle(item, stepNum, totalSteps, currentTimeStr);
                 } else if (act === "FERTILIZE_CUSTOM") {
-                  const doses = Array.isArray(item.customDosages) && item.customDosages.length > 0
-                    ? item.customDosages
-                    : [{ tankCode: "Bình A", ml: 2.0 }, { tankCode: "Bình B", ml: 2.0 }];
-                  const doseDesc = doses.map((d) => `${d.tankCode}: ${d.ml}ml`).join(", ");
-                  pushWebNotification(`⏰ Lịch [Bước ${stepNum}/${totalSteps}]: Kích hoạt Tưới Phân Tùy Chỉnh [${doseDesc}] ("${item.title}")`, "PROCESS");
-                  await sendTelegramText(`⏰ LỊCH TỰ ĐỘNG [Bước ${stepNum}/${totalSteps}]:\n📌 Tên: ${item.title}\n🧪 Hành động: Tưới Phân Tùy Chỉnh (${doseDesc})\n⏱ Thời gian: ${currentTimeStr}`);
-                  for (const dose of doses) {
-                    if (dose.tankCode && dose.ml > 0) {
-                      await fetch(`http://localhost:${PORT}/api/esp32/dose`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ tankCode: dose.tankCode, ml: dose.ml }),
-                      }).catch(() => {});
-                    }
-                  }
+                  await runFullCustomFertilizeCycle(item, stepNum, totalSteps, currentTimeStr);
                 } else if (act === "SPRAY_ALL") {
                   pushWebNotification(`⏰ Lịch [Bước ${stepNum}/${totalSteps}]: Kích hoạt Phun toàn bộ vườn ("${item.title}")`, "PROCESS");
                   await sendTelegramText(`⏰ LỊCH TỰ ĐỘNG [Bước ${stepNum}/${totalSteps}]:\n📌 Tên: ${item.title}\n🚿 Hành động: Phun toàn bộ vườn (Phím p)\n⏱ Thời gian: ${currentTimeStr}`);

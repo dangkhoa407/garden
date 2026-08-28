@@ -336,16 +336,11 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
 
     const tanksToDose: { tankCode: string; ml: number }[] = [];
 
-    if (isAiMode && aiRecommendations.length > 0) {
-      aiRecommendations.forEach((r) => {
-        if (r.selected) {
-          tanksToDose.push({ tankCode: r.tankCode, ml: r.ml });
-        }
-      });
-      if (tanksToDose.length === 0) {
-        availableTanks.forEach((code) => {
-          if (selectedTanks[code]?.selected) {
-            tanksToDose.push({ tankCode: code, ml: selectedTanks[code].ml });
+    if (isAiMode) {
+      if (aiRecommendations.length > 0) {
+        aiRecommendations.forEach((r) => {
+          if (r.selected) {
+            tanksToDose.push({ tankCode: r.tankCode, ml: r.ml });
           }
         });
       }
@@ -357,62 +352,59 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
       });
     }
 
-    if (tanksToDose.length === 0) {
-      alert("❌ Chưa chọn bình phân nào! Vui lòng tích chọn ít nhất 1 bình phân.");
-      setIsIrrigating(false);
-      setIrrigateStep("idle");
-      return;
-    }
+    // Kiểm tra lượng phân bón trong từng bình trước khi trích xuất (nếu có bình phân được chọn)
+    if (tanksToDose.length > 0) {
+      let currentFertilizersList: any[] = activeFertilizers || [];
+      try {
+        const fRes = await fetch("/api/fertilizers");
+        if (fRes.ok) {
+          const freshList = await fRes.json();
+          if (Array.isArray(freshList)) currentFertilizersList = freshList;
+        }
+      } catch (e) { }
 
-    // Kiểm tra lượng phân bón trong từng bình trước khi trích xuất
-    let currentFertilizersList: any[] = activeFertilizers || [];
-    try {
-      const fRes = await fetch("/api/fertilizers");
-      if (fRes.ok) {
-        const freshList = await fRes.json();
-        if (Array.isArray(freshList)) currentFertilizersList = freshList;
+      let insufficientTank: { name: string; tankCode: string; required: number; remaining: number } | null = null;
+
+      for (const t of tanksToDose) {
+        const fertItem = currentFertilizersList.find(
+          (f) => f.tankCode === t.tankCode || f.name === t.tankCode || f.code === t.tankCode
+        );
+        const remainingMl = fertItem
+          ? fertItem.currentMl !== undefined
+            ? Number(fertItem.currentMl)
+            : Number(fertItem.capacityMl || 0)
+          : 0;
+
+        if (remainingMl < t.ml) {
+          insufficientTank = {
+            name: fertItem?.name || t.tankCode,
+            tankCode: t.tankCode,
+            required: t.ml,
+            remaining: remainingMl,
+          };
+          break;
+        }
       }
-    } catch (e) { }
 
-    let insufficientTank: { name: string; tankCode: string; required: number; remaining: number } | null = null;
-
-    for (const t of tanksToDose) {
-      const fertItem = currentFertilizersList.find(
-        (f) => f.tankCode === t.tankCode || f.name === t.tankCode || f.code === t.tankCode
-      );
-      const remainingMl = fertItem
-        ? fertItem.currentMl !== undefined
-          ? Number(fertItem.currentMl)
-          : Number(fertItem.capacityMl || 0)
-        : 0;
-
-      if (remainingMl < t.ml) {
-        insufficientTank = {
-          name: fertItem?.name || t.tankCode,
-          tankCode: t.tankCode,
-          required: t.ml,
-          remaining: remainingMl,
-        };
-        break;
+      if (insufficientTank) {
+        setIsIrrigating(false);
+        setIrrigateStep("idle");
+        alert(
+          `⚠️ KHÔNG THỂ TRÍCH XUẤT PHÂN BÓN!\n\n` +
+          `Bình phân [${insufficientTank.tankCode} - ${insufficientTank.name}] hiện chỉ còn ${insufficientTank.remaining} ml.\n` +
+          `Lượng phân cần trích xuất: ${insufficientTank.required} ml.\n\n` +
+          `Lượng phân trong bình không đủ để trích xuất! Vui lòng châm thêm phân bón trước khi thực hiện.`
+        );
+        return;
       }
-    }
-
-    if (insufficientTank) {
-      setIsIrrigating(false);
-      setIrrigateStep("idle");
-      alert(
-        `⚠️ KHÔNG THỂ TRÍCH XUẤT PHÂN BÓN!\n\n` +
-        `Bình phân [${insufficientTank.tankCode} - ${insufficientTank.name}] hiện chỉ còn ${insufficientTank.remaining} ml.\n` +
-        `Lượng phân cần trích xuất: ${insufficientTank.required} ml.\n\n` +
-        `Lượng phân trong bình không đủ để trích xuất! Vui lòng châm thêm phân bón trước khi thực hiện.`
-      );
-      return;
     }
 
     let estDurationSec = 20;
-    tanksToDose.forEach((t) => {
-      estDurationSec += Math.max(2, Math.round((t.ml * 10) / 6));
-    });
+    if (tanksToDose.length > 0) {
+      tanksToDose.forEach((t) => {
+        estDurationSec += Math.max(2, Math.round((t.ml * 10) / 6));
+      });
+    }
 
     if (onStartIrrigation) {
       onStartIrrigation(estDurationSec);
@@ -442,81 +434,90 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
           `🔄 === BẮT ĐẦU CHU KỲ PHA & TƯỚI LẦN ${cycleCount} ===`,
         ]);
 
-        // 1. KIỂM TRẢ DUNG TÍCH BÌNH PHÂN XEM CÓ ĐỦ TRÍCH XUẤT KHÔNG
-        let currentFertilizersList: any[] = [];
-        try {
-          const fRes = await fetch("/api/fertilizers");
-          if (fRes.ok) currentFertilizersList = await fRes.json();
-        } catch (e) { }
+        // 1. KIỂM TRẢ DUNG TÍCH BÌNH PHÂN XEM CÓ ĐỦ TRÍCH XUẤT KHÔNG (nếu có bình phân được chọn)
+        if (tanksToDose.length > 0) {
+          let currentFertilizersList: any[] = [];
+          try {
+            const fRes = await fetch("/api/fertilizers");
+            if (fRes.ok) currentFertilizersList = await fRes.json();
+          } catch (e) { }
 
-        let insufficientTank: { tankCode: string; required: number; remaining: number } | null = null;
+          let insufficientTank: { tankCode: string; required: number; remaining: number } | null = null;
 
-        for (const t of tanksToDose) {
-          const fertItem = currentFertilizersList.find(
-            (f) => f.tankCode === t.tankCode || f.name === t.tankCode
-          );
-          const remainingMl = fertItem
-            ? fertItem.currentMl !== undefined
-              ? fertItem.currentMl
-              : fertItem.capacityMl || 0
-            : 999;
+          for (const t of tanksToDose) {
+            const fertItem = currentFertilizersList.find(
+              (f) => f.tankCode === t.tankCode || f.name === t.tankCode
+            );
+            const remainingMl = fertItem
+              ? fertItem.currentMl !== undefined
+                ? fertItem.currentMl
+                : fertItem.capacityMl || 0
+              : 999;
 
-          if (remainingMl < t.ml) {
-            insufficientTank = {
-              tankCode: t.tankCode,
-              required: t.ml,
-              remaining: remainingMl,
-            };
-            break;
+            if (remainingMl < t.ml) {
+              insufficientTank = {
+                tankCode: t.tankCode,
+                required: t.ml,
+                remaining: remainingMl,
+              };
+              break;
+            }
           }
-        }
 
-        // Nếu phân không đủ để trích xuất -> Dừng lại và gửi cảnh báo Web + Telegram
-        if (insufficientTank) {
-          const alertMsg = `⚠️ CẢNH BÁO TƯỚI PHÂN (GROW HUB):\nBình [${insufficientTank.tankCode}] chỉ còn ${insufficientTank.remaining}ml, KHÔNG ĐỦ để trích xuất ${insufficientTank.required}ml!\n👉 Hệ thống đã TỰ ĐỘNG DỪNG chu trình tưới phân bón để bảo vệ hệ thống.`;
+          // Nếu phân không đủ để trích xuất -> Dừng lại và gửi cảnh báo Web + Telegram
+          if (insufficientTank) {
+            const alertMsg = `⚠️ CẢNH BÁO TƯỚI PHÂN (GROW HUB):\nBình [${insufficientTank.tankCode}] chỉ còn ${insufficientTank.remaining}ml, KHÔNG ĐỦ để trích xuất ${insufficientTank.required}ml!\n👉 Hệ thống đã TỰ ĐỘNG DỪNG chu trình tưới phân bón để bảo vệ hệ thống.`;
 
-          setIrrigateLog((prev) => [
-            ...prev,
-            `❌ HẾT PHÂN BÓN: ${insufficientTank.tankCode} chỉ còn ${insufficientTank.remaining}ml (Không đủ trích xuất ${insufficientTank.required}ml)!`,
-            `📢 Đã gửi cảnh báo tới hệ thống Web và Bot Telegram!`,
-          ]);
+            setIrrigateLog((prev) => [
+              ...prev,
+              `❌ HẾT PHÂN BÓN: ${insufficientTank.tankCode} chỉ còn ${insufficientTank.remaining}ml (Không đủ trích xuất ${insufficientTank.required}ml)!`,
+              `📢 Đã gửi cảnh báo tới hệ thống Web và Bot Telegram!`,
+            ]);
 
-          await sendTelegramAlert(alertMsg);
+            await sendTelegramAlert(alertMsg);
 
-          // Ngắt các bơm đảm bảo an toàn
-          await fetch("/api/esp32/command", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ command: "WATER OFF" }),
-          });
-          await fetch("/api/esp32/command", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ command: "WELL OFF" }),
-          });
+            // Ngắt các bơm đảm bảo an toàn
+            await fetch("/api/esp32/command", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ command: "WATER OFF" }),
+            });
+            await fetch("/api/esp32/command", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ command: "WELL OFF" }),
+            });
 
-          setIsIrrigating(false);
-          setIrrigateStep("idle");
-          return;
+            setIsIrrigating(false);
+            setIrrigateStep("idle");
+            return;
+          }
         }
 
         // 2. TRÍCH XUẤT PHÂN BÓN (DOSE)
         setIrrigateStep("dose");
-        for (const t of tanksToDose) {
-          const expectedSec = Math.round(t.ml * 60);
+        if (tanksToDose.length > 0) {
+          for (const t of tanksToDose) {
+            const expectedSec = Math.round(t.ml * 60);
+            setIrrigateLog((prev) => [
+              ...prev,
+              `🧪 DOSE: Bơm ${t.ml}ml từ ${t.tankCode} (Dự kiến: ${expectedSec}s)...`,
+            ]);
+            const res = await fetch("/api/esp32/dose", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ tankCode: t.tankCode, ml: t.ml }),
+            });
+            const data = await res.json();
+            const actualSec = data.durationSec || expectedSec;
+
+            await new Promise((r) => setTimeout(r, actualSec * 1000 + 500));
+          }
+        } else {
           setIrrigateLog((prev) => [
             ...prev,
-            `🧪 DOSE: Bơm ${t.ml}ml từ ${t.tankCode} (Dự kiến: ${expectedSec}s)...`,
+            "ℹ️ Không chọn/đề xuất bình phân nào: Bỏ qua kích hoạt bơm nhu động.",
           ]);
-          const res = await fetch("/api/esp32/dose", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ tankCode: t.tankCode, ml: t.ml }),
-          });
-          const data = await res.json();
-          const actualSec = data.durationSec || expectedSec;
-
-          await new Promise((r) => setTimeout(r, actualSec * 1000 + 500));
         }
 
         // 3. BƠM NƯỚC GIẾNG VÀO BỒN TRỘN (WELL ON - ĐỢI PHAO CAO BẬT)
@@ -1023,7 +1024,7 @@ export function IrrigateModal({ isOpen, onClose, fertilizers = [], onSuccess, on
           <button
             type="button"
             onClick={() => handleStartIrrigation(irrigateTab === "ai")}
-            disabled={isIrrigating || availableTanks.length === 0}
+            disabled={isIrrigating}
             className="px-6 py-2.5 rounded-xl text-body-sm font-bold bg-emerald-600 text-white hover:bg-emerald-700 shadow-md flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50"
           >
             {isIrrigating ? (
